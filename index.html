@@ -283,6 +283,29 @@
   .qc-group-docs { font-size: 12px; color: var(--text-secondary); margin-top: 4px; text-transform: capitalize; }
   .qc-page-flag { font-size: 12px; color: var(--warning); margin-top: 6px; }
 
+  /* Sort progress bar (master box + QC box) */
+  .sort-progress { display: none; margin-top: 12px; }
+  .sort-progress.show { display: block; }
+  .sort-progress-bar { height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
+  .sort-progress-bar > span {
+    display: block; height: 100%; width: 0%; background: var(--brand); border-radius: 5px;
+    transition: width .25s ease;
+  }
+  .sort-progress-bar.indeterminate > span {
+    width: 40%; background: linear-gradient(90deg, var(--border) 0%, var(--brand) 50%, var(--border) 100%);
+    animation: sweep 1.1s ease-in-out infinite;
+  }
+  @keyframes sweep { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .sort-progress-label { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+  .sort-progress-label .spl-pct { font-variant-numeric: tabular-nums; }
+
+  /* Master sort — results grouped by category */
+  .cat-block { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 10px; }
+  .cat-block-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .cat-block-title { font-size: 14px; font-weight: 600; }
+  .cat-block-list { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+  .cat-block-list div { padding: 2px 0; }
+
   /* Report readiness */
   .readiness { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 24px; flex-wrap: wrap; }
   .readiness-title { font-size: 15px; font-weight: 600; }
@@ -632,6 +655,35 @@
         <button class="btn btn-primary" onclick="handleGenerate()">Generate Report</button>
       </div>
 
+      <!-- Master box — drop everything, the app works out what each page is -->
+      <div class="section">
+        <div class="section-head">
+          <h2>Drop everything here</h2>
+          <span class="section-desc">One scan, one stack, any order — sorted automatically</span>
+        </div>
+        <div class="card panel">
+          <label class="dropzone" for="fileMaster">
+            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <div class="dz-title">Add this month's paperwork</div>
+            <div class="dz-sub">Scans, PDFs, photos or spreadsheets — everything in one go</div>
+            <input type="file" id="fileMaster" multiple accept=".pdf,.xlsx,.xls,.csv,image/*">
+          </label>
+          <div id="backendWarning" style="display:none;background:var(--warning-bg);color:var(--warning);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px"></div>
+          <div class="qc-count" id="masterCount">Nothing added yet</div>
+          <div class="file-list" id="listMaster"></div>
+          <button type="button" class="btn btn-primary btn-sm" id="masterSortBtn" style="margin-top:14px" disabled onclick="runMasterSort()">Sort everything</button>
+          <div class="sort-progress" id="masterProgress">
+            <div class="sort-progress-bar" id="masterProgressBar"><span></span></div>
+            <div class="sort-progress-label">
+              <span id="masterProgressText">Preparing…</span>
+              <span class="spl-pct" id="masterProgressPct"></span>
+            </div>
+          </div>
+          <div class="qc-sort-status" id="masterStatus"></div>
+          <div id="masterResults"></div>
+        </div>
+      </div>
+
       <!-- DVSA data -->
       <div class="section">
         <div class="section-head"><h2>DVSA data</h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
@@ -709,6 +761,13 @@
             <p>Scan in the paperwork for whichever vehicles you QC'd this month, in any order. The system reads the registration off each page, groups the full set together, and cross-checks it against the test log — so there's no need to note down separately which ones were QC'd.</p>
           </details>
           <button type="button" class="btn btn-secondary btn-sm" id="sortScansBtn" style="margin-top:14px" disabled onclick="runSmartScan()">Sort scanned pages</button>
+          <div class="sort-progress" id="qcProgress">
+            <div class="sort-progress-bar" id="qcProgressBar"><span></span></div>
+            <div class="sort-progress-label">
+              <span id="qcProgressText">Preparing…</span>
+              <span class="spl-pct" id="qcProgressPct"></span>
+            </div>
+          </div>
           <div class="qc-sort-status" id="qcSortStatus"></div>
           <div id="qcGroupsContainer"></div>
         </div>
@@ -910,7 +969,7 @@
   ];
   var singleFileInputs = DVSA_INPUTS.map(function (d) { return d.input; });
 
-  var pickedFiles = { fileQcScans: [] };
+  var pickedFiles = { fileQcScans: [], fileMaster: [] };
   singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
 
   var ICON_UPLOADED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7d4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -1058,6 +1117,7 @@
 
   DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input, d.list, true, d.status); });
   wireFileInput('fileQcScans', 'listQcScans', false, null);
+  wireFileInput('fileMaster', 'listMaster', false, null);
   // Paint the initial "Required — not uploaded" state on each DVSA card.
   DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
 
@@ -1168,6 +1228,15 @@
 
     var sortBtn = document.getElementById('sortScansBtn');
     if (sortBtn) sortBtn.disabled = qc === 0;
+
+    var master = (pickedFiles.fileMaster || []).length;
+    var masterBtn = document.getElementById('masterSortBtn');
+    if (masterBtn) masterBtn.disabled = master === 0;
+    var masterCountEl = document.getElementById('masterCount');
+    if (masterCountEl) {
+      masterCountEl.textContent = master === 0 ? 'Nothing added yet'
+        : master + ' file' + (master === 1 ? '' : 's') + ' ready to sort';
+    }
   }
 
   function refreshStatuses() {
@@ -1185,20 +1254,77 @@
   var QC_EXPECTED_DOCS = ['emissions_test', 'vt20_certificate', 'inspection_sheet']; // vt30_refusal only appears on a fail
   var qcSortResults = [];
 
+  // Claude rejects images over 10MB. Scans are often 2500x3500+ at high DPI,
+  // so pages are downscaled and JPEG-encoded before sending — comfortably
+  // under the limit while staying sharp enough to read plates and names.
+  var MAX_PAGE_EDGE_PX = 2600;
+  var PAGE_JPEG_QUALITY = 0.92;
+
+  /* Small progress-bar helper shared by both sort buttons. Opening and
+     converting files has no countable steps, so that phase shows a sweeping
+     "indeterminate" bar; once we know the page count it switches to a real
+     percentage. */
+  function makeProgress(prefix) {
+    var wrap = document.getElementById(prefix + 'Progress');
+    var bar = document.getElementById(prefix + 'ProgressBar');
+    var text = document.getElementById(prefix + 'ProgressText');
+    var pct = document.getElementById(prefix + 'ProgressPct');
+    return {
+      start: function (label) {
+        wrap.classList.add('show');
+        bar.classList.add('indeterminate');
+        bar.firstElementChild.style.width = '';
+        text.textContent = label || 'Working…';
+        pct.textContent = '';
+      },
+      set: function (done, total, label) {
+        bar.classList.remove('indeterminate');
+        var p = total ? Math.round(done / total * 100) : 0;
+        bar.firstElementChild.style.width = p + '%';
+        text.textContent = label || (done + ' of ' + total + ' pages read');
+        pct.textContent = p + '%';
+      },
+      finish: function () {
+        bar.classList.remove('indeterminate');
+        bar.firstElementChild.style.width = '100%';
+        pct.textContent = '100%';
+        setTimeout(function () { wrap.classList.remove('show'); }, 900);
+      },
+      fail: function () { wrap.classList.remove('show'); }
+    };
+  }
+
   function fileToPageImages_(file) {
     var ext = (file.name.split('.').pop() || '').toLowerCase();
     if (ext === 'pdf') return pdfToPageImages_(file);
     return fileToSingleImage_(file).then(function (img) { return [img]; });
   }
 
+  // Photos straight off a phone can also exceed Claude's 10MB image limit,
+  // so they get the same downscale-and-JPEG treatment as PDF pages.
   function fileToSingleImage_(file) {
     return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onload = function () {
-        resolve({ base64: reader.result.split(',')[1], mimeType: file.type || 'image/jpeg', label: file.name });
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var longest = Math.max(img.naturalWidth, img.naturalHeight);
+        var scale = Math.min(1, MAX_PAGE_EDGE_PX / longest);
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve({
+          base64: canvas.toDataURL('image/jpeg', PAGE_JPEG_QUALITY).split(',')[1],
+          mimeType: 'image/jpeg',
+          label: file.name
+        });
       };
-      reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
-      reader.readAsDataURL(file);
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Could not read ' + file.name)); };
+      img.src = url;
     });
   }
 
@@ -1210,12 +1336,28 @@
         var pagePromises = [];
         var _loop = function (pageNum) {
           pagePromises.push(pdf.getPage(pageNum).then(function (page) {
-            var viewport = page.getViewport({ scale: 1.8 });
+            // Scans come in at very high DPI — rendering them 1:1 as PNG blows
+            // past Claude's 10MB image limit. Cap the longest edge and encode
+            // as JPEG instead: still easily legible for reading a reg plate,
+            // but a fraction of the size.
+            var base = page.getViewport({ scale: 1 });
+            var longest = Math.max(base.width, base.height);
+            var scale = Math.min(1, MAX_PAGE_EDGE_PX / longest);
+            var viewport = page.getViewport({ scale: scale });
             var canvas = document.createElement('canvas');
             canvas.width = viewport.width;
             canvas.height = viewport.height;
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise.then(function () {
-              return { base64: canvas.toDataURL('image/png').split(',')[1], mimeType: 'image/png', label: file.name + ' (page ' + pageNum + ')' };
+            var ctx = canvas.getContext('2d');
+            // White background — JPEG has no transparency, and unpainted
+            // canvas would otherwise come out black.
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+              return {
+                base64: canvas.toDataURL('image/jpeg', PAGE_JPEG_QUALITY).split(',')[1],
+                mimeType: 'image/jpeg',
+                label: file.name + ' (page ' + pageNum + ')'
+              };
             });
           }));
         };
@@ -1237,6 +1379,38 @@
 
   function normalizeReg_(reg) { return (reg || '').toUpperCase().replace(/\s+/g, ''); }
 
+  // The Apps Script backend reports its own version. If it's older than what
+  // this page expects, the sorting will misbehave in confusing ways — so say
+  // so plainly instead of leaving it to be guessed at.
+  var EXPECTED_BACKEND_VERSION = 3;
+
+  function checkBackendVersion_() {
+    if (!SCRIPT_URL) return;
+    fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'getVersion' }) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var v = (data && data.status === 'success') ? data.version : 0;
+        if (v < EXPECTED_BACKEND_VERSION) {
+          showBackendWarning_('The Apps Script backend is running old code (v' + (v || 'unknown') +
+            ', expected v' + EXPECTED_BACKEND_VERSION + '). Re-deploy Code.gs with "New version" or pages will be sorted incorrectly.');
+        } else {
+          hideBackendWarning_();
+        }
+      })
+      .catch(function () { /* offline or unreachable — the sort itself will report it */ });
+  }
+
+  function showBackendWarning_(msg) {
+    var el = document.getElementById('backendWarning');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+  function hideBackendWarning_() {
+    var el = document.getElementById('backendWarning');
+    if (el) el.style.display = 'none';
+  }
+
   function runSmartScan() {
     var files = pickedFiles.fileQcScans;
     if (!files.length) return;
@@ -1251,25 +1425,35 @@
 
     btn.disabled = true;
     btn.textContent = 'Sorting…';
-    statusEl.textContent = 'Reading pages…';
+    statusEl.textContent = '';
     document.getElementById('qcGroupsContainer').innerHTML = '';
     qcSortResults = [];
+
+    var progress = makeProgress('qc');
+    progress.start('Opening files…');
 
     Promise.all(files.map(fileToPageImages_))
       .then(function (nested) {
         var allPages = [].concat.apply([], nested);
         var done = 0;
-        statusEl.textContent = 'Analyzing 0 / ' + allPages.length + ' pages…';
+        progress.set(0, allPages.length);
         return Promise.all(allPages.map(function (pageImg) {
           return analyzePageOnServer_(pageImg).then(function (res) {
             done++;
-            statusEl.textContent = 'Analyzing ' + done + ' / ' + allPages.length + ' pages…';
+            progress.set(done, allPages.length);
             qcSortResults.push({ label: pageImg.label, response: res });
           });
         }));
       })
       .then(function () {
+        progress.finish();
         renderQcGroups_();
+        btn.disabled = false;
+        btn.textContent = 'Sort scanned pages';
+      })
+      .catch(function (err) {
+        progress.fail();
+        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those pages: ' + escapeHtml_(err.message || 'unknown error') + '</span>';
         btn.disabled = false;
         btn.textContent = 'Sort scanned pages';
       });
@@ -1328,6 +1512,222 @@
         needsReview.map(function (r) { return '<div class="qc-page-flag">' + escapeHtml_(r.label) + ' — ' + escapeHtml_(r.reason) + '</div>'; }).join('');
       container.appendChild(reviewDiv);
     }
+  }
+
+  /* ═══════════════ Master box — drop everything, sort it out ═══════════════
+     Takes whatever's thrown at it (a whole scanned bundle, loose photos,
+     spreadsheets) and works out what each page actually is, rather than
+     making Paul pre-sort anything. Spreadsheets are read directly; scanned
+     pages go to Claude for classification. Vehicle paperwork is then grouped
+     by registration, exactly like the QC box does. */
+  var CATEGORY_LABELS = {
+    mot_vehicle_paperwork: 'MOT vehicle paperwork',
+    dvsa_test_quality: 'DVSA Test Quality reports',
+    dvsa_test_log: 'DVSA test logs',
+    vts_checklist: 'VTS self-assessment checklist',
+    equipment_calibration: 'Equipment calibration records',
+    admin_tracker: 'Admin tracker',
+    spreadsheet: 'Spreadsheets',
+    other: 'Unrecognised pages'
+  };
+
+  var masterResults = [];
+
+  function runMasterSort() {
+    var files = pickedFiles.fileMaster || [];
+    if (!files.length) return;
+
+    var statusEl = document.getElementById('masterStatus');
+    var btn = document.getElementById('masterSortBtn');
+    var resultsEl = document.getElementById('masterResults');
+
+    if (!SCRIPT_URL) {
+      statusEl.innerHTML = '<span style="color:var(--warning)">Sorting needs the Apps Script backend with an Anthropic API key — not connected yet.</span>';
+      return;
+    }
+
+    // Warn loudly if the deployed Apps Script is behind this page — otherwise
+    // pages get mis-sorted for reasons that look like an AI problem but aren't.
+    checkBackendVersion_();
+
+    btn.disabled = true;
+    btn.textContent = 'Sorting…';
+    resultsEl.innerHTML = '';
+    masterResults = [];
+    statusEl.textContent = '';
+
+    var progress = makeProgress('master');
+    progress.start('Opening files…');
+
+    // Spreadsheets are read locally; everything else becomes page images.
+    var spreadsheetFiles = [], scanFiles = [];
+    files.forEach(function (f) {
+      var ext = (f.name.split('.').pop() || '').toLowerCase();
+      (['xlsx', 'xls', 'csv'].indexOf(ext) > -1 ? spreadsheetFiles : scanFiles).push(f);
+    });
+
+    var sheetWork = Promise.all(spreadsheetFiles.map(function (f) {
+      return readSpreadsheet_(f).then(function (res) {
+        masterResults.push({
+          label: f.name,
+          category: 'spreadsheet',
+          detail: res.error ? res.error : Math.max(0, res.rows.length - 1) + ' rows',
+          ok: !res.error
+        });
+      });
+    }));
+
+    var scanWork = Promise.all(scanFiles.map(fileToPageImages_)).then(function (nested) {
+      var allPages = [].concat.apply([], nested);
+      if (!allPages.length) return;
+      var done = 0;
+      progress.set(0, allPages.length);
+      return Promise.all(allPages.map(function (pageImg) {
+        return analyzePageOnServer_(pageImg).then(function (res) {
+          done++;
+          progress.set(done, allPages.length);
+          if (res.status !== 'success') {
+            masterResults.push({ label: pageImg.label, category: 'other', detail: res.message || 'Could not read', ok: false });
+            return;
+          }
+          var a = res.result || {};
+          // Never trust a "registration" that is really the VTS number.
+          if (!looksLikeRealPlate_(a.registration)) a.registration = null;
+          masterResults.push({
+            label: pageImg.label,
+            category: resolveCategory_(a),
+            analysis: a,
+            detail: buildPageDetail_(a),
+            ok: a.confidence !== 'low'
+          });
+        });
+      }));
+    });
+
+    Promise.all([sheetWork, scanWork])
+      .then(function () {
+        progress.finish();
+        renderMasterResults_();
+        btn.disabled = false;
+        btn.textContent = 'Sort everything';
+      })
+      .catch(function (err) {
+        progress.fail();
+        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong sorting those files: ' + escapeHtml_(err.message || 'unknown error') + '</span>';
+        btn.disabled = false;
+        btn.textContent = 'Sort everything';
+      });
+  }
+
+  // Mortlake's own VTS number shows up all over these pages and is not a
+  // number plate — guard against it being mistaken for one.
+  var VTS_NUMBER = '22453';
+  var UK_PLATE_RE = /^[A-Z0-9]{2,4}[A-Z0-9]{1,4}$/;
+
+  function looksLikeRealPlate_(reg) {
+    var r = normalizeReg_(reg);
+    if (!r || r === VTS_NUMBER) return false;
+    if (r === 'UNKNOWN' || r === 'N/A') return false;
+    if (!/[A-Z]/.test(r)) return false;      // a plate always has letters
+    if (r.length < 4 || r.length > 8) return false;
+    return UK_PLATE_RE.test(r);
+  }
+
+  // If the backend is running older code it won't send a category. Rather than
+  // dumping everything into "Unrecognised", work it out from what we do have.
+  function resolveCategory_(a) {
+    if (a.category) return a.category;
+    var vehicleTypes = ['emissions_test', 'vt20_certificate', 'inspection_sheet', 'vt30_refusal'];
+    if (looksLikeRealPlate_(a.registration) && vehicleTypes.indexOf(a.document_type) > -1) {
+      return 'mot_vehicle_paperwork';
+    }
+    return 'other';
+  }
+
+  function buildPageDetail_(a) {
+    var bits = [];
+    if (a.registration) bits.push(normalizeReg_(a.registration));
+    if (a.document_type && a.document_type !== 'other') bits.push(a.document_type.replace(/_/g, ' '));
+    if (a.period) bits.push(a.period);
+    if (a.tester_name) bits.push(a.tester_name);
+    if (a.qc_flag) bits.push('marked QC');
+    if (a.confidence === 'low') bits.push('low confidence');
+    return bits.join(' · ') || 'no details read';
+  }
+
+  function renderMasterResults_() {
+    var statusEl = document.getElementById('masterStatus');
+    var container = document.getElementById('masterResults');
+    container.innerHTML = '';
+
+    var byCategory = {};
+    masterResults.forEach(function (r) {
+      if (!byCategory[r.category]) byCategory[r.category] = [];
+      byCategory[r.category].push(r);
+    });
+
+    var vehiclePages = (byCategory.mot_vehicle_paperwork || []).filter(function (r) { return r.analysis && r.analysis.registration; });
+    var regCount = Object.keys(vehiclePages.reduce(function (acc, r) { acc[normalizeReg_(r.analysis.registration)] = 1; return acc; }, {})).length;
+
+    statusEl.textContent = masterResults.length + ' item' + (masterResults.length === 1 ? '' : 's') + ' sorted' +
+      (regCount ? ' · ' + regCount + ' vehicle' + (regCount === 1 ? '' : 's') + ' identified' : '');
+
+    // Show vehicle paperwork first (grouped by reg), then everything else.
+    if (vehiclePages.length) {
+      qcSortResults = vehiclePages.map(function (r) { return { label: r.label, response: { status: 'success', result: r.analysis } }; });
+      var vehBlock = document.createElement('div');
+      vehBlock.className = 'cat-block';
+      vehBlock.innerHTML = '<div class="cat-block-head"><span class="cat-block-title">' + CATEGORY_LABELS.mot_vehicle_paperwork +
+        '</span><span class="badge neutral">' + vehiclePages.length + ' page' + (vehiclePages.length === 1 ? '' : 's') + '</span></div>' +
+        '<div id="masterVehicleGroups"></div>';
+      container.appendChild(vehBlock);
+      renderQcGroupsInto_(document.getElementById('masterVehicleGroups'), vehiclePages);
+    }
+
+    Object.keys(byCategory).forEach(function (cat) {
+      if (cat === 'mot_vehicle_paperwork') return;
+      var items = byCategory[cat];
+      var block = document.createElement('div');
+      block.className = 'cat-block';
+      block.innerHTML = '<div class="cat-block-head"><span class="cat-block-title">' + escapeHtml_(CATEGORY_LABELS[cat] || cat) +
+        '</span><span class="badge neutral">' + items.length + '</span></div>' +
+        '<div class="cat-block-list">' + items.map(function (r) {
+          return '<div>' + escapeHtml_(r.label) + ' — ' + escapeHtml_(r.detail) + '</div>';
+        }).join('') + '</div>';
+      container.appendChild(block);
+    });
+  }
+
+  // Shared with the QC box: groups vehicle pages by registration into a target element.
+  function renderQcGroupsInto_(target, pages) {
+    var groups = {};
+    pages.forEach(function (r) {
+      var a = r.analysis;
+      var reg = normalizeReg_(a.registration);
+      if (!groups[reg]) groups[reg] = { pages: [], testers: {} };
+      groups[reg].pages.push(a);
+      if (a.tester_name) groups[reg].testers[a.tester_name] = true;
+    });
+
+    Object.keys(groups).sort().forEach(function (reg) {
+      var g = groups[reg];
+      var foundTypes = g.pages.map(function (p) { return p.document_type; });
+      var missing = QC_EXPECTED_DOCS.filter(function (t) { return foundTypes.indexOf(t) === -1; });
+      var complete = missing.length === 0;
+      var testerList = Object.keys(g.testers);
+      var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
+
+      var div = document.createElement('div');
+      div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
+      div.innerHTML =
+        '<div class="qc-group-head"><span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
+          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + QC_EXPECTED_DOCS.length + ' pages') + '</span></div>' +
+        '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
+          (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
+        '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(String(t).replace(/_/g, ' ')); }).join(', ') + '</div>' +
+        (missing.length ? '<div class="qc-page-flag">Missing: ' + missing.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' : '');
+      target.appendChild(div);
+    });
   }
 
   /* ═══════════════ VTS self-assessment checklist ═══════════════ */
