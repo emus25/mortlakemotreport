@@ -1,0 +1,1773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mortlake Report">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>Mortlake Garage — DVSA Compliance</title>
+<style>
+  :root {
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --surface-subtle: #fafaf8;
+
+    --text: #181818;
+    --text-secondary: #737373;
+    --text-tertiary: #9a9a9a;
+
+    --border: #e6e6e2;
+    --border-strong: #d7d7d2;
+
+    --brand: #ffd400;          /* Mortlake yellow — fills, underline, bars */
+    --brand-strong: #e6be00;   /* hover / borders */
+    --brand-line: #d4a600;     /* chart line, readable on white */
+    --brand-tint: #fff9db;     /* soft active background */
+
+    --success: #2f7d4a;  --success-bg: #eaf4ee;
+    --warning: #a66a00;  --warning-bg: #fbf3e3;
+    --danger:  #b54747;  --danger-bg:  #f8ecec;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    --shadow-sm: 0 1px 2px rgba(24,24,24,0.04);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased; min-height: 100dvh;
+  }
+  button { font-family: inherit; }
+
+  /* ══════════ Header + primary nav ══════════ */
+  .appbar {
+    position: sticky; top: 0; z-index: 30; background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+    padding: 10px 24px;
+  }
+  .appbar-brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .appbar-logo { height: 30px; width: auto; display: block; }
+  .appbar-descriptor {
+    font-size: 12px; font-weight: 600; color: var(--text-secondary);
+    padding-left: 12px; border-left: 1px solid var(--border); letter-spacing: 0.01em;
+  }
+
+  .appnav { display: flex; gap: 4px; flex: 1; }
+  .navtab {
+    position: relative; background: none; border: none; cursor: pointer;
+    padding: 10px 14px; font-size: 14px; font-weight: 600; color: var(--text-secondary);
+    border-radius: var(--radius-sm); transition: color .15s, background .15s;
+  }
+  .navtab:hover { color: var(--text); background: var(--surface-subtle); }
+  .navtab.active { color: var(--text); }
+  .navtab.active::after {
+    content: ""; position: absolute; left: 12px; right: 12px; bottom: -11px; height: 3px;
+    background: var(--brand); border-radius: 3px 3px 0 0;
+  }
+  .navtab:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+
+  .appbar-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .month-select { display: flex; flex-direction: column; gap: 2px; }
+  .month-select label { font-size: 10px; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: .04em; }
+  .month-select input[type=month] {
+    font-family: inherit; font-size: 13px; padding: 7px 10px; color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+  }
+  .month-select input:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; border-color: var(--brand-strong); }
+
+  /* ══════════ Buttons ══════════ */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); cursor: pointer;
+    padding: 0 16px; height: 40px; border: 1px solid transparent; transition: background .15s, border-color .15s, opacity .15s;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--brand); color: #181818; }
+  .btn-primary:hover { background: var(--brand-strong); }
+  .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+  .btn-secondary:hover { background: var(--surface-subtle); }
+  .btn-sm { height: 34px; padding: 0 12px; font-size: 12px; }
+  .btn:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+
+  /* ══════════ Page + views ══════════ */
+  .page { max-width: 1400px; margin: 0 auto; padding: 28px 24px 72px; }
+  .view { display: none; }
+  .view.active { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .view-head { margin-bottom: 24px; }
+  .view-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .view-head .view-month { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+  .view-head .view-desc { font-size: 13px; color: var(--text-secondary); margin-top: 6px; max-width: 640px; }
+
+  .section { margin-top: 32px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .section-head h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .section-head .section-desc { font-size: 13px; color: var(--text-secondary); }
+
+  .info-banner {
+    display: flex; align-items: flex-start; gap: 9px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 11px 14px; font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;
+  }
+  .info-banner svg { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; color: var(--text-tertiary); }
+  .info-banner strong { color: var(--text); font-weight: 600; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+
+  /* ══════════ Dashboard: hero ══════════ */
+  .hero { display: grid; grid-template-columns: 1.4fr 1px 1fr; gap: 28px; padding: 24px 28px; align-items: center; }
+  .hero-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); margin-bottom: 10px; }
+  .hero-main { display: flex; align-items: baseline; gap: 8px; }
+  .hero-score { font-size: 60px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--text); }
+  .hero-score-max { font-size: 20px; font-weight: 600; color: var(--text-tertiary); }
+  .hero-status-row { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .hero-delta { font-size: 13px; font-weight: 600; color: var(--success); }
+  .hero-divider { background: var(--border); width: 1px; height: 100%; min-height: 60px; }
+  .hero-national .hero-label { margin-bottom: 6px; }
+  .hero-national-score { font-size: 30px; font-weight: 700; color: var(--text-secondary); letter-spacing: -0.02em; }
+  .hero-national-score small { font-size: 15px; font-weight: 600; color: var(--text-tertiary); }
+  .hero-national-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 4px; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+    padding: 3px 9px; border-radius: 6px; line-height: 1.3;
+  }
+  .badge svg { width: 12px; height: 12px; }
+  .badge.success { background: var(--success-bg); color: var(--success); }
+  .badge.warning { background: var(--warning-bg); color: var(--warning); }
+  .badge.danger  { background: var(--danger-bg);  color: var(--danger); }
+  .badge.neutral { background: var(--surface-subtle); color: var(--text-secondary); border: 1px solid var(--border); }
+  .badge.brand   { background: var(--brand-tint); color: #7a6600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.green { background: var(--success); }
+  .dot.amber { background: var(--warning); }
+  .dot.red { background: var(--danger); }
+
+  /* ══════════ Dashboard: KPI cards ══════════ */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .kpi { padding: 18px; }
+  .kpi-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+  .kpi-value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 0 6px; }
+  .kpi-compare { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); flex-wrap: wrap; }
+  .kpi-compare .delta { font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+  .kpi-compare .delta.up { color: var(--success); }
+  .kpi-compare .delta.down { color: var(--success); } /* down retest = good */
+  .kpi-foot { margin-top: 8px; }
+
+  /* ══════════ Dashboard: two-column grid for chart + risk ══════════ */
+  .grid-2 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 16px; align-items: start; }
+
+  .panel { padding: 20px; }
+  .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .panel-title { font-size: 14px; font-weight: 600; }
+  .panel-note { font-size: 12px; color: var(--text-tertiary); margin-top: 10px; }
+
+  .chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+  .chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend-line { width: 14px; height: 2px; border-radius: 2px; display: inline-block; }
+
+  /* Risk indicator */
+  .risk-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+  .risk-scale { position: relative; height: 8px; border-radius: 5px; display: flex; margin: 16px 0 10px; overflow: visible; }
+  .risk-seg { flex: 1; height: 100%; }
+  .risk-seg:first-child { border-radius: 5px 0 0 5px; background: #d9ede1; }
+  .risk-seg:nth-child(2) { background: #f4e7c6; }
+  .risk-seg:last-child { border-radius: 0 5px 5px 0; background: #eccfca; }
+  .risk-pointer { position: absolute; top: -4px; width: 3px; height: 16px; background: var(--text); border-radius: 2px; transform: translateX(-50%); box-shadow: 0 0 0 2px var(--surface); }
+  .risk-scale-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-tertiary); }
+  .risk-help { font-size: 12px; color: var(--text-secondary); margin-top: 12px; }
+
+  /* ══════════ Dashboard: monthly overview status cards ══════════ */
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
+  .status-card {
+    text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 16px; cursor: pointer; transition: border-color .15s, box-shadow .15s; font-family: inherit;
+  }
+  .status-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+  .status-card:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
+  .status-card .sc-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  .status-card .sc-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 4px; }
+  .status-card .sc-sub { font-size: 12px; color: var(--text-tertiary); min-height: 16px; }
+  .status-card .sc-sub.attention { color: var(--warning); font-weight: 600; }
+  .status-progress { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 8px; }
+  .status-progress > span { display: block; height: 100%; background: var(--brand); border-radius: 3px; transition: width .2s ease; }
+
+  /* ══════════ Equipment & calibration table ══════════ */
+  .cal-table { width: 100%; }
+  .cal-head, .cal-row {
+    display: grid; grid-template-columns: 1.6fr 0.9fr 1fr 1.1fr auto; gap: 12px; align-items: center;
+  }
+  .cal-head {
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-tertiary);
+    padding: 0 4px 10px; border-bottom: 1px solid var(--border);
+  }
+  .cal-row { padding: 12px 4px; border-bottom: 1px solid var(--border); }
+  .cal-row:last-child { border-bottom: none; }
+  .cal-row input {
+    width: 100%; font-family: inherit; font-size: 14px; padding: 9px 11px; color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+  }
+  .cal-row input:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; border-color: var(--brand-strong); }
+  .cal-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+  .cal-remove { background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 18px; line-height: 1; padding: 6px; border-radius: var(--radius-sm); }
+  .cal-remove:hover { color: var(--danger); background: var(--danger-bg); }
+  .cal-empty { text-align: center; padding: 28px 16px; color: var(--text-tertiary); font-size: 13px; }
+  .cal-foot { margin-top: 16px; }
+
+  /* ══════════ Monthly Report: upload cards ══════════ */
+  .upload-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .upload-card { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .upload-card-top { display: flex; align-items: flex-start; gap: 12px; }
+  .upload-icon {
+    width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; background: var(--surface-subtle);
+    border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-secondary);
+  }
+  .upload-icon svg { width: 19px; height: 19px; }
+  .upload-card-title { font-size: 14px; font-weight: 600; }
+  .upload-card-sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .upload-status { display: flex; align-items: center; gap: 7px; font-size: 12px; margin-top: auto; }
+  .upload-status .us-icon { width: 16px; height: 16px; flex-shrink: 0; }
+  .upload-status.required { color: var(--text-tertiary); }
+  .upload-status.uploaded { color: var(--success); }
+  .upload-status.reading { color: var(--text-tertiary); }
+  .upload-status.warn { color: var(--warning); }
+  .upload-status .us-file { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .upload-actions { display: flex; gap: 8px; }
+  input[type=file] { display: none; }
+
+  .file-chip {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 13px; color: var(--text); padding: 7px 10px; background: var(--surface-subtle);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 6px;
+  }
+  .file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-chip button { background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; padding: 2px 4px; border-radius: 4px; }
+  .file-chip button:hover { color: var(--danger); }
+
+  /* QC paperwork dropzone */
+  .dropzone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); padding: 26px 16px;
+    text-align: center; cursor: pointer; background: var(--surface-subtle); transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover { border-color: var(--brand-strong); background: #fdfcf3; }
+  .dropzone .dz-icon { width: 26px; height: 26px; color: var(--text-tertiary); }
+  .dropzone .dz-title { font-size: 14px; font-weight: 600; }
+  .dropzone .dz-sub { font-size: 12px; color: var(--text-secondary); }
+  .qc-count { font-size: 13px; color: var(--text-secondary); margin-top: 12px; font-weight: 500; }
+  .qc-how { margin-top: 12px; }
+  .qc-how summary { font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+  .qc-how summary::-webkit-details-marker { display: none; }
+  .qc-how summary::before { content: "›"; display: inline-block; transition: transform .15s; color: var(--text-tertiary); }
+  .qc-how[open] summary::before { transform: rotate(90deg); }
+  .qc-how p { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin-top: 8px; }
+
+  /* Smart scan — sorted QC page groups */
+  .qc-sort-status { font-size: 12px; color: var(--text-secondary); margin: 10px 0 2px; min-height: 16px; }
+  .qc-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 10px; }
+  .qc-group.complete { border-color: #bfe0c9; background: #f7fcf8; }
+  .qc-group.incomplete { border-color: #f0d9a6; background: #fffaf0; }
+  .qc-group-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .qc-group-reg { font-size: 14px; font-weight: 700; letter-spacing: 0.03em; }
+  .qc-group-tester { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+  .qc-group-docs { font-size: 12px; color: var(--text-secondary); margin-top: 4px; text-transform: capitalize; }
+  .qc-page-flag { font-size: 12px; color: var(--warning); margin-top: 6px; }
+
+  /* Report readiness */
+  .readiness { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 24px; flex-wrap: wrap; }
+  .readiness-title { font-size: 15px; font-weight: 600; }
+  .readiness-lines { font-size: 13px; color: var(--text-secondary); margin-top: 6px; display: flex; flex-direction: column; gap: 3px; }
+  .readiness-lines .rl { display: flex; align-items: center; gap: 7px; }
+  .readiness-lines .rl svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+  /* ══════════ Checklist ══════════ */
+  .checklist-summary { display: flex; align-items: center; gap: 18px; padding: 20px 22px; margin-bottom: 20px; flex-wrap: wrap; }
+  .checklist-summary .cs-numbers { display: flex; align-items: baseline; gap: 8px; }
+  .checklist-summary .cs-percent { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .checklist-summary .cs-count { font-size: 14px; color: var(--text-secondary); }
+  .checklist-summary .cs-bar { flex: 1; min-width: 160px; height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
+  .checklist-summary .cs-bar > span { display: block; height: 100%; background: var(--brand); border-radius: 5px; transition: width .25s ease; }
+  .checklist-summary .cs-flag { font-size: 13px; color: var(--warning); font-weight: 600; }
+
+  .checklist-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-group { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .filter-btn { background: none; border: none; padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+  .filter-btn + .filter-btn { border-left: 1px solid var(--border); }
+  .filter-btn.active { background: var(--brand-tint); color: #7a6600; }
+  .toolbar-spacer { flex: 1; }
+
+  .checklist-cat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; overflow: hidden; transition: opacity .15s; }
+  .checklist-cat.filtered-out { display: none; }
+  .checklist-cat.complete { background: var(--surface-subtle); }
+  .checklist-cat-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 0 16px; min-height: 58px; cursor: pointer; user-select: none;
+  }
+  .checklist-cat-head:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -2px; }
+  .checklist-cat-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
+  .checklist-cat.complete .checklist-cat-title { color: var(--text-secondary); }
+  .checklist-cat-meta { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .cat-count { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .cat-check { width: 18px; height: 18px; color: var(--success); display: none; }
+  .checklist-cat.complete .cat-check { display: block; }
+  .checklist-cat.complete .cat-count { color: var(--success); }
+  .chevron { width: 16px; height: 16px; color: var(--text-tertiary); transition: transform .18s; }
+  .checklist-cat.open .chevron { transform: rotate(90deg); }
+  .checklist-cat-body { display: none; padding: 4px 16px 12px; }
+  .checklist-cat.open .checklist-cat-body { display: block; }
+
+  .auto-hint { font-size: 12px; color: var(--text-secondary); background: var(--brand-tint); border-radius: var(--radius-sm); padding: 8px 10px; margin: 4px 0 10px; }
+  .badge-auto {
+    display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+    color: #7a6600; background: var(--brand-tint); padding: 2px 6px; border-radius: 5px;
+  }
+
+  .check-item { border-top: 1px solid var(--border); padding: 12px 2px; }
+  .check-item:first-child { border-top: none; }
+  .check-item-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .check-item-text { font-size: 13px; color: var(--text); line-height: 1.45; flex: 1; }
+  .check-pills { display: flex; gap: 6px; flex-shrink: 0; }
+  .check-pill {
+    padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
+    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
+  }
+  .check-pill:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; }
+  .check-pill.yes.active { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+  .check-pill.no.active { border-color: var(--danger); color: var(--danger); background: var(--danger-bg); }
+  .check-action { display: none; margin-top: 10px; }
+  .check-action.show { display: block; }
+  .check-action label { display: block; font-size: 11px; font-weight: 700; color: var(--danger); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
+  .check-action textarea {
+    width: 100%; font-family: inherit; font-size: 13px; padding: 10px 12px; color: var(--text);
+    border: 1px solid #e2c4bf; border-radius: var(--radius-sm); background: #fffafa; resize: vertical; min-height: 42px;
+  }
+  .check-action textarea:focus-visible { outline: 2px solid var(--danger); outline-offset: 1px; }
+
+  /* ══════════ Lock screen ══════════ */
+  .lock-screen { min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
+  .lock-box { width: 100%; max-width: 320px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; text-align: center; box-shadow: var(--shadow-sm); }
+  .lock-box img { height: 30px; margin-bottom: 18px; }
+  .lock-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 14px; }
+  .lock-input {
+    width: 100%; font-family: inherit; font-size: 15px; padding: 11px 13px; color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); margin-bottom: 12px;
+  }
+  .lock-input:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; border-color: var(--brand-strong); }
+  .lock-box .btn { width: 100%; }
+  .lock-error { display: none; font-size: 13px; color: var(--danger); margin-bottom: 12px; }
+  .lock-error.show { display: block; }
+
+  /* ══════════ Responsive ══════════ */
+  @media (max-width: 1080px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .appbar { gap: 12px 16px; padding: 10px 16px; }
+    .appnav { order: 3; width: 100%; overflow-x: auto; }
+    .navtab.active::after { bottom: -10px; }
+    .appbar-actions { margin-left: auto; }
+    .page { padding: 22px 16px 60px; }
+    .hero { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
+    .hero-divider { display: none; }
+    .hero-national { border-top: 1px solid var(--border); padding-top: 16px; }
+    .hero-score { font-size: 48px; }
+    .cal-head { display: none; }
+    .cal-row { grid-template-columns: 1fr 1fr; gap: 10px; row-gap: 8px; align-items: stretch; }
+    .cal-row .calName { grid-column: 1 / 3; }
+    .cal-row .cal-status { grid-column: 1 / 2; }
+    .cal-row .cal-remove { grid-column: 2 / 3; justify-self: end; }
+    .readiness { flex-direction: column; align-items: stretch; }
+    .readiness .btn { width: 100%; }
+  }
+  @media (max-width: 460px) {
+    .cal-row { grid-template-columns: 1fr; }
+    .cal-row .cal-status, .cal-row .cal-remove { grid-column: 1 / 2; justify-self: start; }
+  }
+
+  /* ══════════ Printable report ══════════ */
+  #printReport { display: none; color: #111; font-family: Arial, Helvetica, sans-serif; }
+  #printReport .pr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 18px; }
+  #printReport .pr-logo { height: 34px; width: auto; }
+  #printReport h1 { font-size: 18px; margin: 6px 0 2px; }
+  #printReport .pr-station { font-size: 12px; color: #333; }
+  #printReport .pr-meta { font-size: 11px; color: #333; text-align: right; line-height: 1.6; }
+  #printReport h2 { font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #bbb; padding-bottom: 4px; }
+  #printReport .pr-summary { display: flex; gap: 26px; font-size: 12px; margin: 6px 0 10px; }
+  #printReport .pr-summary b { font-size: 15px; }
+  #printReport table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px; }
+  #printReport th, #printReport td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
+  #printReport th { background: #f2f2f0; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  #printReport .pr-cat td { background: #fafaf8; font-weight: bold; }
+  #printReport .pr-yes { color: #2f7d4a; font-weight: bold; }
+  #printReport .pr-no { color: #b54747; font-weight: bold; }
+  #printReport .pr-na { color: #999; }
+  #printReport .col-status { width: 90px; }
+  #printReport .col-note { width: 34%; color: #444; }
+  #printReport .pr-note { font-size: 11px; color: #555; margin: 4px 0 10px; }
+  #printReport .pr-foot { margin-top: 22px; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
+
+  @media print {
+    @page { margin: 15mm; }
+    html, body { background: #fff !important; }
+    #lockScreen, #appRoot { display: none !important; }
+    #printReport { display: block !important; }
+  }
+</style>
+<!-- Local libraries for reading Excel/CSV/PDF files entirely in the browser
+     — no upload, no server, works even with no internet connection. -->
+<script src="assets/lib/xlsx.full.min.js"></script>
+<script src="assets/lib/pdf.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════ Lock screen ══════════ -->
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-box">
+    <img src="assets/mortlake-logo.png" alt="Mortlake Garage">
+    <div class="lock-title">Enter password</div>
+    <input type="password" id="lockPasswordInput" class="lock-input" autocomplete="current-password">
+    <div class="lock-error" id="lockError"></div>
+    <button type="button" class="btn btn-primary" id="lockSubmitBtn" onclick="submitLockScreen()">Unlock</button>
+  </div>
+</div>
+
+<!-- ══════════ App ══════════ -->
+<div id="appRoot" style="display:none">
+
+  <header class="appbar">
+    <div class="appbar-brand">
+      <img class="appbar-logo" src="assets/mortlake-logo.png" alt="Mortlake Garage">
+      <span class="appbar-descriptor">DVSA Compliance</span>
+    </div>
+
+    <nav class="appnav" role="tablist" aria-label="Primary">
+      <button type="button" class="navtab active" id="tab-dashboard" role="tab" aria-selected="true" onclick="switchTab('dashboard')">Dashboard</button>
+      <button type="button" class="navtab" id="tab-report" role="tab" aria-selected="false" onclick="switchTab('report')">Monthly Report</button>
+      <button type="button" class="navtab" id="tab-checklist" role="tab" aria-selected="false" onclick="switchTab('checklist')">Checklist</button>
+    </nav>
+
+    <div class="appbar-actions">
+      <div class="month-select">
+        <label for="fMonth">Reporting month</label>
+        <input type="month" id="fMonth">
+      </div>
+      <button class="btn btn-primary" id="generateBtn" onclick="handleGenerate()">Generate Report</button>
+    </div>
+  </header>
+
+  <div class="page">
+
+    <!-- ═══════════════ DASHBOARD ═══════════════ -->
+    <section class="view active" id="view-dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+      <div class="view-head">
+        <h1>Monthly overview</h1>
+        <div class="view-month" id="dashMonthLabel"></div>
+      </div>
+
+      <div class="info-banner">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div><strong>Sample performance data.</strong> The rating, KPIs and trend below update automatically once this month's DVSA rating export is uploaded in Monthly Report.</div>
+      </div>
+
+      <!-- Hero: Mortlake vs national -->
+      <div class="card hero">
+        <div class="hero-mortlake">
+          <div class="hero-label">Mortlake Garage</div>
+          <div class="hero-main">
+            <span class="hero-score">92</span>
+            <span class="hero-score-max">/ 100</span>
+          </div>
+          <div class="hero-status-row">
+            <span class="badge success"><span class="dot green"></span>Green</span>
+            <span class="hero-delta">▲ +14 vs national average</span>
+          </div>
+        </div>
+        <div class="hero-divider"></div>
+        <div class="hero-national">
+          <div class="hero-label">National average</div>
+          <div class="hero-national-score">78<small> / 100</small></div>
+          <div class="hero-national-sub">DVSA scheme benchmark</div>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="section">
+        <div class="section-head"><h2>Performance</h2><span class="section-desc">This month vs the national average</span></div>
+        <div class="kpi-grid">
+          <div class="card kpi">
+            <div class="kpi-label">Risk rating</div>
+            <div class="kpi-value">Green</div>
+            <div class="kpi-foot"><span class="badge success">On track</span></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Site assessment risk score</div>
+            <div class="kpi-value">18</div>
+            <div class="kpi-compare"><span>National 32</span><span class="delta up">▼ 14 lower</span></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Initial pass rate</div>
+            <div class="kpi-value">84%</div>
+            <div class="kpi-compare"><span>National 79%</span><span class="delta up">▲ 5 pts</span></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Retest rate</div>
+            <div class="kpi-value">9%</div>
+            <div class="kpi-compare"><span>National 13%</span><span class="delta down">▼ 4 pts</span></div>
+          </div>
+          <div class="card kpi">
+            <div class="kpi-label">Tests carried out</div>
+            <div class="kpi-value">180</div>
+            <div class="kpi-compare"><span>This reporting month</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trend + risk -->
+      <div class="section">
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="panel-head">
+              <span class="panel-title">Performance trend</span>
+              <span class="chart-legend">
+                <span><span class="legend-line" style="background:var(--brand-line)"></span>Mortlake</span>
+                <span><span class="legend-line" style="background:#c9c9c5"></span>National</span>
+              </span>
+            </div>
+            <svg id="ratingChart" style="width:100%;height:190px;display:block"></svg>
+            <div class="panel-note">Sample data — replaced with the real trend once monthly rating exports have been uploaded.</div>
+          </div>
+
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">Risk score</span></div>
+            <div class="risk-value">18</div>
+            <div class="risk-scale">
+              <div class="risk-seg"></div><div class="risk-seg"></div><div class="risk-seg"></div>
+              <div class="risk-pointer" style="left: 14%"></div>
+            </div>
+            <div class="risk-scale-labels"><span>Low</span><span>Medium</span><span>High</span></div>
+            <div class="badge success" style="margin-top:14px"><span class="dot green"></span>Green risk level</div>
+            <div class="risk-help">Lower score = lower risk. DVSA refreshes this monthly.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly overview status cards -->
+      <div class="section">
+        <div class="section-head"><h2>This month's report</h2><span class="section-desc">What's done and what still needs attention</span></div>
+        <div class="status-grid">
+          <button type="button" class="status-card" onclick="switchTab('report')">
+            <div class="sc-label">DVSA files</div>
+            <div class="sc-value" id="tileDvsaFiles">0 / 4</div>
+            <div class="sc-sub" id="tileDvsaSub">4 files required</div>
+          </button>
+          <button type="button" class="status-card" onclick="switchTab('report')">
+            <div class="sc-label">QC paperwork</div>
+            <div class="sc-value" id="tileQcScans">0</div>
+            <div class="sc-sub" id="tileQcSub">pages added</div>
+          </button>
+          <button type="button" class="status-card" onclick="switchTab('checklist')">
+            <div class="sc-label">Checklist</div>
+            <div class="sc-value" id="tileChecklist">0 / 61</div>
+            <div class="sc-sub" id="tileChecklistSub">0% complete</div>
+            <div class="status-progress"><span id="tileChecklistBar" style="width:0%"></span></div>
+          </button>
+          <button type="button" class="status-card" onclick="scrollToCalibration()">
+            <div class="sc-label">Equipment</div>
+            <div class="sc-value" id="tileEquipment">0</div>
+            <div class="sc-sub" id="tileEquipmentSub">tracked</div>
+          </button>
+          <button type="button" class="status-card" onclick="scrollToCalibration()">
+            <div class="sc-label">Calibration</div>
+            <div class="sc-value" id="tileDueSoon">0</div>
+            <div class="sc-sub" id="tileDueSub">due soon</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Equipment & calibration -->
+      <div class="section" id="calibrationSection">
+        <div class="section-head"><h2>Equipment &amp; calibration</h2><span class="section-desc">Upcoming equipment calibration dates</span></div>
+        <div class="card panel">
+          <div class="cal-table">
+            <div class="cal-head" id="calHead">
+              <div>Equipment</div><div>Serial no.</div><div>Next due</div><div>Status</div><div></div>
+            </div>
+            <div id="calRows"></div>
+            <div class="cal-empty" id="calEmpty">No equipment added yet. Add your brake tester, gas analyser, and other equipment to track calibration dates.</div>
+          </div>
+          <div class="cal-foot">
+            <button type="button" class="btn btn-secondary btn-sm" id="addCalRowBtn">+ Add equipment</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ MONTHLY REPORT ═══════════════ -->
+    <section class="view" id="view-report" role="tabpanel" aria-labelledby="tab-report">
+      <div class="view-head">
+        <h1>Monthly Report</h1>
+        <div class="view-month" id="reportMonthLabel"></div>
+        <div class="view-desc">Upload this month's DVSA exports and supporting QC paperwork.</div>
+      </div>
+
+      <!-- Report readiness -->
+      <div class="card readiness">
+        <div>
+          <div class="readiness-title">Report readiness</div>
+          <div class="readiness-lines">
+            <div class="rl" id="readyDvsaLine"></div>
+            <div class="rl" id="readyQcLine"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="handleGenerate()">Generate Report</button>
+      </div>
+
+      <!-- DVSA data -->
+      <div class="section">
+        <div class="section-head"><h2>DVSA data</h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
+        <div class="upload-grid">
+
+          <div class="card upload-card">
+            <div class="upload-card-top">
+              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
+              <div><div class="upload-card-title">Quality control</div><div class="upload-card-sub">QC data export · .xlsx</div></div>
+            </div>
+            <div class="upload-actions">
+              <label class="btn btn-secondary btn-sm" for="fileQc">Upload file</label>
+              <input type="file" id="fileQc" accept=".xlsx,.xls">
+            </div>
+            <div class="file-list" id="listQc"></div>
+            <div class="upload-status required" id="statusQc"></div>
+          </div>
+
+          <div class="card upload-card">
+            <div class="upload-card-top">
+              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
+              <div><div class="upload-card-title">Test log — by date</div><div class="upload-card-sub">Date sequence · .xlsx</div></div>
+            </div>
+            <div class="upload-actions">
+              <label class="btn btn-secondary btn-sm" for="fileLogDate">Upload file</label>
+              <input type="file" id="fileLogDate" accept=".xlsx,.xls">
+            </div>
+            <div class="file-list" id="listLogDate"></div>
+            <div class="upload-status required" id="statusLogDate"></div>
+          </div>
+
+          <div class="card upload-card">
+            <div class="upload-card-top">
+              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
+              <div><div class="upload-card-title">Test log — by duration</div><div class="upload-card-sub">Time on the ramp · .xlsx</div></div>
+            </div>
+            <div class="upload-actions">
+              <label class="btn btn-secondary btn-sm" for="fileLogDuration">Upload file</label>
+              <input type="file" id="fileLogDuration" accept=".xlsx,.xls">
+            </div>
+            <div class="file-list" id="listLogDuration"></div>
+            <div class="upload-status required" id="statusLogDuration"></div>
+          </div>
+
+          <div class="card upload-card">
+            <div class="upload-card-top">
+              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
+              <div><div class="upload-card-title">DVSA rating</div><div class="upload-card-sub">Rating &amp; scheme performance · .xlsx</div></div>
+            </div>
+            <div class="upload-actions">
+              <label class="btn btn-secondary btn-sm" for="fileRating">Upload file</label>
+              <input type="file" id="fileRating" accept=".xlsx,.xls">
+            </div>
+            <div class="file-list" id="listRating"></div>
+            <div class="upload-status required" id="statusRating"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- QC paperwork -->
+      <div class="section">
+        <div class="section-head"><h2>QC paperwork</h2><span class="section-desc">Upload the MOT paperwork for vehicles quality-controlled this month</span></div>
+        <div class="card panel">
+          <label class="dropzone" for="fileQcScans">
+            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <div class="dz-title">Add scanned pages</div>
+            <div class="dz-sub">Any order — pages are matched and checked against the monthly test log</div>
+            <input type="file" id="fileQcScans" multiple accept=".pdf,image/*">
+          </label>
+          <div class="qc-count" id="qcCount">0 pages uploaded</div>
+          <div class="file-list" id="listQcScans"></div>
+          <details class="qc-how">
+            <summary>How it works</summary>
+            <p>Scan in the paperwork for whichever vehicles you QC'd this month, in any order. The system reads the registration off each page, groups the full set together, and cross-checks it against the test log — so there's no need to note down separately which ones were QC'd.</p>
+          </details>
+          <button type="button" class="btn btn-secondary btn-sm" id="sortScansBtn" style="margin-top:14px" disabled onclick="runSmartScan()">Sort scanned pages</button>
+          <div class="qc-sort-status" id="qcSortStatus"></div>
+          <div id="qcGroupsContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════ CHECKLIST ═══════════════ -->
+    <section class="view" id="view-checklist" role="tabpanel" aria-labelledby="tab-checklist">
+      <div class="view-head">
+        <h1>Monthly compliance checklist</h1>
+        <div class="view-month" id="checklistMonthLabel"></div>
+        <div class="view-desc">Digitised from Mortlake's paper template, aligned to DVSA's current site assessment criteria.</div>
+      </div>
+
+      <div class="card checklist-summary">
+        <div class="cs-numbers">
+          <span class="cs-percent" id="clPercent">0%</span>
+          <span class="cs-count" id="clCount">0 / 61 complete</span>
+        </div>
+        <div class="cs-bar"><span id="clBar" style="width:0%"></span></div>
+        <span class="cs-flag" id="clFlag"></span>
+      </div>
+
+      <div class="checklist-toolbar">
+        <div class="filter-group" role="group" aria-label="Filter checklist">
+          <button type="button" class="filter-btn active" data-filter="all" onclick="setChecklistFilter('all')">All</button>
+          <button type="button" class="filter-btn" data-filter="incomplete" onclick="setChecklistFilter('incomplete')">Incomplete</button>
+          <button type="button" class="filter-btn" data-filter="complete" onclick="setChecklistFilter('complete')">Complete</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="setAllCats(true)">Expand all</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="setAllCats(false)">Collapse all</button>
+      </div>
+
+      <div id="checklistContainer"></div>
+    </section>
+
+  </div>
+</div>
+
+<!-- Printable report — hidden on screen, shown only when printing / saving to PDF -->
+<div id="printReport"></div>
+
+<script>
+  /* ═══════════════ Auth (unchanged behaviour) ═══════════════ */
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzA6EEtsyy3VMzGGyfQQ9pt_SRarwW4gdIfntpHzdh1kSeZfo3e4rCG7YRTBJttZ7a9gA/exec';
+  var PW_KEY = 'mortlake_report_password';
+
+  function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
+
+  function verifyPassword(pw, onResult) {
+    if (!SCRIPT_URL) { onResult(false, 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'checkDashboardPassword', password: pw })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { onResult(data.status === 'success'); })
+      .catch(function () { onResult(false); });
+  }
+
+  function lockApp(msg) {
+    localStorage.removeItem(PW_KEY);
+    document.getElementById('lockScreen').style.display = 'flex';
+    document.getElementById('appRoot').style.display = 'none';
+    var err = document.getElementById('lockError');
+    if (msg) { err.textContent = msg; err.classList.add('show'); } else { err.classList.remove('show'); }
+    document.getElementById('lockPasswordInput').value = '';
+  }
+
+  function unlockApp() {
+    document.getElementById('lockScreen').style.display = 'none';
+    document.getElementById('appRoot').style.display = 'block';
+  }
+
+  function submitLockScreen() {
+    var pw = document.getElementById('lockPasswordInput').value;
+    var btn = document.getElementById('lockSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    verifyPassword(pw, function (ok, err) {
+      btn.disabled = false;
+      btn.textContent = 'Unlock';
+      if (ok) {
+        localStorage.setItem(PW_KEY, pw);
+        unlockApp();
+      } else {
+        var errEl = document.getElementById('lockError');
+        errEl.textContent = err || 'Incorrect password.';
+        errEl.classList.add('show');
+      }
+    });
+  }
+
+  document.getElementById('lockPasswordInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') submitLockScreen();
+  });
+
+  (function () {
+    // No backend deployed yet, so skip the lock screen for local review.
+    if (!SCRIPT_URL) { unlockApp(); return; }
+    var pw = getPassword();
+    if (!pw) return;
+    verifyPassword(pw, function (ok) { if (ok) unlockApp(); else lockApp('Session expired — please re-enter the password.'); });
+  })();
+
+  function escapeHtml_(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ═══════════════ Tab navigation (show/hide — state preserved) ═══════════════ */
+  var TABS = ['dashboard', 'report', 'checklist'];
+  function switchTab(tab) {
+    TABS.forEach(function (t) {
+      var isActive = t === tab;
+      document.getElementById('view-' + t).classList.toggle('active', isActive);
+      var nav = document.getElementById('tab-' + t);
+      nav.classList.toggle('active', isActive);
+      nav.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    window.scrollTo(0, 0);
+  }
+
+  function scrollToCalibration() {
+    switchTab('dashboard');
+    var el = document.getElementById('calibrationSection');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ═══════════════ Persistence (localStorage) ═══════════════ */
+  // Everything the user enters is saved locally so nothing is lost on refresh
+  // or reopen. Checklist answers are kept per reporting month; calibration
+  // equipment carries across months. Nothing leaves the browser.
+  var STORE_KEY = 'mortlake_report_v1';
+  var currentMonth = '';
+
+  function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } }
+  function saveStore() { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} }
+  var store = loadStore();
+  if (!store.months) store.months = {};
+  if (!store.calibration) store.calibration = [];
+
+  function persistChecklistState() {
+    store.months[currentMonth] = { state: checklistState, notes: checklistNotes };
+    saveStore();
+  }
+  function persistCalibration() {
+    var list = [];
+    document.querySelectorAll('.cal-row').forEach(function (row) {
+      list.push({
+        name: row.querySelector('.calName').value,
+        serial: row.querySelector('.calSerial').value,
+        date: row.querySelector('.calDate').value
+      });
+    });
+    store.calibration = list;
+    saveStore();
+  }
+  function persistMonth() { store.selectedMonth = currentMonth; saveStore(); }
+
+  function loadChecklistForMonth(month) {
+    var m = store.months[month] || {};
+    checklistState = Object.assign({}, m.state || {});
+    checklistNotes = Object.assign({}, m.notes || {});
+  }
+
+  /* ═══════════════ Reporting month label ═══════════════ */
+  function formatMonth(val) {
+    if (!val) return '';
+    var parts = val.split('-');
+    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  }
+  function updateMonthLabels() {
+    var label = formatMonth(document.getElementById('fMonth').value);
+    ['dashMonthLabel', 'reportMonthLabel', 'checklistMonthLabel'].forEach(function (id) {
+      document.getElementById(id).textContent = label;
+    });
+  }
+  // Switching month swaps in that month's saved checklist (calibration is global).
+  document.getElementById('fMonth').addEventListener('change', function () {
+    currentMonth = document.getElementById('fMonth').value;
+    persistMonth();
+    loadChecklistForMonth(currentMonth);
+    renderChecklist();
+    updateProgress();
+    updateMonthLabels();
+  });
+
+  /* ═══════════════ File uploads ═══════════════ */
+  // Single-file DVSA inputs + their status/badge elements, plus the multi QC input.
+  var DVSA_INPUTS = [
+    { input: 'fileQc',          list: 'listQc',          status: 'statusQc' },
+    { input: 'fileLogDate',     list: 'listLogDate',     status: 'statusLogDate' },
+    { input: 'fileLogDuration', list: 'listLogDuration', status: 'statusLogDuration' },
+    { input: 'fileRating',      list: 'listRating',      status: 'statusRating' }
+  ];
+  var singleFileInputs = DVSA_INPUTS.map(function (d) { return d.input; });
+
+  var pickedFiles = { fileQcScans: [] };
+  singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
+
+  var ICON_UPLOADED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7d4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var ICON_REQUIRED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>';
+  var ICON_WARN = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#a66a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>';
+  var ICON_SPIN = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="40" stroke-dashoffset="15"/></svg>';
+
+  /* ═══════════════ Reading Excel / CSV / PDF files ═══════════════ */
+  // Everything happens right here in the browser — the file never gets sent
+  // anywhere. Excel/CSV are read properly (real rows of data). PDFs are read
+  // properly ONLY if they have real text in them. A scanned/photographed PDF
+  // (just a picture of a page, no text underneath) can't be read this way —
+  // that needs the separate "smart scan" feature, not this one.
+  var parsedFileData = {}; // inputId -> { kind, rows, sheetNames, pageCount, hasText, error }
+
+  function readUploadedFile_(file) {
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') return readSpreadsheet_(file);
+    if (ext === 'pdf') return readPdf_(file);
+    return Promise.resolve({ kind: 'unsupported', error: "Can't read a ." + ext + " file — try .xlsx, .csv or .pdf." });
+  }
+
+  function readSpreadsheet_(file) {
+    return file.arrayBuffer().then(function (buf) {
+      var workbook = XLSX.read(buf, { type: 'array' });
+      var sheetNames = workbook.SheetNames;
+      var firstSheet = workbook.Sheets[sheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+      // Drop fully-blank rows so the row count means something.
+      rows = rows.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+      return { kind: 'spreadsheet', sheetNames: sheetNames, rows: rows };
+    }).catch(function () {
+      return { kind: 'spreadsheet', error: "Couldn't read this file — is it a valid Excel/CSV file?" };
+    });
+  }
+
+  function readPdf_(file) {
+    if (typeof pdfjsLib === 'undefined') {
+      return Promise.resolve({ kind: 'pdf', error: 'PDF reader failed to load.' });
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/lib/pdf.worker.min.js';
+    return file.arrayBuffer().then(function (buf) {
+      return pdfjsLib.getDocument({ data: buf }).promise.then(function (pdf) {
+        var pageCount = pdf.numPages;
+        var pagePromises = [];
+        for (var i = 1; i <= pageCount; i++) {
+          pagePromises.push(pdf.getPage(i).then(function (page) {
+            return page.getTextContent().then(function (tc) {
+              return tc.items.map(function (it) { return it.str; }).join(' ');
+            });
+          }));
+        }
+        return Promise.all(pagePromises).then(function (pageTexts) {
+          var fullText = pageTexts.join('\n').trim();
+          if (!fullText) {
+            // No text at all = this PDF is just scanned/photographed pages,
+            // not real data. Being upfront about that rather than pretending.
+            return { kind: 'pdf', pageCount: pageCount, hasText: false, rows: [] };
+          }
+          var rows = fullText.split('\n').filter(function (l) { return l.trim() !== ''; });
+          return { kind: 'pdf', pageCount: pageCount, hasText: true, rows: rows, text: fullText };
+        });
+      });
+    }).catch(function () {
+      return { kind: 'pdf', error: "Couldn't open this PDF." };
+    });
+  }
+
+  function describeParsedResult_(result) {
+    if (result.error) return { ok: false, text: result.error };
+    if (result.kind === 'spreadsheet') {
+      var dataRows = Math.max(0, result.rows.length - 1); // minus header row
+      return { ok: true, text: dataRows + ' row' + (dataRows === 1 ? '' : 's') + ' read' };
+    }
+    if (result.kind === 'pdf') {
+      if (!result.hasText) {
+        return { ok: false, text: 'Scanned PDF (' + result.pageCount + ' page' + (result.pageCount === 1 ? '' : 's') + ') — no readable text, needs smart scan' };
+      }
+      return { ok: true, text: result.pageCount + ' page' + (result.pageCount === 1 ? '' : 's') + ' of text read' };
+    }
+    return { ok: false, text: result.error || 'Unsupported file' };
+  }
+
+  function wireFileInput(inputId, listId, singleFile, statusId) {
+    var input = document.getElementById(inputId);
+    input.addEventListener('change', function () {
+      if (singleFile) pickedFiles[inputId] = [];
+      var newFiles = Array.prototype.slice.call(input.files);
+      newFiles.forEach(function (f) { pickedFiles[inputId].push(f); });
+      input.value = '';
+      renderFileList(inputId, listId, statusId);
+      refreshStatuses();
+
+      // Actually read the file's contents in the background, then show
+      // what was found (or honestly say it couldn't be read).
+      newFiles.forEach(function (f) {
+        if (statusId) {
+          var el = document.getElementById(statusId);
+          el.className = 'upload-status reading';
+          el.innerHTML = ICON_SPIN + '<span>Reading ' + escapeHtml_(f.name) + '…</span>';
+        }
+        readUploadedFile_(f).then(function (result) {
+          parsedFileData[inputId] = result;
+          if (!statusId) return;
+          var el = document.getElementById(statusId);
+          var summary = describeParsedResult_(result);
+          if (summary.ok) {
+            el.className = 'upload-status uploaded';
+            el.innerHTML = ICON_UPLOADED + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
+          } else {
+            el.className = 'upload-status warn';
+            el.innerHTML = ICON_WARN + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
+          }
+        });
+      });
+    });
+  }
+
+  function renderFileList(inputId, listId, statusId) {
+    var list = document.getElementById(listId);
+    list.innerHTML = '';
+    pickedFiles[inputId].forEach(function (f, i) {
+      var row = document.createElement('div');
+      row.className = 'file-chip';
+      row.innerHTML = '<span>' + escapeHtml_(f.name) + '</span><button type="button" aria-label="Remove file">&times;</button>';
+      row.querySelector('button').addEventListener('click', function () {
+        pickedFiles[inputId].splice(i, 1);
+        renderFileList(inputId, listId, statusId);
+        refreshStatuses();
+      });
+      list.appendChild(row);
+    });
+    // DVSA single-file status label
+    if (statusId) {
+      var el = document.getElementById(statusId);
+      if (pickedFiles[inputId].length > 0) {
+        el.className = 'upload-status uploaded';
+        el.innerHTML = ICON_UPLOADED + '<span class="us-file">Uploaded · ' + escapeHtml_(pickedFiles[inputId][0].name) + '</span>';
+      } else {
+        el.className = 'upload-status required';
+        el.innerHTML = ICON_REQUIRED + '<span>Required — not uploaded</span>';
+      }
+    }
+  }
+
+  DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input, d.list, true, d.status); });
+  wireFileInput('fileQcScans', 'listQcScans', false, null);
+  // Paint the initial "Required — not uploaded" state on each DVSA card.
+  DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
+
+  /* ═══════════════ Equipment & calibration ═══════════════ */
+  var DUE_SOON_DAYS = 30;
+  var calRowCount = 0;
+
+  function computeCalStatus(dateStr) {
+    if (!dateStr) return { text: 'Set a date', badge: '', cls: 'neutral', due: false };
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var d = new Date(dateStr); d.setHours(0, 0, 0, 0);
+    var days = Math.round((d - today) / 86400000);
+    if (days < 0)  return { text: Math.abs(days) + ' days ago', badge: 'Overdue',  cls: 'danger',  due: true };
+    if (days === 0) return { text: 'Today', badge: 'Due soon', cls: 'warning', due: true };
+    if (days <= DUE_SOON_DAYS) return { text: days + ' days', badge: 'Due soon', cls: 'warning', due: true };
+    return { text: days + ' days', badge: 'OK', cls: 'success', due: false };
+  }
+
+  function renderCalStatus(row) {
+    var dateVal = row.querySelector('.calDate').value;
+    var s = computeCalStatus(dateVal);
+    var cell = row.querySelector('.cal-status');
+    cell.innerHTML = '<span>' + s.text + '</span>' + (s.badge ? '<span class="badge ' + s.cls + '">' + s.badge + '</span>' : '');
+  }
+
+  function updateCalEmptyState() {
+    var has = document.getElementById('calRows').children.length > 0;
+    document.getElementById('calEmpty').style.display = has ? 'none' : 'block';
+    document.getElementById('calHead').style.display = has ? 'grid' : 'none';
+  }
+
+  function addCalRow(prefill) {
+    calRowCount++;
+    var row = document.createElement('div');
+    row.className = 'cal-row';
+    row.dataset.rowId = calRowCount;
+    row.innerHTML =
+      '<input type="text" class="calName" placeholder="e.g. Brake tester" aria-label="Equipment name">' +
+      '<input type="text" class="calSerial" placeholder="Serial no." aria-label="Serial number">' +
+      '<input type="date" class="calDate" aria-label="Next due date">' +
+      '<div class="cal-status"></div>' +
+      '<button type="button" class="cal-remove" aria-label="Remove equipment">&times;</button>';
+
+    row.querySelector('.cal-remove').addEventListener('click', function () {
+      row.remove();
+      updateCalEmptyState();
+      refreshStatuses();
+      persistCalibration();
+    });
+    row.querySelector('.calName').addEventListener('input', function () { refreshStatuses(); persistCalibration(); });
+    row.querySelector('.calSerial').addEventListener('input', persistCalibration);
+    row.querySelector('.calDate').addEventListener('input', function () { renderCalStatus(row); refreshStatuses(); persistCalibration(); });
+
+    if (prefill) {
+      row.querySelector('.calName').value = prefill.name || '';
+      row.querySelector('.calSerial').value = prefill.serial || '';
+      row.querySelector('.calDate').value = prefill.date || '';
+    }
+    document.getElementById('calRows').appendChild(row);
+    renderCalStatus(row);
+    updateCalEmptyState();
+  }
+
+  document.getElementById('addCalRowBtn').addEventListener('click', function () { addCalRow(); refreshStatuses(); persistCalibration(); });
+  updateCalEmptyState();
+
+  /* ═══════════════ Dashboard status cards + report readiness ═══════════════ */
+  function updateDashboardTiles() {
+    var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
+    document.getElementById('tileDvsaFiles').textContent = dvsaCount + ' / 4';
+    var dvsaSub = document.getElementById('tileDvsaSub');
+    if (dvsaCount === 4) { dvsaSub.textContent = 'All uploaded'; dvsaSub.className = 'sc-sub'; }
+    else { dvsaSub.textContent = (4 - dvsaCount) + ' file' + (4 - dvsaCount === 1 ? '' : 's') + ' missing'; dvsaSub.className = 'sc-sub attention'; }
+
+    var qc = pickedFiles.fileQcScans.length;
+    document.getElementById('tileQcScans').textContent = qc;
+    document.getElementById('tileQcSub').textContent = qc === 1 ? 'page added' : 'pages added';
+
+    var rows = document.querySelectorAll('.cal-row');
+    var tracked = 0, dueSoon = 0;
+    rows.forEach(function (row) {
+      var name = row.querySelector('.calName').value.trim();
+      var dateVal = row.querySelector('.calDate').value;
+      if (name) tracked++;
+      if (dateVal && computeCalStatus(dateVal).due) dueSoon++;
+    });
+    document.getElementById('tileEquipment').textContent = tracked;
+    document.getElementById('tileEquipmentSub').textContent = tracked === 1 ? 'item tracked' : 'items tracked';
+    document.getElementById('tileDueSoon').textContent = dueSoon;
+    var dueSub = document.getElementById('tileDueSub');
+    dueSub.textContent = 'due soon';
+    dueSub.className = dueSoon > 0 ? 'sc-sub attention' : 'sc-sub';
+  }
+
+  function updateReportReadiness() {
+    var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
+    var qc = pickedFiles.fileQcScans.length;
+
+    var dvsaLine = document.getElementById('readyDvsaLine');
+    var ok = dvsaCount === 4;
+    dvsaLine.innerHTML = (ok ? ICON_UPLOADED : ICON_REQUIRED) +
+      '<span>' + dvsaCount + ' / 4 DVSA exports uploaded' + (ok ? '' : ' — ' + (4 - dvsaCount) + ' still needed') + '</span>';
+
+    var qcLine = document.getElementById('readyQcLine');
+    qcLine.innerHTML = (qc > 0 ? ICON_UPLOADED : ICON_REQUIRED) + '<span>' + qc + ' QC page' + (qc === 1 ? '' : 's') + ' added</span>';
+
+    document.getElementById('qcCount').textContent = qc + (qc === 1 ? ' page uploaded' : ' pages uploaded');
+
+    var sortBtn = document.getElementById('sortScansBtn');
+    if (sortBtn) sortBtn.disabled = qc === 0;
+  }
+
+  function refreshStatuses() {
+    updateDashboardTiles();
+    updateReportReadiness();
+  }
+
+  /* ═══════════════ Smart scan — reading & sorting QC paperwork ═══════════════
+     Turns every uploaded QC page (image or PDF) into an image, sends each one
+     to the Apps Script backend (which asks Claude to read it), then groups
+     the results by registration number. Needs the backend deployed with an
+     Anthropic API key — until then it says so plainly instead of pretending
+     to work. Nothing here silently guesses: any page that can't be read with
+     confidence is listed separately for a manual check. */
+  var QC_EXPECTED_DOCS = ['emissions_test', 'vt20_certificate', 'inspection_sheet']; // vt30_refusal only appears on a fail
+  var qcSortResults = [];
+
+  function fileToPageImages_(file) {
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') return pdfToPageImages_(file);
+    return fileToSingleImage_(file).then(function (img) { return [img]; });
+  }
+
+  function fileToSingleImage_(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        resolve({ base64: reader.result.split(',')[1], mimeType: file.type || 'image/jpeg', label: file.name });
+      };
+      reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function pdfToPageImages_(file) {
+    if (typeof pdfjsLib === 'undefined') return Promise.resolve([]);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/lib/pdf.worker.min.js';
+    return file.arrayBuffer().then(function (buf) {
+      return pdfjsLib.getDocument({ data: buf }).promise.then(function (pdf) {
+        var pagePromises = [];
+        var _loop = function (pageNum) {
+          pagePromises.push(pdf.getPage(pageNum).then(function (page) {
+            var viewport = page.getViewport({ scale: 1.8 });
+            var canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise.then(function () {
+              return { base64: canvas.toDataURL('image/png').split(',')[1], mimeType: 'image/png', label: file.name + ' (page ' + pageNum + ')' };
+            });
+          }));
+        };
+        for (var i = 1; i <= pdf.numPages; i++) _loop(i);
+        return Promise.all(pagePromises);
+      });
+    });
+  }
+
+  function analyzePageOnServer_(pageImg) {
+    if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
+    return fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'analyzeQcPage', password: getPassword(), imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
+    }).then(function (r) { return r.json(); }).catch(function () {
+      return { status: 'error', message: 'Network error contacting the backend.' };
+    });
+  }
+
+  function normalizeReg_(reg) { return (reg || '').toUpperCase().replace(/\s+/g, ''); }
+
+  function runSmartScan() {
+    var files = pickedFiles.fileQcScans;
+    if (!files.length) return;
+
+    var statusEl = document.getElementById('qcSortStatus');
+    var btn = document.getElementById('sortScansBtn');
+
+    if (!SCRIPT_URL) {
+      statusEl.innerHTML = '<span style="color:var(--warning)">Smart scan needs the Apps Script backend deployed with an Anthropic API key — not connected yet.</span>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sorting…';
+    statusEl.textContent = 'Reading pages…';
+    document.getElementById('qcGroupsContainer').innerHTML = '';
+    qcSortResults = [];
+
+    Promise.all(files.map(fileToPageImages_))
+      .then(function (nested) {
+        var allPages = [].concat.apply([], nested);
+        var done = 0;
+        statusEl.textContent = 'Analyzing 0 / ' + allPages.length + ' pages…';
+        return Promise.all(allPages.map(function (pageImg) {
+          return analyzePageOnServer_(pageImg).then(function (res) {
+            done++;
+            statusEl.textContent = 'Analyzing ' + done + ' / ' + allPages.length + ' pages…';
+            qcSortResults.push({ label: pageImg.label, response: res });
+          });
+        }));
+      })
+      .then(function () {
+        renderQcGroups_();
+        btn.disabled = false;
+        btn.textContent = 'Sort scanned pages';
+      });
+  }
+
+  function renderQcGroups_() {
+    var statusEl = document.getElementById('qcSortStatus');
+    var container = document.getElementById('qcGroupsContainer');
+    container.innerHTML = '';
+
+    var groups = {};
+    var needsReview = [];
+
+    qcSortResults.forEach(function (item) {
+      var res = item.response;
+      if (res.status !== 'success') { needsReview.push({ label: item.label, reason: res.message || 'Could not read this page' }); return; }
+      var a = res.result;
+      var reg = normalizeReg_(a.registration);
+      if (!reg) { needsReview.push({ label: item.label, reason: 'Registration not readable' }); return; }
+      if (a.confidence === 'low') needsReview.push({ label: item.label, reason: 'Low-confidence read — check by hand' });
+      if (!groups[reg]) groups[reg] = { pages: [], testers: {} };
+      groups[reg].pages.push(a);
+      if (a.tester_name) groups[reg].testers[a.tester_name] = true;
+    });
+
+    var regKeys = Object.keys(groups).sort();
+    statusEl.textContent = regKeys.length + ' vehicle' + (regKeys.length === 1 ? '' : 's') + ' found across ' + qcSortResults.length + ' page' + (qcSortResults.length === 1 ? '' : 's') +
+      (needsReview.length ? ' · ' + needsReview.length + ' need' + (needsReview.length === 1 ? 's' : '') + ' manual check' : '');
+
+    regKeys.forEach(function (reg) {
+      var g = groups[reg];
+      var foundTypes = g.pages.map(function (p) { return p.document_type; });
+      var missing = QC_EXPECTED_DOCS.filter(function (t) { return foundTypes.indexOf(t) === -1; });
+      var complete = missing.length === 0;
+      var testerList = Object.keys(g.testers);
+      var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
+
+      var div = document.createElement('div');
+      div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
+      div.innerHTML =
+        '<div class="qc-group-head">' +
+          '<span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
+          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + QC_EXPECTED_DOCS.length + ' pages') + '</span>' +
+        '</div>' +
+        '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
+          (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
+        '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' +
+        (missing.length ? '<div class="qc-page-flag">Missing: ' + missing.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' : '');
+      container.appendChild(div);
+    });
+
+    if (needsReview.length) {
+      var reviewDiv = document.createElement('div');
+      reviewDiv.className = 'qc-group incomplete';
+      reviewDiv.innerHTML = '<div class="qc-group-head"><span class="qc-group-reg">Needs manual check</span></div>' +
+        needsReview.map(function (r) { return '<div class="qc-page-flag">' + escapeHtml_(r.label) + ' — ' + escapeHtml_(r.reason) + '</div>'; }).join('');
+      container.appendChild(reviewDiv);
+    }
+  }
+
+  /* ═══════════════ VTS self-assessment checklist ═══════════════ */
+  // Digitised from Mortlake's paper template (MOT Consultancy Ltd), aligned to
+  // DVSA's current Site Assessment Risk Scoring Guide / Guide to MOT Risk Reduction.
+  var CHECKLIST = [
+    { cat: 'VTS site appearance', items: [
+      'Forecourt & exterior of VTS clean, tidy & well presented',
+      'All customer areas signed, clean, tidy & well maintained',
+      'Cleaning agents contracted or staff cleaning rota displayed'
+    ]},
+    { cat: 'Customer parking', items: [
+      'Adequate for MOT tests & other services',
+      'Signed and lined'
+    ]},
+    { cat: 'MOT signs', items: [
+      'MOT triangles sign displayed',
+      'Diesels tested / catalysts tested signs displayed (not mandatory)',
+      'All signs visible & not badly faded'
+    ]},
+    { cat: 'Reception area', items: [
+      "Entrance well signed with 'no smoking' notice displayed",
+      'Seating with clean toilet facility',
+      'MOT viewing area / CCTV monitor notices displayed',
+      'Customer vehicle ignition key & property secure & protected',
+      'MOT appointment system in place, recording customer name, phone number and registration mark, retained for 3 months'
+    ]},
+    { cat: 'MOT notice board', items: [
+      'AE entity correctly identified on VT9, matches insurance certificate, letterheads, business cards & MOT invoices',
+      'Current DVSA VT9A displayed with area office address clearly completed',
+      'Current public information leaflets available',
+      'MOT hours displayed match those registered on MOT Comp'
+    ]},
+    { cat: 'MOT documents readily available', items: [
+      'All required MOT documents neatly filed & readily available to a visiting DVSA examiner'
+    ]},
+    { cat: 'MOT risk score criteria', items: [
+      "Current DVSA 'Site Assessment Risk Scoring Guide' & 'Guide to MOT Risk Reduction' available to all staff"
+    ]},
+    { cat: 'Monthly VTS self-assessment', items: [
+      'This checklist completed, filed & readily available to DVSA as evidence of a regular review process'
+    ]},
+    { cat: 'MTS notices for display', items: [
+      'Notice displayed for security of the security card, MTS password & PIN',
+      'Notice displayed for renewal of calibration certificates & equipment checks'
+    ]},
+    { cat: 'Contingency testing', items: [
+      'Stock of contingency documents (CT20–CT30 & CT32) kept or saved for printing when needed',
+      'Copies of each contingency test certificate, with emissions printouts attached, retained for 3 months'
+    ]},
+    { cat: 'Monthly reports printed from MTS & filed', items: [
+      'VTS test logs printed in date sequence',
+      'VTS test logs printed in test duration sequence',
+      'Test quality information printed for all MOT testers'
+    ], auto: 'Marked automatically once this month\'s three DVSA exports are uploaded in Monthly Report' },
+    { cat: 'Annual MOT tester training & CPD', items: [
+      'Previous records of tester annual training, CPD & assessment passes filed & available to DVSA for 5 years',
+      "Current MOT tester annual training topics & CPD record kept on file"
+    ]},
+    { cat: 'MOT tester additional training & staff training', items: [
+      'Record kept of any in-house or outside-agency training',
+      'Record kept of training on new or replacement MOT equipment',
+      'Record kept of all staff meetings'
+    ]},
+    { cat: 'MOT viewing area', items: [
+      'Clearly signed, seating available, clean & uncluttered',
+      'MOT test CCTV monitor available',
+      'Safety barriers secure'
+    ]},
+    { cat: 'MOT test bay', items: [
+      'Clean & tidy, perimeter guard secure & floor markings present',
+      'MOT tool board displayed — corrosion tool, tyre depth gauge, tape measure, lever bars, examination lamp, 13-pin towbar socket tester all present & in good condition'
+    ]},
+    { cat: 'MOT equipment', items: [
+      'Turnplates oiled/greased, undamaged & operative with locking pins in situ',
+      'RBT in good order, no bare patches, wells free of dirt & debris',
+      'ECA & DSM working correctly, clock set to current GMT/BST',
+      'Beam tester clean, undamaged, tight on post, running smoothly with datum line marked',
+      'Leak detection spray & brake applicator available and in good condition'
+    ]},
+    { cat: 'MOT tester QC/QM checks', items: [
+      'QC checks run monthly on all testers',
+      'Constructive comments made & recorded',
+      'All QC checks acknowledged by the tester',
+      'All QC checks fully documented, filed & readily available to DVSA',
+      'QC wallchart or notice displayed prominently'
+    ], auto: 'Marked automatically once this month\'s QC scans are uploaded in Monthly Report' },
+    { cat: 'Equipment calibration certificates & checks', items: [
+      'RBT, plate tester & beam tester certificates available',
+      'ECA & DSM certificates available',
+      'Tapley meter, TDG & shaker plate checks recorded on schedule',
+      'Serial numbers & calibration dates accurately recorded'
+    ], auto: 'Marked automatically from the calibration dates entered on the Dashboard' },
+    { cat: 'Vehicle documents & handover', items: [
+      'System in place for vehicle return & MOT documentation handover, documents retained & retrievable',
+      'Customer feedback report provided',
+      'Protective gloves, seat covers & floor mats used during MOT/service/repairs'
+    ]},
+    { cat: 'Equipment maintenance', items: [
+      'Records show a competent person conducts regular equipment checks',
+      'Operating instructions & training sessions retained & available to staff'
+    ]},
+    { cat: 'Workshop appearance', items: [
+      'Clean & tidy with a cleaning schedule for designated work areas',
+      'Tools clean & in use, instruction manuals available, maintenance/calibration records on file',
+      'Vehicle parts, tyres & oil recycling self-evident'
+    ]},
+    { cat: 'Building maintenance', items: [
+      'Site inspection, cleaning & defect reporting procedure in place, maintenance history recorded',
+      'If a tenant: evidence of requests made to landlord for repairs/maintenance where needed'
+    ]}
+  ];
+
+  var checklistState = {}; // "catIndex-itemIndex" -> 'yes' | 'no'
+  var checklistNotes = {}; // "catIndex-itemIndex" -> note text
+  var checklistFilter = 'all';
+
+  var CHECK_ICON = '<svg class="cat-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var CHEVRON = '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+  function renderChecklist() {
+    var container = document.getElementById('checklistContainer');
+    container.innerHTML = '';
+    CHECKLIST.forEach(function (cat, ci) {
+      var catEl = document.createElement('div');
+      catEl.className = 'checklist-cat';
+      catEl.dataset.catIndex = ci;
+      catEl.innerHTML =
+        '<div class="checklist-cat-head" tabindex="0" role="button" aria-expanded="false">' +
+          '<div class="checklist-cat-title">' + escapeHtml_(cat.cat) + (cat.auto ? ' <span class="badge-auto">Auto</span>' : '') + '</div>' +
+          '<div class="checklist-cat-meta">' + CHECK_ICON + '<span class="cat-count">0 / ' + cat.items.length + '</span>' + CHEVRON + '</div>' +
+        '</div>' +
+        '<div class="checklist-cat-body"></div>';
+
+      var head = catEl.querySelector('.checklist-cat-head');
+      function toggle() {
+        var open = catEl.classList.toggle('open');
+        head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      head.addEventListener('click', toggle);
+      head.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
+
+      var body = catEl.querySelector('.checklist-cat-body');
+      if (cat.auto) {
+        var hint = document.createElement('div');
+        hint.className = 'auto-hint';
+        hint.textContent = cat.auto;
+        body.appendChild(hint);
+      }
+
+      cat.items.forEach(function (text, ii) {
+        var key = ci + '-' + ii;
+        var item = document.createElement('div');
+        item.className = 'check-item';
+        item.innerHTML =
+          '<div class="check-item-row">' +
+            '<div class="check-item-text">' + escapeHtml_(text) + '</div>' +
+            '<div class="check-pills">' +
+              '<button type="button" class="check-pill yes" data-val="yes">Yes</button>' +
+              '<button type="button" class="check-pill no" data-val="no">No</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="check-action"><label>Action required</label><textarea placeholder="What needs fixing, and by when?"></textarea></div>';
+
+        var yesBtn = item.querySelector('.check-pill.yes');
+        var noBtn = item.querySelector('.check-pill.no');
+        var noteWrap = item.querySelector('.check-action');
+        var noteInput = item.querySelector('textarea');
+
+        function setVal(v) {
+          checklistState[key] = v;
+          yesBtn.classList.toggle('active', v === 'yes');
+          noBtn.classList.toggle('active', v === 'no');
+          noteWrap.classList.toggle('show', v === 'no');
+          persistChecklistState();
+          updateProgress();
+        }
+        yesBtn.addEventListener('click', function () { setVal('yes'); });
+        noBtn.addEventListener('click', function () { setVal('no'); });
+        noteInput.addEventListener('input', function () { checklistNotes[key] = noteInput.value; persistChecklistState(); });
+
+        // Restore any previously saved answer / note for this item.
+        var saved = checklistState[key];
+        if (saved === 'yes') { yesBtn.classList.add('active'); }
+        else if (saved === 'no') { noBtn.classList.add('active'); noteWrap.classList.add('show'); }
+        if (checklistNotes[key]) { noteInput.value = checklistNotes[key]; }
+
+        body.appendChild(item);
+      });
+
+      container.appendChild(catEl);
+    });
+  }
+
+  function applyChecklistFilter() {
+    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
+      var ci = parseInt(catEl.dataset.catIndex, 10);
+      var total = CHECKLIST[ci].items.length, done = 0;
+      for (var ii = 0; ii < total; ii++) { if (checklistState[ci + '-' + ii]) done++; }
+      var isComplete = done === total;
+      var show = checklistFilter === 'all' ||
+                 (checklistFilter === 'complete' && isComplete) ||
+                 (checklistFilter === 'incomplete' && !isComplete);
+      catEl.classList.toggle('filtered-out', !show);
+    });
+  }
+
+  function setChecklistFilter(f) {
+    checklistFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(function (b) {
+      b.classList.toggle('active', b.dataset.filter === f);
+    });
+    applyChecklistFilter();
+  }
+
+  function setAllCats(open) {
+    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
+      if (catEl.classList.contains('filtered-out')) return;
+      catEl.classList.toggle('open', open);
+      catEl.querySelector('.checklist-cat-head').setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  }
+
+  function updateProgress() {
+    var total = 0, done = 0, flagged = 0;
+    CHECKLIST.forEach(function (cat, ci) {
+      cat.items.forEach(function (text, ii) {
+        total++;
+        var v = checklistState[ci + '-' + ii];
+        if (v) done++;
+        if (v === 'no') flagged++;
+      });
+    });
+
+    // Per-category count + complete styling
+    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
+      var ci = parseInt(catEl.dataset.catIndex, 10);
+      var itemCount = CHECKLIST[ci].items.length, doneCount = 0;
+      for (var ii = 0; ii < itemCount; ii++) { if (checklistState[ci + '-' + ii]) doneCount++; }
+      catEl.querySelector('.cat-count').textContent = doneCount + ' / ' + itemCount;
+      catEl.classList.toggle('complete', doneCount === itemCount);
+    });
+
+    var pct = total ? Math.round(done / total * 100) : 0;
+
+    // Checklist tab summary
+    setText('clPercent', pct + '%');
+    setText('clCount', done + ' / ' + total + ' complete');
+    setWidth('clBar', pct);
+    setText('clFlag', flagged ? (flagged + ' flagged for action') : '');
+
+    // Dashboard checklist status card
+    setText('tileChecklist', done + ' / ' + total);
+    setText('tileChecklistSub', pct + '% complete');
+    setWidth('tileChecklistBar', pct);
+
+    applyChecklistFilter();
+  }
+
+  function setText(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
+  function setWidth(id, pct) { var el = document.getElementById(id); if (el) el.style.width = pct + '%'; }
+
+  // Mortlake's actual MOT equipment, taken from Paul's own calibration sheet.
+  // Seeded once on first run so the app starts with the real kit rather than a
+  // blank table; after that whatever's on screen is whatever Paul has edited.
+  // (The Tapley decelerometer, serial 77303, is on his sheet but marked
+  // "not in use", so it's deliberately left out — add it if that changes.)
+  var DEFAULT_EQUIPMENT = [
+    { name: 'Headlamp Tester — Tecalemit DE7288',   serial: '2245',      date: '2026-10-31' },
+    { name: 'Roller Brake Tester — Hofmann Brekon 120', serial: '80780205',  date: '2026-10-31' },
+    { name: 'Exhaust Gas Meter — V-Tech Opus Combi', serial: '11210011',  date: '2026-10-20' },
+    { name: 'Diesel Smoke Meter — V-Tech DSM Opus',  serial: '432040006', date: '2026-10-20' },
+    { name: 'Brake Decelerometer — Bowmonk',         serial: '4712',      date: '2026-09-08' }
+  ];
+
+  // ── Boot: restore saved month, calibration and checklist, then render ──
+  (function boot() {
+    var now = new Date();
+    var def = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    currentMonth = store.selectedMonth || def;
+    document.getElementById('fMonth').value = currentMonth;
+    persistMonth();
+
+    // Seed the real equipment list only once, so deleting a row doesn't
+    // bring it straight back on the next visit.
+    if (!store.equipmentSeeded && !(store.calibration || []).length) {
+      store.calibration = DEFAULT_EQUIPMENT.slice();
+      store.equipmentSeeded = true;
+      saveStore();
+    }
+
+    (store.calibration || []).forEach(function (c) { addCalRow(c); });
+    updateCalEmptyState();
+
+    loadChecklistForMonth(currentMonth);
+    renderChecklist();
+    updateProgress();
+    refreshStatuses();
+    updateMonthLabels();
+  })();
+
+  /* ═══════════════ Rating trend chart (sample data) ═══════════════ */
+  var RATING_TREND_SAMPLE = {
+    months: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+    mortlake: [78, 82, 85, 88, 90, 92],
+    national: [74, 75, 75, 76, 77, 78]
+  };
+
+  function buildRatingChart() {
+    var svg = document.getElementById('ratingChart');
+    var W = 640, H = 190, padL = 8, padR = 8, padT = 12, padB = 22;
+    var months = RATING_TREND_SAMPLE.months;
+    var allVals = RATING_TREND_SAMPLE.mortlake.concat(RATING_TREND_SAMPLE.national);
+    var minV = Math.min.apply(null, allVals) - 6;
+    var maxV = Math.max.apply(null, allVals) + 6;
+
+    function x(i) { return padL + (W - padL - padR) * (i / (months.length - 1)); }
+    function y(v) { return padT + (H - padT - padB) * (1 - (v - minV) / (maxV - minV)); }
+    function pathFor(vals) {
+      return vals.map(function (v, i) { return (i === 0 ? 'M' : 'L') + x(i).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ');
+    }
+    function areaFor(vals) {
+      return pathFor(vals) + ' L' + x(vals.length - 1).toFixed(1) + ',' + y(minV).toFixed(1) + ' L' + x(0).toFixed(1) + ',' + y(minV).toFixed(1) + ' Z';
+    }
+    var labels = months.map(function (m, i) {
+      return '<text x="' + x(i).toFixed(1) + '" y="' + (H - 6) + '" font-size="10" fill="#9a9a9a" text-anchor="middle" font-family="inherit">' + m + '</text>';
+    }).join('');
+
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.innerHTML =
+      '<defs><linearGradient id="mortlakeFill" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0%" stop-color="#d4a600" stop-opacity="0.16"/><stop offset="100%" stop-color="#d4a600" stop-opacity="0"/>' +
+      '</linearGradient></defs>' +
+      '<path d="' + areaFor(RATING_TREND_SAMPLE.mortlake) + '" fill="url(#mortlakeFill)" stroke="none"/>' +
+      '<path d="' + pathFor(RATING_TREND_SAMPLE.national) + '" fill="none" stroke="#c9c9c5" stroke-width="2" stroke-dasharray="5 4"/>' +
+      '<path d="' + pathFor(RATING_TREND_SAMPLE.mortlake) + '" fill="none" stroke="#d4a600" stroke-width="2.5"/>' +
+      labels;
+  }
+  buildRatingChart();
+
+  /* ═══════════════ Generate report ═══════════════ */
+  // Builds a clean, printable monthly compliance report from everything the
+  // app currently knows (checklist answers + action notes, calibration, and
+  // which DVSA exports were attached this session) and opens the browser's
+  // print dialog so it can be saved as a PDF or printed on paper. The DVSA
+  // performance figures stay as placeholders until the real exports are parsed.
+  var DVSA_REPORT_FILES = [
+    { input: 'fileQc', label: 'Quality control' },
+    { input: 'fileLogDate', label: 'Test log — by date' },
+    { input: 'fileLogDuration', label: 'Test log — by duration' },
+    { input: 'fileRating', label: 'DVSA rating & scheme performance' }
+  ];
+
+  function buildReportHTML() {
+    var monthLabel = formatMonth(currentMonth) || '—';
+    var now = new Date();
+    var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
+      ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+    // Checklist tally
+    var total = 0, done = 0, flagged = 0;
+    CHECKLIST.forEach(function (cat, ci) {
+      cat.items.forEach(function (t, ii) {
+        total++;
+        var v = checklistState[ci + '-' + ii];
+        if (v) done++;
+        if (v === 'no') flagged++;
+      });
+    });
+    var pct = total ? Math.round(done / total * 100) : 0;
+
+    // DVSA files attached this session
+    var dvsaRows = DVSA_REPORT_FILES.map(function (d) {
+      var f = pickedFiles[d.input][0];
+      return '<tr><td>' + escapeHtml_(d.label) + '</td>' +
+        (f ? '<td class="pr-yes">Attached</td><td>' + escapeHtml_(f.name) + '</td>'
+           : '<td class="pr-na">Not attached</td><td class="pr-na">—</td>') + '</tr>';
+    }).join('');
+    var qc = pickedFiles.fileQcScans.length;
+
+    // Checklist detail
+    var checklistRows = CHECKLIST.map(function (cat, ci) {
+      var head = '<tr class="pr-cat"><td colspan="3">' + escapeHtml_(cat.cat) + '</td></tr>';
+      var items = cat.items.map(function (t, ii) {
+        var v = checklistState[ci + '-' + ii];
+        var statusCell = v === 'yes' ? '<td class="col-status pr-yes">Yes</td>'
+          : v === 'no' ? '<td class="col-status pr-no">No</td>'
+          : '<td class="col-status pr-na">Not answered</td>';
+        var note = (v === 'no' && checklistNotes[ci + '-' + ii]) ? escapeHtml_(checklistNotes[ci + '-' + ii]) : '';
+        return '<tr><td>' + escapeHtml_(t) + '</td>' + statusCell + '<td class="col-note">' + note + '</td></tr>';
+      }).join('');
+      return head + items;
+    }).join('');
+
+    // Calibration
+    var calList = [];
+    document.querySelectorAll('.cal-row').forEach(function (row) {
+      var name = row.querySelector('.calName').value.trim();
+      var serial = row.querySelector('.calSerial').value.trim();
+      var date = row.querySelector('.calDate').value;
+      if (name || date) calList.push({ name: name, serial: serial, date: date });
+    });
+    var calRows = calList.length ? calList.map(function (c) {
+      var s = computeCalStatus(c.date);
+      var dateTxt = c.date ? new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+      return '<tr><td>' + escapeHtml_(c.name || '—') + '</td><td>' + escapeHtml_(c.serial || '—') + '</td><td>' + dateTxt + '</td><td>' + s.text + (s.badge ? ' (' + s.badge + ')' : '') + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" class="pr-na">No equipment recorded.</td></tr>';
+
+    return '' +
+      '<div class="pr-header">' +
+        '<div><img class="pr-logo" src="assets/mortlake-logo.png" alt="Mortlake Garage">' +
+          '<h1>Monthly DVSA Compliance Report</h1>' +
+          '<div class="pr-station">Mortlake Station Garage · VTS 22453 · 29 Sheen Lane, Mortlake, London SW14 8HY</div>' +
+        '</div>' +
+        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong><br>Generated ' + escapeHtml_(generated) + '</div>' +
+      '</div>' +
+
+      '<h2>DVSA performance</h2>' +
+      '<div class="pr-note">Performance figures are populated automatically once this month\'s DVSA rating and test-log exports are parsed. Files attached to this report:</div>' +
+      '<table><thead><tr><th>Export</th><th>Status</th><th>File</th></tr></thead><tbody>' + dvsaRows + '</tbody></table>' +
+      '<div class="pr-note">QC paperwork pages attached this session: ' + qc + '.</div>' +
+
+      '<h2>Self-assessment checklist</h2>' +
+      '<div class="pr-summary"><span><b>' + pct + '%</b> complete</span><span><b>' + done + ' / ' + total + '</b> items answered</span><span><b>' + flagged + '</b> flagged for action</span></div>' +
+      '<table><thead><tr><th>Item</th><th class="col-status">Result</th><th class="col-note">Action required</th></tr></thead><tbody>' + checklistRows + '</tbody></table>' +
+
+      '<h2>Equipment &amp; calibration</h2>' +
+      '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
+
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>';
+  }
+
+  function handleGenerate() {
+    document.getElementById('printReport').innerHTML = buildReportHTML();
+    window.print();
+  }
+</script>
+
+</body>
+</html>
