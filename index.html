@@ -1257,8 +1257,37 @@
   // Claude rejects images over 10MB. Scans are often 2500x3500+ at high DPI,
   // so pages are downscaled and JPEG-encoded before sending — comfortably
   // under the limit while staying sharp enough to read plates and names.
-  var MAX_PAGE_EDGE_PX = 2600;
-  var PAGE_JPEG_QUALITY = 0.92;
+  // Claude resizes images internally to ~1568px on the long edge, so sending
+  // anything bigger just costs bandwidth and tokens for no extra detail.
+  var MAX_PAGE_EDGE_PX = 1560;
+  var PAGE_JPEG_QUALITY = 0.9;
+
+  // Firing every page at once is what trips API rate limits on a big scan.
+  // Work through them a few at a time instead — slower per burst, but it
+  // actually finishes rather than half the pages failing.
+  var SCAN_CONCURRENCY = 3;
+
+  /* Runs `worker` over `items`, at most SCAN_CONCURRENCY at a time.
+     onProgress fires as each one finishes. Results keep their input order. */
+  function runWithConcurrency_(items, worker, onProgress) {
+    var results = new Array(items.length);
+    var nextIndex = 0, completed = 0;
+
+    function startOne() {
+      if (nextIndex >= items.length) return null;
+      var i = nextIndex++;
+      return Promise.resolve(worker(items[i], i)).then(function (r) {
+        results[i] = r;
+        completed++;
+        if (onProgress) onProgress(completed, items.length);
+        return startOne();
+      });
+    }
+
+    var runners = [];
+    for (var k = 0; k < Math.min(SCAN_CONCURRENCY, items.length); k++) runners.push(startOne());
+    return Promise.all(runners).then(function () { return results; });
+  }
 
   /* Small progress-bar helper shared by both sort buttons. Opening and
      converting files has no countable steps, so that phase shows a sweeping
@@ -1382,7 +1411,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 3;
+  var EXPECTED_BACKEND_VERSION = 4;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -1435,15 +1464,12 @@
     Promise.all(files.map(fileToPageImages_))
       .then(function (nested) {
         var allPages = [].concat.apply([], nested);
-        var done = 0;
         progress.set(0, allPages.length);
-        return Promise.all(allPages.map(function (pageImg) {
+        return runWithConcurrency_(allPages, function (pageImg) {
           return analyzePageOnServer_(pageImg).then(function (res) {
-            done++;
-            progress.set(done, allPages.length);
             qcSortResults.push({ label: pageImg.label, response: res });
           });
-        }));
+        }, function (done, total) { progress.set(done, total); });
       })
       .then(function () {
         progress.finish();
@@ -1580,12 +1606,9 @@
     var scanWork = Promise.all(scanFiles.map(fileToPageImages_)).then(function (nested) {
       var allPages = [].concat.apply([], nested);
       if (!allPages.length) return;
-      var done = 0;
       progress.set(0, allPages.length);
-      return Promise.all(allPages.map(function (pageImg) {
+      return runWithConcurrency_(allPages, function (pageImg) {
         return analyzePageOnServer_(pageImg).then(function (res) {
-          done++;
-          progress.set(done, allPages.length);
           if (res.status !== 'success') {
             masterResults.push({ label: pageImg.label, category: 'other', detail: res.message || 'Could not read', ok: false });
             return;
@@ -1601,7 +1624,7 @@
             ok: a.confidence !== 'low'
           });
         });
-      }));
+      }, function (done, total) { progress.set(done, total); });
     });
 
     Promise.all([sheetWork, scanWork])
