@@ -1252,6 +1252,15 @@
      to work. Nothing here silently guesses: any page that can't be read with
      confidence is listed separately for a manual check. */
   var QC_EXPECTED_DOCS = ['emissions_test', 'vt20_certificate', 'inspection_sheet']; // vt30_refusal only appears on a fail
+
+  /* A fully electric vehicle has no exhaust, so there is no emissions printout
+     to file — flagging one as "missing" sends Paul looking for a page that
+     never existed. Work out what this particular vehicle should actually have. */
+  function expectedDocsFor_(pages) {
+    var isEV = pages.some(function (p) { return p && p.is_electric === true; });
+    if (!isEV) return QC_EXPECTED_DOCS;
+    return QC_EXPECTED_DOCS.filter(function (t) { return t !== 'emissions_test'; });
+  }
   var qcSortResults = [];
 
   // Claude rejects images over 10MB. Scans are often 2500x3500+ at high DPI,
@@ -1418,7 +1427,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 5;
+  var EXPECTED_BACKEND_VERSION = 6;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -1519,18 +1528,22 @@
     regKeys.forEach(function (reg) {
       var g = groups[reg];
       var foundTypes = g.pages.map(function (p) { return p.document_type; });
-      var missing = QC_EXPECTED_DOCS.filter(function (t) { return foundTypes.indexOf(t) === -1; });
+      var expected = expectedDocsFor_(g.pages);
+      var isEV = expected.indexOf('emissions_test') === -1;
+      var missing = expected.filter(function (t) { return foundTypes.indexOf(t) === -1; });
       var complete = missing.length === 0;
       var testerList = Object.keys(g.testers);
       var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
+      var model = (g.pages.find(function (p) { return p.make_model; }) || {}).make_model;
 
       var div = document.createElement('div');
       div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
       div.innerHTML =
         '<div class="qc-group-head">' +
           '<span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
-          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + QC_EXPECTED_DOCS.length + ' pages') + '</span>' +
+          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + expected.length + ' pages') + '</span>' +
         '</div>' +
+        (model ? '<div class="qc-group-docs">' + escapeHtml_(model) + (isEV ? ' &nbsp;<span class="badge neutral">Electric — no emissions test needed</span>' : '') + '</div>' : '') +
         '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
           (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
         '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' +
@@ -1753,16 +1766,20 @@
     Object.keys(groups).sort().forEach(function (reg) {
       var g = groups[reg];
       var foundTypes = g.pages.map(function (p) { return p.document_type; });
-      var missing = QC_EXPECTED_DOCS.filter(function (t) { return foundTypes.indexOf(t) === -1; });
+      var expected = expectedDocsFor_(g.pages);
+      var isEV = expected.indexOf('emissions_test') === -1;
+      var missing = expected.filter(function (t) { return foundTypes.indexOf(t) === -1; });
       var complete = missing.length === 0;
       var testerList = Object.keys(g.testers);
       var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
+      var model = (g.pages.filter(function (p) { return p.make_model; })[0] || {}).make_model;
 
       var div = document.createElement('div');
       div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
       div.innerHTML =
         '<div class="qc-group-head"><span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
-          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + QC_EXPECTED_DOCS.length + ' pages') + '</span></div>' +
+          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + expected.length + ' pages') + '</span></div>' +
+        (model ? '<div class="qc-group-docs">' + escapeHtml_(model) + (isEV ? ' &nbsp;<span class="badge neutral">Electric — no emissions test needed</span>' : '') + '</div>' : '') +
         '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
           (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
         '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(String(t).replace(/_/g, ' ')); }).join(', ') + '</div>' +
