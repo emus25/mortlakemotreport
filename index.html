@@ -264,6 +264,29 @@
   .dropzone .dz-icon { width: 26px; height: 26px; color: var(--text-tertiary); }
   .dropzone .dz-title { font-size: 14px; font-weight: 600; }
   .dropzone .dz-sub { font-size: 12px; color: var(--text-secondary); }
+
+  /* Compact variant — the master box sits at the top of the page and is used
+     constantly, so it earns its space by being a single slim row rather than
+     a tall banner. */
+  .dropzone.compact {
+    flex-direction: row; justify-content: flex-start; text-align: left;
+    padding: 12px 14px; gap: 12px;
+  }
+  .dropzone.compact .dz-icon { width: 20px; height: 20px; flex-shrink: 0; }
+  .dropzone.compact .dz-title { font-size: 13px; }
+  .dropzone.compact .dz-sub { font-size: 11px; }
+
+  /* Drag-and-drop feedback. Applied to whichever target the files are over,
+     so it's obvious where they'll land before letting go. */
+  .drop-target { transition: border-color .15s, background .15s, box-shadow .15s; }
+  .drop-target.drag-over {
+    border-color: var(--brand-strong) !important;
+    background: #fffbe6 !important;
+    box-shadow: 0 0 0 3px rgba(255,212,0,0.25);
+  }
+  .upload-card.drag-over { border-color: var(--brand-strong); background: #fffbe6; box-shadow: 0 0 0 3px rgba(255,212,0,0.25); }
+  /* Dim the page slightly while a drag is in progress anywhere over the app. */
+  body.dragging-files .dropzone { border-color: var(--brand-strong); }
   .qc-count { font-size: 13px; color: var(--text-secondary); margin-top: 12px; font-weight: 500; }
   .qc-how { margin-top: 12px; }
   .qc-how summary { font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
@@ -499,7 +522,7 @@
 
       <div class="info-banner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        <div><strong>Sample performance data.</strong> The rating, KPIs and trend below update automatically once this month's DVSA rating export is uploaded in Monthly Report.</div>
+        <div><strong>Sample performance data.</strong> The figures and trend below update automatically once this month's Test Quality Information export is uploaded in Monthly Report.</div>
       </div>
 
       <!-- Hero: Mortlake vs national -->
@@ -567,7 +590,7 @@
               </span>
             </div>
             <svg id="ratingChart" style="width:100%;height:190px;display:block"></svg>
-            <div class="panel-note">Sample data — replaced with the real trend once monthly rating exports have been uploaded.</div>
+            <div class="panel-note">Sample data — replaced with the real trend once monthly Test Quality Information exports have been uploaded.</div>
           </div>
 
           <div class="card panel">
@@ -584,14 +607,46 @@
         </div>
       </div>
 
+      <!-- Test Quality Information: per-tester and failure breakdown -->
+      <div class="section">
+        <div class="section-head">
+          <h2>Test Quality Information</h2>
+          <span class="section-desc">From the monthly DVSA export — site vs national</span>
+        </div>
+
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">By tester</span></div>
+            <div style="overflow-x:auto">
+              <table class="compare-table" id="testerTable">
+                <thead><tr><th>Tester</th><th>Tests</th><th>Avg time</th><th>Failed</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="panel-note" id="testerNote"></div>
+          </div>
+
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">Failures by category</span></div>
+            <div style="overflow-x:auto">
+              <table class="compare-table" id="failureTable">
+                <thead><tr><th>Category</th><th>Site</th><th>National</th><th></th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="panel-note" id="failureNote"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Monthly overview status cards -->
       <div class="section">
         <div class="section-head"><h2>This month's report</h2><span class="section-desc">What's done and what still needs attention</span></div>
         <div class="status-grid">
           <button type="button" class="status-card" onclick="switchTab('report')">
             <div class="sc-label">DVSA files</div>
-            <div class="sc-value" id="tileDvsaFiles">0 / 4</div>
-            <div class="sc-sub" id="tileDvsaSub">4 files required</div>
+            <div class="sc-value" id="tileDvsaFiles">0 / 3</div>
+            <div class="sc-sub" id="tileDvsaSub">3 files required</div>
           </button>
           <button type="button" class="status-card" onclick="switchTab('report')">
             <div class="sc-label">QC paperwork</div>
@@ -655,52 +710,12 @@
         <button class="btn btn-primary" onclick="handleGenerate()">Generate Report</button>
       </div>
 
-      <!-- Master box — drop everything, the app works out what each page is -->
-      <div class="section">
-        <div class="section-head">
-          <h2>Drop everything here</h2>
-          <span class="section-desc">One scan, one stack, any order — sorted automatically</span>
-        </div>
-        <div class="card panel">
-          <label class="dropzone" for="fileMaster">
-            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-            <div class="dz-title">Add this month's paperwork</div>
-            <div class="dz-sub">Scans, PDFs, photos or spreadsheets — everything in one go</div>
-            <input type="file" id="fileMaster" multiple accept=".pdf,.xlsx,.xls,.csv,image/*">
-          </label>
-          <div id="backendWarning" style="display:none;background:var(--warning-bg);color:var(--warning);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:12px"></div>
-          <div class="qc-count" id="masterCount">Nothing added yet</div>
-          <div class="file-list" id="listMaster"></div>
-          <button type="button" class="btn btn-primary btn-sm" id="masterSortBtn" style="margin-top:14px" disabled onclick="runMasterSort()">Sort everything</button>
-          <div class="sort-progress" id="masterProgress">
-            <div class="sort-progress-bar" id="masterProgressBar"><span></span></div>
-            <div class="sort-progress-label">
-              <span id="masterProgressText">Preparing…</span>
-              <span class="spl-pct" id="masterProgressPct"></span>
-            </div>
-          </div>
-          <div class="qc-sort-status" id="masterStatus"></div>
-          <div id="masterResults"></div>
-        </div>
-      </div>
+      <div id="backendWarning" style="display:none;background:var(--warning-bg);color:var(--warning);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:16px"></div>
 
       <!-- DVSA data -->
       <div class="section">
         <div class="section-head"><h2>DVSA data</h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
         <div class="upload-grid">
-
-          <div class="card upload-card">
-            <div class="upload-card-top">
-              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Quality control</div><div class="upload-card-sub">QC data export · .xlsx</div></div>
-            </div>
-            <div class="upload-actions">
-              <label class="btn btn-secondary btn-sm" for="fileQc">Upload file</label>
-              <input type="file" id="fileQc" accept=".xlsx,.xls">
-            </div>
-            <div class="file-list" id="listQc"></div>
-            <div class="upload-status required" id="statusQc"></div>
-          </div>
 
           <div class="card upload-card">
             <div class="upload-card-top">
@@ -731,7 +746,7 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">DVSA rating</div><div class="upload-card-sub">Rating &amp; scheme performance · .xlsx</div></div>
+              <div><div class="upload-card-title">Test Quality Information</div><div class="upload-card-sub">Site vs national performance · .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileRating">Upload file</label>
@@ -750,7 +765,7 @@
         <div class="card panel">
           <label class="dropzone" for="fileQcScans">
             <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-            <div class="dz-title">Add scanned pages</div>
+            <div class="dz-title">Drag scanned pages here, or click to browse</div>
             <div class="dz-sub">Any order — pages are matched and checked against the monthly test log</div>
             <input type="file" id="fileQcScans" multiple accept=".pdf,image/*">
           </label>
@@ -962,14 +977,13 @@
   /* ═══════════════ File uploads ═══════════════ */
   // Single-file DVSA inputs + their status/badge elements, plus the multi QC input.
   var DVSA_INPUTS = [
-    { input: 'fileQc',          list: 'listQc',          status: 'statusQc' },
     { input: 'fileLogDate',     list: 'listLogDate',     status: 'statusLogDate' },
     { input: 'fileLogDuration', list: 'listLogDuration', status: 'statusLogDuration' },
     { input: 'fileRating',      list: 'listRating',      status: 'statusRating' }
   ];
   var singleFileInputs = DVSA_INPUTS.map(function (d) { return d.input; });
 
-  var pickedFiles = { fileQcScans: [], fileMaster: [] };
+  var pickedFiles = { fileQcScans: [] };
   singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
 
   var ICON_UPLOADED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7d4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -1117,9 +1131,95 @@
 
   DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input, d.list, true, d.status); });
   wireFileInput('fileQcScans', 'listQcScans', false, null);
-  wireFileInput('fileMaster', 'listMaster', false, null);
   // Paint the initial "Required — not uploaded" state on each DVSA card.
   DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
+
+  /* ═══════════════ Drag and drop ═══════════════
+     Dragging a stack of scans straight onto the page is a lot less fiddly than
+     going through a file picker, so every upload area accepts a drop. Each
+     target highlights as files pass over it, so it's clear where they'll land.
+
+     The browser's default is to navigate away and open a dropped file, which
+     would lose everything on the page — so that's suppressed everywhere. */
+  function acceptDroppedFiles_(inputId, listId, singleFile, statusId, fileList) {
+    var files = Array.prototype.slice.call(fileList).filter(function (f) { return f && f.size >= 0; });
+    if (!files.length) return;
+    if (singleFile) {
+      pickedFiles[inputId] = [files[0]];   // these slots hold one file only
+    } else {
+      files.forEach(function (f) { pickedFiles[inputId].push(f); });
+    }
+    renderFileList(inputId, listId, statusId);
+    refreshStatuses();
+
+    // Mirror the file-picker behaviour: actually read what was dropped.
+    (singleFile ? [files[0]] : files).forEach(function (f) {
+      if (statusId) {
+        var el = document.getElementById(statusId);
+        el.className = 'upload-status reading';
+        el.innerHTML = ICON_SPIN + '<span>Reading ' + escapeHtml_(f.name) + '…</span>';
+      }
+      readUploadedFile_(f).then(function (result) {
+        parsedFileData[inputId] = result;
+        if (!statusId) return;
+        var el = document.getElementById(statusId);
+        var summary = describeParsedResult_(result);
+        el.className = 'upload-status ' + (summary.ok ? 'uploaded' : 'warn');
+        el.innerHTML = (summary.ok ? ICON_UPLOADED : ICON_WARN) +
+          '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
+      });
+    });
+  }
+
+  function makeDroppable_(el, inputId, listId, singleFile, statusId) {
+    if (!el) return;
+    el.classList.add('drop-target');
+    var depth = 0;   // dragenter/leave fire for child elements too, so count them
+
+    el.addEventListener('dragenter', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      depth++; el.classList.add('drag-over');
+    });
+    el.addEventListener('dragover', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    });
+    el.addEventListener('dragleave', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      depth = 0; el.classList.remove('drag-over');
+      document.body.classList.remove('dragging-files');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        acceptDroppedFiles_(inputId, listId, singleFile, statusId, e.dataTransfer.files);
+      }
+    });
+  }
+
+  // The two big drop areas…
+  makeDroppable_(document.querySelector('label[for="fileQcScans"]'), 'fileQcScans', 'listQcScans', false, null);
+  // …and each DVSA card, so a file can be dropped straight onto the right one.
+  DVSA_INPUTS.forEach(function (d) {
+    var label = document.querySelector('label[for="' + d.input + '"]');
+    var card = label && label.closest('.upload-card');
+    makeDroppable_(card || label, d.input, d.list, true, d.status);
+  });
+
+  // Dropping anywhere else must not make the browser navigate away and bin
+  // the page's state — that would wipe an in-progress month.
+  window.addEventListener('dragover', function (e) {
+    if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.indexOf('Files') > -1) {
+      e.preventDefault();
+      document.body.classList.add('dragging-files');
+    }
+  });
+  window.addEventListener('drop', function (e) { e.preventDefault(); document.body.classList.remove('dragging-files'); });
+  window.addEventListener('dragleave', function (e) {
+    if (e.clientX === 0 && e.clientY === 0) document.body.classList.remove('dragging-files');
+  });
 
   /* ═══════════════ Equipment & calibration ═══════════════ */
   var DUE_SOON_DAYS = 30;
@@ -1186,11 +1286,15 @@
 
   /* ═══════════════ Dashboard status cards + report readiness ═══════════════ */
   function updateDashboardTiles() {
+    // Derived from the actual list of DVSA inputs, so adding or removing a
+    // box never leaves a stale hard-coded total behind.
+    var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
-    document.getElementById('tileDvsaFiles').textContent = dvsaCount + ' / 4';
+    var dvsaMissing = dvsaTotal - dvsaCount;
+    document.getElementById('tileDvsaFiles').textContent = dvsaCount + ' / ' + dvsaTotal;
     var dvsaSub = document.getElementById('tileDvsaSub');
-    if (dvsaCount === 4) { dvsaSub.textContent = 'All uploaded'; dvsaSub.className = 'sc-sub'; }
-    else { dvsaSub.textContent = (4 - dvsaCount) + ' file' + (4 - dvsaCount === 1 ? '' : 's') + ' missing'; dvsaSub.className = 'sc-sub attention'; }
+    if (dvsaMissing === 0) { dvsaSub.textContent = 'All uploaded'; dvsaSub.className = 'sc-sub'; }
+    else { dvsaSub.textContent = dvsaMissing + ' file' + (dvsaMissing === 1 ? '' : 's') + ' missing'; dvsaSub.className = 'sc-sub attention'; }
 
     var qc = pickedFiles.fileQcScans.length;
     document.getElementById('tileQcScans').textContent = qc;
@@ -1213,13 +1317,15 @@
   }
 
   function updateReportReadiness() {
+    var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
     var qc = pickedFiles.fileQcScans.length;
 
     var dvsaLine = document.getElementById('readyDvsaLine');
-    var ok = dvsaCount === 4;
+    var ok = dvsaCount === dvsaTotal;
     dvsaLine.innerHTML = (ok ? ICON_UPLOADED : ICON_REQUIRED) +
-      '<span>' + dvsaCount + ' / 4 DVSA exports uploaded' + (ok ? '' : ' — ' + (4 - dvsaCount) + ' still needed') + '</span>';
+      '<span>' + dvsaCount + ' / ' + dvsaTotal + ' DVSA exports uploaded' +
+      (ok ? '' : ' — ' + (dvsaTotal - dvsaCount) + ' still needed') + '</span>';
 
     var qcLine = document.getElementById('readyQcLine');
     qcLine.innerHTML = (qc > 0 ? ICON_UPLOADED : ICON_REQUIRED) + '<span>' + qc + ' QC page' + (qc === 1 ? '' : 's') + ' added</span>';
@@ -1228,15 +1334,6 @@
 
     var sortBtn = document.getElementById('sortScansBtn');
     if (sortBtn) sortBtn.disabled = qc === 0;
-
-    var master = (pickedFiles.fileMaster || []).length;
-    var masterBtn = document.getElementById('masterSortBtn');
-    if (masterBtn) masterBtn.disabled = master === 0;
-    var masterCountEl = document.getElementById('masterCount');
-    if (masterCountEl) {
-      masterCountEl.textContent = master === 0 ? 'Nothing added yet'
-        : master + ' file' + (master === 1 ? '' : 's') + ' ready to sort';
-    }
   }
 
   function refreshStatuses() {
@@ -1468,6 +1565,17 @@
       return;
     }
 
+    // Flag a stale backend deployment before spending API calls on a sort that
+    // would be mis-sorted for reasons that look like an AI problem but aren't.
+    checkBackendVersion_();
+
+    // Without the PDF reader nothing can be opened at all, so say so up front
+    // rather than churning through files and finding zero pages.
+    if (typeof pdfjsLib === 'undefined') {
+      statusEl.innerHTML = '<span style="color:var(--danger)">PDF reader failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
+      return;
+    }
+
     btn.disabled = true;
     btn.textContent = 'Sorting…';
     statusEl.textContent = '';
@@ -1560,234 +1668,6 @@
     }
   }
 
-  /* ═══════════════ Master box — drop everything, sort it out ═══════════════
-     Takes whatever's thrown at it (a whole scanned bundle, loose photos,
-     spreadsheets) and works out what each page actually is, rather than
-     making Paul pre-sort anything. Spreadsheets are read directly; scanned
-     pages go to Claude for classification. Vehicle paperwork is then grouped
-     by registration, exactly like the QC box does. */
-  var CATEGORY_LABELS = {
-    mot_vehicle_paperwork: 'MOT vehicle paperwork',
-    dvsa_test_quality: 'DVSA Test Quality reports',
-    dvsa_test_log: 'DVSA test logs',
-    vts_checklist: 'VTS self-assessment checklist',
-    equipment_calibration: 'Equipment calibration records',
-    admin_tracker: 'Admin tracker',
-    spreadsheet: 'Spreadsheets',
-    other: 'Unrecognised pages'
-  };
-
-  var masterResults = [];
-
-  function runMasterSort() {
-    var files = pickedFiles.fileMaster || [];
-    if (!files.length) return;
-
-    var statusEl = document.getElementById('masterStatus');
-    var btn = document.getElementById('masterSortBtn');
-    var resultsEl = document.getElementById('masterResults');
-
-    if (!SCRIPT_URL) {
-      statusEl.innerHTML = '<span style="color:var(--warning)">Sorting needs the Apps Script backend with an Anthropic API key — not connected yet.</span>';
-      return;
-    }
-
-    // Warn loudly if the deployed Apps Script is behind this page — otherwise
-    // pages get mis-sorted for reasons that look like an AI problem but aren't.
-    checkBackendVersion_();
-
-    // Same for the local libraries: without these nothing can be read at all,
-    // so say so up front rather than churning through files and finding zero.
-    var missingLibs = [];
-    if (typeof pdfjsLib === 'undefined') missingLibs.push('PDF reader');
-    if (typeof XLSX === 'undefined') missingLibs.push('Excel reader');
-    if (missingLibs.length) {
-      statusEl.innerHTML = '<span style="color:var(--danger)">' + missingLibs.join(' and ') +
-        ' failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Sorting…';
-    resultsEl.innerHTML = '';
-    masterResults = [];
-    statusEl.textContent = '';
-
-    var progress = makeProgress('master');
-    progress.start('Opening files…');
-
-    // Spreadsheets are read locally; everything else becomes page images.
-    var spreadsheetFiles = [], scanFiles = [];
-    files.forEach(function (f) {
-      var ext = (f.name.split('.').pop() || '').toLowerCase();
-      (['xlsx', 'xls', 'csv'].indexOf(ext) > -1 ? spreadsheetFiles : scanFiles).push(f);
-    });
-
-    var sheetWork = Promise.all(spreadsheetFiles.map(function (f) {
-      return readSpreadsheet_(f).then(function (res) {
-        masterResults.push({
-          label: f.name,
-          category: 'spreadsheet',
-          detail: res.error ? res.error : Math.max(0, res.rows.length - 1) + ' rows',
-          ok: !res.error
-        });
-      });
-    }));
-
-    var scanWork = Promise.all(scanFiles.map(fileToPageImages_)).then(function (nested) {
-      var allPages = [].concat.apply([], nested);
-      if (!allPages.length) return;
-      progress.set(0, allPages.length);
-      return runWithConcurrency_(allPages, function (pageImg) {
-        return analyzePageOnServer_(pageImg).then(function (res) {
-          if (res.status !== 'success') {
-            masterResults.push({ label: pageImg.label, category: 'other', detail: res.message || 'Could not read', ok: false });
-            return;
-          }
-          var a = res.result || {};
-          // Never trust a "registration" that is really the VTS number.
-          if (!looksLikeRealPlate_(a.registration)) a.registration = null;
-          masterResults.push({
-            label: pageImg.label,
-            category: resolveCategory_(a),
-            analysis: a,
-            detail: buildPageDetail_(a),
-            ok: a.confidence !== 'low'
-          });
-        });
-      }, function (done, total) { progress.set(done, total); });
-    });
-
-    Promise.all([sheetWork, scanWork])
-      .then(function () {
-        progress.finish();
-        renderMasterResults_();
-        btn.disabled = false;
-        btn.textContent = 'Sort everything';
-      })
-      .catch(function (err) {
-        progress.fail();
-        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong sorting those files: ' + escapeHtml_(err.message || 'unknown error') + '</span>';
-        btn.disabled = false;
-        btn.textContent = 'Sort everything';
-      });
-  }
-
-  // Mortlake's own VTS number shows up all over these pages and is not a
-  // number plate — guard against it being mistaken for one.
-  var VTS_NUMBER = '22453';
-  var UK_PLATE_RE = /^[A-Z0-9]{2,4}[A-Z0-9]{1,4}$/;
-
-  function looksLikeRealPlate_(reg) {
-    var r = normalizeReg_(reg);
-    if (!r || r === VTS_NUMBER) return false;
-    if (r === 'UNKNOWN' || r === 'N/A') return false;
-    if (!/[A-Z]/.test(r)) return false;      // a plate always has letters
-    if (r.length < 4 || r.length > 8) return false;
-    return UK_PLATE_RE.test(r);
-  }
-
-  // If the backend is running older code it won't send a category. Rather than
-  // dumping everything into "Unrecognised", work it out from what we do have.
-  function resolveCategory_(a) {
-    if (a.category) return a.category;
-    var vehicleTypes = ['emissions_test', 'vt20_certificate', 'inspection_sheet', 'vt30_refusal'];
-    if (looksLikeRealPlate_(a.registration) && vehicleTypes.indexOf(a.document_type) > -1) {
-      return 'mot_vehicle_paperwork';
-    }
-    return 'other';
-  }
-
-  function buildPageDetail_(a) {
-    var bits = [];
-    if (a.registration) bits.push(normalizeReg_(a.registration));
-    if (a.document_type && a.document_type !== 'other') bits.push(a.document_type.replace(/_/g, ' '));
-    if (a.period) bits.push(a.period);
-    if (a.tester_name) bits.push(a.tester_name);
-    if (a.qc_flag) bits.push('marked QC');
-    if (a.confidence === 'low') bits.push('low confidence');
-    return bits.join(' · ') || 'no details read';
-  }
-
-  function renderMasterResults_() {
-    var statusEl = document.getElementById('masterStatus');
-    var container = document.getElementById('masterResults');
-    container.innerHTML = '';
-
-    var byCategory = {};
-    masterResults.forEach(function (r) {
-      if (!byCategory[r.category]) byCategory[r.category] = [];
-      byCategory[r.category].push(r);
-    });
-
-    var vehiclePages = (byCategory.mot_vehicle_paperwork || []).filter(function (r) { return r.analysis && r.analysis.registration; });
-    var regCount = Object.keys(vehiclePages.reduce(function (acc, r) { acc[normalizeReg_(r.analysis.registration)] = 1; return acc; }, {})).length;
-
-    statusEl.textContent = masterResults.length + ' item' + (masterResults.length === 1 ? '' : 's') + ' sorted' +
-      (regCount ? ' · ' + regCount + ' vehicle' + (regCount === 1 ? '' : 's') + ' identified' : '');
-
-    // Show vehicle paperwork first (grouped by reg), then everything else.
-    if (vehiclePages.length) {
-      qcSortResults = vehiclePages.map(function (r) { return { label: r.label, response: { status: 'success', result: r.analysis } }; });
-      var vehBlock = document.createElement('div');
-      vehBlock.className = 'cat-block';
-      vehBlock.innerHTML = '<div class="cat-block-head"><span class="cat-block-title">' + CATEGORY_LABELS.mot_vehicle_paperwork +
-        '</span><span class="badge neutral">' + vehiclePages.length + ' page' + (vehiclePages.length === 1 ? '' : 's') + '</span></div>' +
-        '<div id="masterVehicleGroups"></div>';
-      container.appendChild(vehBlock);
-      renderQcGroupsInto_(document.getElementById('masterVehicleGroups'), vehiclePages);
-    }
-
-    Object.keys(byCategory).forEach(function (cat) {
-      if (cat === 'mot_vehicle_paperwork') return;
-      var items = byCategory[cat];
-      var block = document.createElement('div');
-      block.className = 'cat-block';
-      block.innerHTML = '<div class="cat-block-head"><span class="cat-block-title">' + escapeHtml_(CATEGORY_LABELS[cat] || cat) +
-        '</span><span class="badge neutral">' + items.length + '</span></div>' +
-        '<div class="cat-block-list">' + items.map(function (r) {
-          return '<div>' + escapeHtml_(r.label) + ' — ' + escapeHtml_(r.detail) + '</div>';
-        }).join('') + '</div>';
-      container.appendChild(block);
-    });
-  }
-
-  // Shared with the QC box: groups vehicle pages by registration into a target element.
-  function renderQcGroupsInto_(target, pages) {
-    var groups = {};
-    pages.forEach(function (r) {
-      var a = r.analysis;
-      var reg = normalizeReg_(a.registration);
-      if (!groups[reg]) groups[reg] = { pages: [], testers: {} };
-      groups[reg].pages.push(a);
-      if (a.tester_name) groups[reg].testers[a.tester_name] = true;
-    });
-
-    Object.keys(groups).sort().forEach(function (reg) {
-      var g = groups[reg];
-      var foundTypes = g.pages.map(function (p) { return p.document_type; });
-      var expected = expectedDocsFor_(g.pages);
-      var isEV = expected.indexOf('emissions_test') === -1;
-      var missing = expected.filter(function (t) { return foundTypes.indexOf(t) === -1; });
-      var complete = missing.length === 0;
-      var testerList = Object.keys(g.testers);
-      var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
-      var model = (g.pages.filter(function (p) { return p.make_model; })[0] || {}).make_model;
-
-      var div = document.createElement('div');
-      div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
-      div.innerHTML =
-        '<div class="qc-group-head"><span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
-          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + expected.length + ' pages') + '</span></div>' +
-        (model ? '<div class="qc-group-docs">' + escapeHtml_(model) + (isEV ? ' &nbsp;<span class="badge neutral">Electric — no emissions test needed</span>' : '') + '</div>' : '') +
-        '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
-          (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
-        '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(String(t).replace(/_/g, ' ')); }).join(', ') + '</div>' +
-        (missing.length ? '<div class="qc-page-flag">Missing: ' + missing.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' : '');
-      target.appendChild(div);
-    });
-  }
-
   /* ═══════════════ VTS self-assessment checklist ═══════════════ */
   // Digitised from Mortlake's paper template (MOT Consultancy Ltd), aligned to
   // DVSA's current Site Assessment Risk Scoring Guide / Guide to MOT Risk Reduction.
@@ -1840,7 +1720,7 @@
       'VTS test logs printed in date sequence',
       'VTS test logs printed in test duration sequence',
       'Test quality information printed for all MOT testers'
-    ], auto: 'Marked automatically once this month\'s three DVSA exports are uploaded in Monthly Report' },
+    ], auto: 'Marked automatically once this month\'s DVSA exports are uploaded in Monthly Report' },
     { cat: 'Annual MOT tester training & CPD', items: [
       'Previous records of tester annual training, CPD & assessment passes filed & available to DVSA for 5 years',
       "Current MOT tester annual training topics & CPD record kept on file"
@@ -2089,6 +1969,85 @@
     updateMonthLabels();
   })();
 
+  /* ═══════════════ Test Quality Information ═══════════════
+     Shape of one month's DVSA export. The figures below are Mortlake's real
+     January 2026 numbers, kept as the placeholder so the layout is checked
+     against something truthful — they are replaced wholesale the moment a
+     real .xlsx export is parsed. */
+  var TEST_QUALITY = {
+    period: 'Jan-26',
+    isSample: true,
+    testers: [
+      { name: 'Ivaylo Dimitrov',  tests: 189, avgTime: 44, failed: 23 },
+      { name: 'Stuart Attridge',  tests: 11,  avgTime: 44, failed: 9 },
+      { name: 'Paul Townsend',    tests: 7,   avgTime: 45, failed: 0 },
+      { name: 'Rowley Barrett',   tests: 2,   avgTime: 48, failed: 0 },
+      { name: 'Gavin Lee Murton', tests: 0,   avgTime: 0,  failed: 0 },
+      { name: 'Paul McGrath',     tests: 0,   avgTime: 0,  failed: 0 }
+    ],
+    site:     { tests: 209, avgTime: 44, failed: 21 },
+    national: { tests: 52,  avgTime: 43, failed: 28 },
+    failureCategories: [
+      { name: 'Lamps, reflectors & electrical', site: 52.3, national: 44.1 },
+      { name: 'Tyres',                          site: 25.0, national: 20.0 },
+      { name: 'Suspension',                     site: 22.7, national: 21.8 },
+      { name: 'Body, chassis, structure',       site: 15.9, national: 13.6 },
+      { name: 'Brakes',                         site: 15.9, national: 23.0 },
+      { name: 'Steering',                       site: 11.4, national: 8.3 },
+      { name: 'Seat belts & restraints',        site: 6.8,  national: 3.5 },
+      { name: 'Noise, emissions & leaks',       site: 4.5,  national: 11.5 },
+      { name: 'Identification of the vehicle',  site: 2.3,  national: 1.2 },
+      { name: 'Road wheels',                    site: 0.0,  national: 1.4 }
+    ]
+  };
+
+  function renderTestQuality_() {
+    var d = TEST_QUALITY;
+
+    // By tester — busiest first, and skip anyone who did no tests this month.
+    var rows = d.testers.filter(function (t) { return t.tests > 0; })
+      .sort(function (a, b) { return b.tests - a.tests; })
+      .map(function (t) {
+        return '<tr><td>' + escapeHtml_(t.name) + '</td>' +
+               '<td class="mort-col">' + t.tests + '</td>' +
+               '<td>' + t.avgTime + ' min</td>' +
+               '<td>' + t.failed + '%</td></tr>';
+      }).join('');
+    rows += '<tr><td><strong>Site total</strong></td>' +
+            '<td class="mort-col"><strong>' + d.site.tests + '</strong></td>' +
+            '<td><strong>' + d.site.avgTime + ' min</strong></td>' +
+            '<td><strong>' + d.site.failed + '%</strong></td></tr>' +
+            '<tr><td>National average</td><td>' + d.national.tests + '</td>' +
+            '<td>' + d.national.avgTime + ' min</td><td>' + d.national.failed + '%</td></tr>';
+    document.querySelector('#testerTable tbody').innerHTML = rows;
+
+    var inactive = d.testers.filter(function (t) { return t.tests === 0; }).length;
+    setText('testerNote', (d.isSample ? 'Sample — ' + d.period + '. ' : d.period + '. ') +
+      (inactive ? inactive + ' tester' + (inactive === 1 ? '' : 's') + ' did no tests this month.' : ''));
+
+    // Failures by category — worst gap vs national first, since that's what
+    // a DVSA examiner would pick up on.
+    var cats = d.failureCategories.slice().sort(function (a, b) {
+      return (b.site - b.national) - (a.site - a.national);
+    });
+    document.querySelector('#failureTable tbody').innerHTML = cats.map(function (c) {
+      var diff = c.site - c.national;
+      var worse = diff > 0;
+      var chip = Math.abs(diff) < 0.05
+        ? '<span class="badge neutral">level</span>'
+        : '<span class="badge ' + (worse ? 'warning' : 'success') + '">' +
+          (worse ? '▲ ' : '▼ ') + Math.abs(diff).toFixed(1) + '</span>';
+      return '<tr><td>' + escapeHtml_(c.name) + '</td>' +
+             '<td class="mort-col">' + c.site.toFixed(1) + '%</td>' +
+             '<td>' + c.national.toFixed(1) + '%</td>' +
+             '<td>' + chip + '</td></tr>';
+    }).join('');
+
+    var above = cats.filter(function (c) { return c.site - c.national > 0; }).length;
+    setText('failureNote', (d.isSample ? 'Sample — ' + d.period + '. ' : d.period + '. ') +
+      above + ' of ' + cats.length + ' categories above the national average.');
+  }
+
   /* ═══════════════ Rating trend chart (sample data) ═══════════════ */
   var RATING_TREND_SAMPLE = {
     months: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
@@ -2128,6 +2087,7 @@
       labels;
   }
   buildRatingChart();
+  renderTestQuality_();
 
   /* ═══════════════ Generate report ═══════════════ */
   // Builds a clean, printable monthly compliance report from everything the
@@ -2136,10 +2096,9 @@
   // print dialog so it can be saved as a PDF or printed on paper. The DVSA
   // performance figures stay as placeholders until the real exports are parsed.
   var DVSA_REPORT_FILES = [
-    { input: 'fileQc', label: 'Quality control' },
     { input: 'fileLogDate', label: 'Test log — by date' },
     { input: 'fileLogDuration', label: 'Test log — by duration' },
-    { input: 'fileRating', label: 'DVSA rating & scheme performance' }
+    { input: 'fileRating', label: 'Test Quality Information' }
   ];
 
   function buildReportHTML() {
@@ -2207,7 +2166,7 @@
       '</div>' +
 
       '<h2>DVSA performance</h2>' +
-      '<div class="pr-note">Performance figures are populated automatically once this month\'s DVSA rating and test-log exports are parsed. Files attached to this report:</div>' +
+      '<div class="pr-note">Performance figures are populated automatically once this month\'s Test Quality Information and test-log exports are parsed. Files attached to this report:</div>' +
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th></tr></thead><tbody>' + dvsaRows + '</tbody></table>' +
       '<div class="pr-note">QC paperwork pages attached this session: ' + qc + '.</div>' +
 
