@@ -1358,7 +1358,14 @@
   }
 
   function pdfToPageImages_(file) {
-    if (typeof pdfjsLib === 'undefined') return Promise.resolve([]);
+    // Fail loudly. Silently returning no pages here once made a missing
+    // library look like "the AI read nothing", which is impossible to debug.
+    if (typeof pdfjsLib === 'undefined') {
+      return Promise.reject(new Error(
+        'The PDF reader library did not load (assets/lib/pdf.min.js is missing or blocked). ' +
+        'If this site is hosted, check the assets folder was uploaded.'
+      ));
+    }
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/lib/pdf.worker.min.js';
     return file.arrayBuffer().then(function (buf) {
       return pdfjsLib.getDocument({ data: buf }).promise.then(function (pdf) {
@@ -1575,6 +1582,17 @@
     // Warn loudly if the deployed Apps Script is behind this page — otherwise
     // pages get mis-sorted for reasons that look like an AI problem but aren't.
     checkBackendVersion_();
+
+    // Same for the local libraries: without these nothing can be read at all,
+    // so say so up front rather than churning through files and finding zero.
+    var missingLibs = [];
+    if (typeof pdfjsLib === 'undefined') missingLibs.push('PDF reader');
+    if (typeof XLSX === 'undefined') missingLibs.push('Excel reader');
+    if (missingLibs.length) {
+      statusEl.innerHTML = '<span style="color:var(--danger)">' + missingLibs.join(' and ') +
+        ' failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
+      return;
+    }
 
     btn.disabled = true;
     btn.textContent = 'Sorting…';
