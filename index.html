@@ -1104,9 +1104,15 @@
      keystroke and checklist tick; reads happen once, right after unlocking. */
   var syncTimer = null;
   var syncSuppressed = false;   // set while syncDown_ is applying server data
+  var syncDownDone = false;     // no uploading until the server copy has arrived
 
+  /* Nothing may be pushed before syncDown_ has finished. On a fresh browser the
+     local store starts empty and boot seeds the default equipment list, which
+     triggers a save — pushing that would overwrite the real history held on the
+     server. If the server can't be reached this stays false, so the worst case
+     is "not backed up" (and the indicator says so) rather than data loss. */
   function scheduleSyncUp_() {
-    if (!SCRIPT_URL || syncSuppressed || !getPassword()) return;
+    if (!SCRIPT_URL || syncSuppressed || !syncDownDone || !getPassword()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncUp_, 1500);
   }
@@ -1122,7 +1128,8 @@
         data: {
           reviews: store.reviews || {},
           calibration: store.calibration || [],
-          months: store.months || {}
+          months: store.months || {},
+          testQuality: store.testQuality || {}
         }
       })
     })
@@ -1149,6 +1156,9 @@
           setSyncStatus_('error');
           return;
         }
+        // A definitive answer from the server — safe to start uploading now,
+        // whether or not it had anything stored yet.
+        syncDownDone = true;
         if (!res.hasData || !res.data) { setSyncStatus_('saved'); return; }
         syncSuppressed = true;
         var d = res.data;
@@ -1159,6 +1169,11 @@
         if (d.calibration && d.calibration.length) { store.calibration = d.calibration; calChanged = true; }
         if (d.months && Object.keys(d.months).length) {
           store.months = Object.assign({}, store.months || {}, d.months);
+        }
+        var tqChanged = false;
+        if (d.testQuality && Object.keys(d.testQuality).length) {
+          store.testQuality = Object.assign({}, store.testQuality || {}, d.testQuality);
+          tqChanged = true;
         }
         try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {}
         syncSuppressed = false;
@@ -1174,6 +1189,13 @@
         updateProgress();
         renderReviews_();
         refreshStatuses();
+        if (tqChanged) {
+          TEST_QUALITY = testQualityForMonth_(currentMonth) || null;
+          applyTestQualityToDashboard_();
+          renderTestQuality_();
+          renderStanding_();
+          buildRatingChart();
+        }
         setSyncStatus_('saved');
       })
       .catch(function () { setSyncStatus_('error'); });
@@ -1535,6 +1557,12 @@
     updateMonthLabels();
     renderReviews_();
     maybeAutoFetchReviews_();
+
+    // Show the DVSA figures belonging to the month now selected.
+    TEST_QUALITY = testQualityForMonth_(currentMonth);
+    applyTestQualityToDashboard_();
+    renderTestQuality_();
+    renderStanding_();
   });
 
   /* ═══════════════ File uploads ═══════════════ */
@@ -1647,16 +1675,11 @@
     // Keyed by period, so re-uploading the same month corrects it rather
     // than adding a duplicate point.
     if (parsed.period) {
+      // Keep the FULL breakdown per month, not just the headline figures, so
+      // reopening an earlier month shows that month's real testers and
+      // categories rather than whichever export happened to be loaded last.
       if (!store.testQuality) store.testQuality = {};
-      store.testQuality[parsed.period] = {
-        period: parsed.period,
-        siteFailed: parsed.site.failed,
-        nationalFailed: parsed.national.failed,
-        tests: parsed.site.tests,
-        avgTime: parsed.site.avgTime
-      };
-      // Keep the full breakdown for the most recent upload so the tables are
-      // still populated when the app is reopened.
+      store.testQuality[parsed.period] = parsed;
       store.testQualityLatest = parsed;
       saveStore();
     }
@@ -1678,7 +1701,21 @@
      page stops showing sample numbers once a genuine export is loaded. */
   function applyTestQualityToDashboard_() {
     var d = TEST_QUALITY;
-    if (!d || d.isSample) return;
+
+    // No export for the selected month: blank the figures rather than leave a
+    // different month's numbers sitting under this month's heading.
+    if (!d || !d.site) {
+      setText('kpiTests', '—');
+      setText('kpiTestsSub', 'No export loaded for ' + (formatMonth(currentMonth) || 'this month'));
+      setText('kpiPassRate', '—');
+      setHTML_('kpiPassCompare', '<span>—</span>');
+      setText('kpiFailRate', '—');
+      setHTML_('kpiFailCompare', '<span>—</span>');
+      setText('kpiAvgTime', '—');
+      setHTML_('kpiAvgTimeCompare', '<span>—</span>');
+      return;
+    }
+    if (d.isSample) return;
 
     var passRate = Math.max(0, 100 - d.site.failed);
     var natPass = Math.max(0, 100 - d.national.failed);
@@ -2249,7 +2286,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 9;
+  var EXPECTED_BACKEND_VERSION = 10;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -2877,8 +2914,8 @@
       if (ft) ft.innerHTML = empty;
       setText('testerNote', '');
       setText('failureNote', '');
-      ['kpiTests', 'kpiPassRate', 'kpiFailRate', 'kpiAvgTime'].forEach(function (id) { setText(id, '—'); });
-      ['kpiTestsSub', 'kpiPassCompare', 'kpiFailCompare', 'kpiAvgTimeCompare'].forEach(function (id) { setText(id, ''); });
+      // The KPI tiles are applyTestQualityToDashboard_'s responsibility —
+      // clearing them here too wiped the "no export loaded for X" message.
       return;
     }
 
@@ -2944,12 +2981,36 @@
     return '20' + m[2] + '-' + String(mm).padStart(2, '0');
   }
 
+  /* Entries used to be stored as flat headline figures and are now the full
+     parse, so normalise both shapes rather than losing months saved earlier. */
   function getTrendHistory_() {
     var hist = store.testQuality || {};
     return Object.keys(hist)
       .map(function (k) { return hist[k]; })
       .filter(function (e) { return e && e.period; })
+      .map(function (e) {
+        return {
+          period: e.period,
+          siteFailed: e.site ? e.site.failed : e.siteFailed,
+          nationalFailed: e.national ? e.national.failed : e.nationalFailed
+        };
+      })
+      .filter(function (e) { return typeof e.siteFailed === 'number'; })
       .sort(function (a, b) { return monthKeyToSort_(a.period) < monthKeyToSort_(b.period) ? -1 : 1; });
+  }
+
+  /* Finds the stored export for a given reporting month ("2026-07"), matching
+     it against the DVSA period label on the file itself ("Jul-26"). Returns
+     null when that month has no export loaded — the dashboard then says so
+     rather than leaving another month's figures on screen. */
+  function testQualityForMonth_(monthKey) {
+    var hist = store.testQuality || {};
+    var found = null;
+    Object.keys(hist).forEach(function (p) {
+      var e = hist[p];
+      if (e && e.period && e.site && monthKeyToSort_(e.period) === monthKey) found = e;
+    });
+    return found;
   }
 
   function buildRatingChart() {
@@ -3002,12 +3063,11 @@
       (history.length === 1 ? '' : 's') + '. Lower is better.');
   }
 
-  // Restore the last uploaded Test Quality figures so reopening the app shows
-  // real data rather than blanks.
-  if (store.testQualityLatest) {
-    TEST_QUALITY = store.testQualityLatest;
-    applyTestQualityToDashboard_();
-  }
+  // Restore the figures for whichever month is selected, so reopening the app
+  // shows that month's real data rather than blanks — or whatever export
+  // happened to be loaded last.
+  TEST_QUALITY = testQualityForMonth_(currentMonth) || null;
+  applyTestQualityToDashboard_();
   buildRatingChart();
   renderTestQuality_();
   renderStanding_();
