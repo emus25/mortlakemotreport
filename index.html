@@ -124,6 +124,67 @@
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
 
+  /* ══════════ Dashboard: standing vs national ══════════
+     Driven entirely by the DVSA Test Quality export — no self-declared status.
+     The card takes its colour from how the site actually compares, so a good
+     or bad month is obvious without reading any numbers. */
+  .standing-card { padding: 24px 26px; border-left: 6px solid var(--border-strong); }
+  .standing-card.is-good   { border-left-color: var(--success); background: linear-gradient(90deg, #f2f9f4 0%, var(--surface) 60%); }
+  .standing-card.is-level  { border-left-color: var(--text-tertiary); background: linear-gradient(90deg, #f6f6f4 0%, var(--surface) 60%); }
+  .standing-card.is-behind { border-left-color: var(--warning); background: linear-gradient(90deg, #fdf6e9 0%, var(--surface) 60%); }
+
+  .standing-verdict { font-size: 27px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+  .standing-card.is-good   .standing-verdict { color: var(--success); }
+  .standing-card.is-level  .standing-verdict { color: var(--text); }
+  .standing-card.is-behind .standing-verdict { color: var(--warning); }
+  .standing-sub { font-size: 13px; color: var(--text-secondary); margin-top: 5px; max-width: 620px; }
+
+  .standing-compare { display: flex; align-items: center; gap: 22px; margin-top: 20px; flex-wrap: wrap; }
+  .standing-side-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+  .standing-value { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-top: 3px; }
+  .standing-value.muted { color: var(--text-secondary); font-size: 32px; }
+  .standing-side-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+  .standing-gap {
+    font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    background: var(--surface-subtle); border: 1px solid var(--border); color: var(--text-secondary);
+  }
+  .standing-card.is-good   .standing-gap { background: var(--success-bg); border-color: #cfe6d8; color: var(--success); }
+  .standing-card.is-behind .standing-gap { background: var(--warning-bg); border-color: #ecdcbc; color: var(--warning); }
+  .standing-note { font-size: 12px; color: var(--text-secondary); margin-top: 16px; }
+
+  @media (max-width: 560px) {
+    .standing-compare { gap: 14px; }
+    .standing-value { font-size: 32px; }
+  }
+
+  /* ══════════ Dashboard: Google reviews ══════════ */
+  .reviews-card { padding: 20px 22px; }
+  .reviews-figures { display: flex; gap: 44px; flex-wrap: wrap; }
+  .reviews-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
+  .reviews-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin-top: 3px; }
+  .reviews-sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+  .reviews-sub.gain { color: var(--success); font-weight: 600; }
+  .reviews-stars { font-size: 15px; letter-spacing: 1px; margin-top: 3px; height: 19px; }
+  /* Five grey stars with a gold copy clipped to the exact rating width, so 4.6
+     reads as 4.6 rather than being rounded up to five full stars. */
+  .stars-wrap { position: relative; display: inline-block; }
+  .stars-bg { color: #dcdcdc; }
+  .stars-fg { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #f0a92b; }
+  .reviews-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .reviews-manual-toggle {
+    background: none; border: none; font-family: inherit; font-size: 12px; color: var(--text-secondary);
+    text-decoration: underline; cursor: pointer; padding: 4px;
+  }
+  .reviews-manual-toggle:hover { color: var(--text); }
+  .reviews-entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; }
+  .reviews-note { font-size: 12px; color: var(--text-tertiary); margin-top: 12px; }
+  .reviews-source { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+  @media (max-width: 560px) {
+    .reviews-figures { gap: 22px; }
+    .reviews-entry { flex-direction: column; align-items: stretch; }
+  }
+
   /* ══════════ Dashboard: hero ══════════ */
   .hero { display: grid; grid-template-columns: 1.4fr 1px 1fr; gap: 28px; padding: 24px 28px; align-items: center; }
   .hero-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); margin-bottom: 10px; }
@@ -218,7 +279,17 @@
     border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
   }
   .cal-row input:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; border-color: var(--brand-strong); }
-  .cal-status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+  .cal-status { font-size: 13px; color: var(--text-secondary); }
+  .cal-status-main { display: flex; align-items: center; gap: 8px; }
+  .cal-lastdone { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+  .cal-actions { display: flex; align-items: center; gap: 4px; }
+  .cal-done {
+    font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    padding: 7px 10px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-secondary);
+  }
+  .cal-done:hover { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+  .cal-done:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; }
   .cal-remove { background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 18px; line-height: 1; padding: 6px; border-radius: var(--radius-sm); }
   .cal-remove:hover { color: var(--danger); background: var(--danger-bg); }
   .cal-empty { text-align: center; padding: 28px 16px; color: var(--text-tertiary); font-size: 13px; }
@@ -441,26 +512,77 @@
   }
 
   /* ══════════ Printable report ══════════ */
-  #printReport { display: none; color: #111; font-family: Arial, Helvetica, sans-serif; }
-  #printReport .pr-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 18px; }
+  /* ══════════ Printable monthly report ══════════
+     Styled to echo the dashboard rather than read as a plain list: a branded
+     header band, KPI tiles, coloured status pills, and the QC evidence pages
+     appended at the back. Print colours are forced on, otherwise browsers
+     strip backgrounds and the whole thing loses its meaning. */
+  #printReport { display: none; color: #1a1a1a; font-family: Arial, Helvetica, sans-serif; }
+  #printReport * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  #printReport .pr-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    background: #757575; color: #fff; padding: 16px 20px; border-radius: 10px; margin-bottom: 6px;
+  }
   #printReport .pr-logo { height: 34px; width: auto; }
-  #printReport h1 { font-size: 18px; margin: 6px 0 2px; }
-  #printReport .pr-station { font-size: 12px; color: #333; }
-  #printReport .pr-meta { font-size: 11px; color: #333; text-align: right; line-height: 1.6; }
-  #printReport h2 { font-size: 13px; margin: 20px 0 8px; border-bottom: 1px solid #bbb; padding-bottom: 4px; }
-  #printReport .pr-summary { display: flex; gap: 26px; font-size: 12px; margin: 6px 0 10px; }
-  #printReport .pr-summary b { font-size: 15px; }
+  #printReport .pr-title { font-size: 19px; font-weight: bold; letter-spacing: -.01em; }
+  #printReport .pr-station { font-size: 11px; color: #f0f0ee; margin-top: 3px; }
+  #printReport .pr-meta { font-size: 11px; text-align: right; line-height: 1.7; color: #fff; }
+  #printReport .pr-meta strong { font-size: 15px; display: block; }
+
+  #printReport h2 {
+    font-size: 13px; margin: 22px 0 10px; padding-bottom: 5px;
+    border-bottom: 2px solid #ffd400; text-transform: uppercase; letter-spacing: .04em;
+  }
+
+  /* Outcome banner — mirrors the dashboard traffic light. */
+  #printReport .pr-outcome {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    border-left: 6px solid #999; background: #f7f7f5; border-radius: 8px; padding: 14px 18px; margin: 14px 0 4px;
+  }
+  #printReport .pr-outcome.good   { border-left-color: #2f7d4a; background: #f2f9f4; }
+  #printReport .pr-outcome.middle { border-left-color: #a66a00; background: #fdf6e9; }
+  #printReport .pr-outcome.bad    { border-left-color: #b54747; background: #fbf0f0; }
+  #printReport .pr-outcome-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
+  #printReport .pr-outcome-level { font-size: 22px; font-weight: bold; margin-top: 2px; }
+  #printReport .pr-outcome.good   .pr-outcome-level { color: #2f7d4a; }
+  #printReport .pr-outcome.middle .pr-outcome-level { color: #a66a00; }
+  #printReport .pr-outcome.bad    .pr-outcome-level { color: #b54747; }
+  #printReport .pr-outcome-when { font-size: 11px; color: #555; margin-top: 3px; }
+
+  /* KPI tiles, like the dashboard's performance row. */
+  #printReport .pr-kpis { display: flex; gap: 10px; margin: 12px 0 4px; }
+  #printReport .pr-kpi { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
+  #printReport .pr-kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; }
+  #printReport .pr-kpi-value { font-size: 21px; font-weight: bold; margin: 3px 0 1px; }
+  #printReport .pr-kpi-sub { font-size: 10px; color: #666; }
+
   #printReport table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px; }
-  #printReport th, #printReport td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #e2e2e2; vertical-align: top; }
-  #printReport th { background: #f2f2f0; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  #printReport th, #printReport td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ececea; vertical-align: top; }
+  #printReport th { background: #f2f2f0; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #555; }
   #printReport .pr-cat td { background: #fafaf8; font-weight: bold; }
-  #printReport .pr-yes { color: #2f7d4a; font-weight: bold; }
-  #printReport .pr-no { color: #b54747; font-weight: bold; }
+  #printReport td.pr-mine { background: #fffdf0; font-weight: bold; }
+
+  /* Status pills instead of bare words. */
+  #printReport .pill { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; }
+  #printReport .pill-yes  { background: #e8f4ec; color: #2f7d4a; }
+  #printReport .pill-no   { background: #fbeaea; color: #b54747; }
+  #printReport .pill-na   { background: #f0f0ee; color: #888; }
+  #printReport .pill-warn { background: #fbf3e3; color: #a66a00; }
   #printReport .pr-na { color: #999; }
-  #printReport .col-status { width: 90px; }
-  #printReport .col-note { width: 34%; color: #444; }
-  #printReport .pr-note { font-size: 11px; color: #555; margin: 4px 0 10px; }
-  #printReport .pr-foot { margin-top: 22px; font-size: 10px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
+  #printReport .col-status { width: 92px; }
+  #printReport .col-note { width: 32%; color: #444; }
+  #printReport .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
+  #printReport .pr-foot { margin-top: 24px; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
+
+  /* QC evidence pages appended at the back of the report. */
+  #printReport .pr-evidence-page { page-break-before: always; break-before: page; padding-top: 6px; }
+  #printReport .pr-evidence-head { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+  #printReport .pr-evidence-meta { font-size: 10px; color: #666; margin-bottom: 8px; }
+  #printReport .pr-evidence-img {
+    width: 100%; max-height: 232mm; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;
+  }
+  #printReport .pr-pagebreak { page-break-before: always; break-before: page; }
 
   @media print {
     @page { margin: 15mm; }
@@ -520,30 +642,31 @@
         <div class="view-month" id="dashMonthLabel"></div>
       </div>
 
-      <div class="info-banner">
+      <div class="info-banner" id="sampleBanner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         <div><strong>Sample performance data.</strong> The figures and trend below update automatically once this month's Test Quality Information export is uploaded in Monthly Report.</div>
       </div>
 
-      <!-- Hero: Mortlake vs national -->
-      <div class="card hero">
-        <div class="hero-mortlake">
-          <div class="hero-label">Mortlake Garage</div>
-          <div class="hero-main">
-            <span class="hero-score">92</span>
-            <span class="hero-score-max">/ 100</span>
+      <!-- Headline: how Mortlake actually compares, straight from the DVSA export -->
+      <div class="card standing-card" id="standingCard">
+        <div class="standing-verdict" id="standingVerdict">No data yet</div>
+        <div class="standing-sub" id="standingSub">Upload this month\u2019s Test Quality Information export to see how Mortlake compares.</div>
+
+        <div class="standing-compare" id="standingCompare">
+          <div class="standing-side">
+            <div class="standing-side-label">Mortlake</div>
+            <div class="standing-value" id="standingSite">&mdash;</div>
+            <div class="standing-side-sub">failure rate</div>
           </div>
-          <div class="hero-status-row">
-            <span class="badge success"><span class="dot green"></span>Green</span>
-            <span class="hero-delta">▲ +14 vs national average</span>
+          <div class="standing-gap" id="standingGap">&mdash;</div>
+          <div class="standing-side">
+            <div class="standing-side-label">National average</div>
+            <div class="standing-value muted" id="standingNational">&mdash;</div>
+            <div class="standing-side-sub">all UK test stations</div>
           </div>
         </div>
-        <div class="hero-divider"></div>
-        <div class="hero-national">
-          <div class="hero-label">National average</div>
-          <div class="hero-national-score">78<small> / 100</small></div>
-          <div class="hero-national-sub">DVSA scheme benchmark</div>
-        </div>
+
+        <div class="standing-note" id="standingNote"></div>
       </div>
 
       <!-- KPI cards -->
@@ -551,59 +674,40 @@
         <div class="section-head"><h2>Performance</h2><span class="section-desc">This month vs the national average</span></div>
         <div class="kpi-grid">
           <div class="card kpi">
-            <div class="kpi-label">Risk rating</div>
-            <div class="kpi-value">Green</div>
-            <div class="kpi-foot"><span class="badge success">On track</span></div>
-          </div>
-          <div class="card kpi">
-            <div class="kpi-label">Site assessment risk score</div>
-            <div class="kpi-value">18</div>
-            <div class="kpi-compare"><span>National 32</span><span class="delta up">▼ 14 lower</span></div>
+            <div class="kpi-label">Tests carried out</div>
+            <div class="kpi-value" id="kpiTests">191</div>
+            <div class="kpi-compare"><span id="kpiTestsSub">Jul-26</span></div>
           </div>
           <div class="card kpi">
             <div class="kpi-label">Initial pass rate</div>
-            <div class="kpi-value">84%</div>
-            <div class="kpi-compare"><span>National 79%</span><span class="delta up">▲ 5 pts</span></div>
+            <div class="kpi-value" id="kpiPassRate">70%</div>
+            <div class="kpi-compare" id="kpiPassCompare"><span>National 72%</span></div>
           </div>
           <div class="card kpi">
-            <div class="kpi-label">Retest rate</div>
-            <div class="kpi-value">9%</div>
-            <div class="kpi-compare"><span>National 13%</span><span class="delta down">▼ 4 pts</span></div>
+            <div class="kpi-label">Failure rate</div>
+            <div class="kpi-value" id="kpiFailRate">30%</div>
+            <div class="kpi-compare" id="kpiFailCompare"><span>National 28%</span></div>
           </div>
           <div class="card kpi">
-            <div class="kpi-label">Tests carried out</div>
-            <div class="kpi-value">180</div>
-            <div class="kpi-compare"><span>This reporting month</span></div>
+            <div class="kpi-label">Average test time</div>
+            <div class="kpi-value" id="kpiAvgTime">44 min</div>
+            <div class="kpi-compare" id="kpiAvgTimeCompare"><span>National 43 min</span></div>
           </div>
         </div>
       </div>
 
-      <!-- Trend + risk -->
+      <!-- Failure-rate trend, built from the months actually uploaded -->
       <div class="section">
-        <div class="grid-2">
-          <div class="card panel">
-            <div class="panel-head">
-              <span class="panel-title">Performance trend</span>
-              <span class="chart-legend">
-                <span><span class="legend-line" style="background:var(--brand-line)"></span>Mortlake</span>
-                <span><span class="legend-line" style="background:#c9c9c5"></span>National</span>
-              </span>
-            </div>
-            <svg id="ratingChart" style="width:100%;height:190px;display:block"></svg>
-            <div class="panel-note">Sample data — replaced with the real trend once monthly Test Quality Information exports have been uploaded.</div>
+        <div class="card panel">
+          <div class="panel-head">
+            <span class="panel-title">Failure rate trend</span>
+            <span class="chart-legend">
+              <span><span class="legend-line" style="background:var(--brand-line)"></span>Mortlake</span>
+              <span><span class="legend-line" style="background:#c9c9c5"></span>National</span>
+            </span>
           </div>
-
-          <div class="card panel">
-            <div class="panel-head"><span class="panel-title">Risk score</span></div>
-            <div class="risk-value">18</div>
-            <div class="risk-scale">
-              <div class="risk-seg"></div><div class="risk-seg"></div><div class="risk-seg"></div>
-              <div class="risk-pointer" style="left: 14%"></div>
-            </div>
-            <div class="risk-scale-labels"><span>Low</span><span>Medium</span><span>High</span></div>
-            <div class="badge success" style="margin-top:14px"><span class="dot green"></span>Green risk level</div>
-            <div class="risk-help">Lower score = lower risk. DVSA refreshes this monthly.</div>
-          </div>
+          <svg id="ratingChart" style="width:100%;height:190px;display:block"></svg>
+          <div class="panel-note" id="trendNote"></div>
         </div>
       </div>
 
@@ -636,6 +740,46 @@
             </div>
             <div class="panel-note" id="failureNote"></div>
           </div>
+        </div>
+      </div>
+
+      <!-- Google reviews -->
+      <div class="section">
+        <div class="section-head">
+          <h2>Google reviews</h2>
+          <span class="section-desc">Customer feedback — recorded monthly</span>
+        </div>
+        <div class="card panel reviews-card">
+          <div class="reviews-figures">
+            <div class="reviews-block">
+              <div class="reviews-label">Total reviews</div>
+              <div class="reviews-value" id="reviewTotal">&mdash;</div>
+              <div class="reviews-sub" id="reviewGain">No figure recorded yet</div>
+            </div>
+            <div class="reviews-block">
+              <div class="reviews-label">Average rating</div>
+              <div class="reviews-value" id="reviewRating">&mdash;</div>
+              <div class="reviews-stars" id="reviewStars"></div>
+            </div>
+          </div>
+
+          <div class="reviews-actions">
+            <button type="button" class="btn btn-secondary btn-sm" id="reviewRefreshBtn" onclick="fetchGoogleReviews(true)">Refresh from Google</button>
+            <button type="button" class="reviews-manual-toggle" id="reviewManualToggle" onclick="toggleManualReviews()">Enter manually</button>
+          </div>
+
+          <div class="reviews-entry" id="reviewManualEntry" style="display:none">
+            <label class="outcome-field">
+              <span>Total reviews on Google</span>
+              <input type="number" id="reviewTotalInput" min="0" step="1" placeholder="e.g. 214">
+            </label>
+            <label class="outcome-field">
+              <span>Average rating</span>
+              <input type="number" id="reviewRatingInput" min="0" max="5" step="0.1" placeholder="e.g. 4.8">
+            </label>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="saveReviews()">Save for this month</button>
+          </div>
+          <div class="reviews-note" id="reviewNote"></div>
         </div>
       </div>
 
@@ -720,11 +864,11 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by date</div><div class="upload-card-sub">Date sequence · .xlsx</div></div>
+              <div><div class="upload-card-title">Test log — by date</div><div class="upload-card-sub">Date sequence · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileLogDate">Upload file</label>
-              <input type="file" id="fileLogDate" accept=".xlsx,.xls">
+              <input type="file" id="fileLogDate" accept=".csv,.xlsx,.xls">
             </div>
             <div class="file-list" id="listLogDate"></div>
             <div class="upload-status required" id="statusLogDate"></div>
@@ -733,11 +877,11 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by duration</div><div class="upload-card-sub">Time on the ramp · .xlsx</div></div>
+              <div><div class="upload-card-title">Test log — by duration</div><div class="upload-card-sub">Time on the ramp · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileLogDuration">Upload file</label>
-              <input type="file" id="fileLogDuration" accept=".xlsx,.xls">
+              <input type="file" id="fileLogDuration" accept=".csv,.xlsx,.xls">
             </div>
             <div class="file-list" id="listLogDuration"></div>
             <div class="upload-status required" id="statusLogDuration"></div>
@@ -746,11 +890,11 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test Quality Information</div><div class="upload-card-sub">Site vs national performance · .xlsx</div></div>
+              <div><div class="upload-card-title">Test Quality Information</div><div class="upload-card-sub">Site vs national · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileRating">Upload file</label>
-              <input type="file" id="fileRating" accept=".xlsx,.xls">
+              <input type="file" id="fileRating" accept=".csv,.xlsx,.xls">
             </div>
             <div class="file-list" id="listRating"></div>
             <div class="upload-status required" id="statusRating"></div>
@@ -856,6 +1000,9 @@
   function unlockApp() {
     document.getElementById('lockScreen').style.display = 'none';
     document.getElementById('appRoot').style.display = 'block';
+    // On a first login the boot-time reviews fetch has already run and been
+    // rejected (no password stored yet), so try again now that we have one.
+    if (typeof maybeAutoFetchReviews_ === 'function') maybeAutoFetchReviews_();
   }
 
   function submitLockScreen() {
@@ -937,7 +1084,8 @@
       list.push({
         name: row.querySelector('.calName').value,
         serial: row.querySelector('.calSerial').value,
-        date: row.querySelector('.calDate').value
+        date: row.querySelector('.calDate').value,
+        lastDone: row.dataset.lastDone || ''
       });
     });
     store.calibration = list;
@@ -949,6 +1097,280 @@
     var m = store.months[month] || {};
     checklistState = Object.assign({}, m.state || {});
     checklistNotes = Object.assign({}, m.notes || {});
+  }
+
+  /* ═══════════════ Standing vs national ═══════════════
+     Deliberately NOT framed as "higher pass rate = better". DVSA's risk
+     rating runs an outlier-detection model over tester data, and they have
+     said publicly that unusually high pass rates are one of the things that
+     draws their attention — a garage passing far more vehicles than the
+     national norm looks like it may not be testing thoroughly. Failing far
+     more than the norm is also a deviation worth knowing about.
+
+     So the healthy position is CLOSE to the national average, and this card
+     says so, using the failure rate — the figure DVSA's own export leads
+     with. */
+  var STANDING_TOLERANCE = 3;   // points either side of national that count as "in line"
+
+  function renderStanding_() {
+    var card = document.getElementById('standingCard');
+    if (!card) return;
+    card.classList.remove('is-good', 'is-level', 'is-behind');
+
+    var d = TEST_QUALITY;
+    if (!d || !d.site) {
+      setText('standingVerdict', 'No data yet');
+      setText('standingSub', 'Upload this month\u2019s Test Quality Information export to see how Mortlake compares.');
+      setText('standingSite', '\u2014');
+      setText('standingNational', '\u2014');
+      setText('standingGap', '\u2014');
+      setText('standingNote', '');
+      card.classList.add('is-level');
+      return;
+    }
+
+    var siteFail = d.site.failed;
+    var natFail  = d.national.failed;
+    var diff = siteFail - natFail;          // positive = fails more than typical
+
+    var tone, verdict, explain;
+    if (Math.abs(diff) <= STANDING_TOLERANCE) {
+      tone = 'is-good';
+      verdict = 'In line with the national average';
+      explain = 'Testing in step with the rest of the country \u2014 the position DVSA expect to see.';
+    } else if (diff < 0) {
+      // Passing notably more than the norm — the direction DVSA scrutinise.
+      tone = 'is-behind';
+      verdict = 'Failing fewer vehicles than average';
+      explain = 'DVSA treat an unusually high pass rate as a reason to look closer, so it is worth being able to show why.';
+    } else {
+      tone = 'is-level';
+      verdict = 'Failing more vehicles than average';
+      explain = 'Not a compliance concern in itself \u2014 often just the age or mix of vehicles being tested.';
+    }
+    card.classList.add(tone);
+
+    setText('standingVerdict', verdict);
+    setText('standingSite', fmtPct_(siteFail));
+    setText('standingNational', fmtPct_(natFail));
+    setText('standingGap', (diff > 0 ? '+' : diff < 0 ? '\u2212' : '') +
+      Math.abs(diff).toFixed(Math.abs(diff) % 1 === 0 ? 0 : 1) + ' pts');
+
+    var period = d.period ? d.period : 'this month';
+    setText('standingSub', d.site.tests + ' tests carried out in ' + period + '. ' + explain);
+
+    // A single headline can hide a bad category, so name the biggest gap too.
+    var cats = (d.failureCategories || []).filter(function (c) { return c.site > 0 || c.national > 0; });
+    var above = cats.filter(function (c) { return c.site - c.national > 0; });
+    var note = '';
+    if (cats.length) {
+      note = above.length + ' of ' + cats.length + ' failure categories are above the national average';
+      var worst = cats.slice().sort(function (a, b) { return (b.site - b.national) - (a.site - a.national); })[0];
+      if (worst && worst.site - worst.national > 0) {
+        note += ' \u2014 biggest gap: ' + worst.name + ' (' + fmtPct_(worst.site) +
+                ' vs ' + fmtPct_(worst.national) + ').';
+      } else {
+        note += '.';
+      }
+    }
+    setText('standingNote', note);
+  }
+
+  /* ═══════════════ Google reviews ═══════════════
+     Google's API exposes a running total, never a per-month figure, so the
+     number gained in a month can only come from comparing totals. Paul enters
+     the total he sees on his Business Profile and the app works out the gain
+     against whichever earlier month was last recorded — so it still reads
+     correctly if a month gets skipped. */
+  function prevMonthKey_(key) {
+    var p = (key || '').split('-');
+    if (p.length !== 2) return null;
+    var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1;
+    if (m < 1) { m = 12; y--; }
+    return y + '-' + String(m).padStart(2, '0');
+  }
+
+  // Walk back up to two years to find the most recent earlier reading.
+  function lastReviewBefore_(key) {
+    var reviews = store.reviews || {};
+    var k = prevMonthKey_(key);
+    for (var i = 0; i < 24 && k; i++) {
+      if (reviews[k] && typeof reviews[k].total === 'number') return { key: k, entry: reviews[k] };
+      k = prevMonthKey_(k);
+    }
+    return null;
+  }
+
+  function saveReviews() {
+    var totalEl = document.getElementById('reviewTotalInput');
+    var ratingEl = document.getElementById('reviewRatingInput');
+    var note = document.getElementById('reviewNote');
+
+    var total = parseInt(totalEl.value, 10);
+    if (isNaN(total) || total < 0) {
+      note.innerHTML = '<span style="color:var(--danger)">Enter the total number of Google reviews.</span>';
+      return;
+    }
+    var rating = parseFloat(ratingEl.value);
+    if (ratingEl.value !== '' && (isNaN(rating) || rating < 0 || rating > 5)) {
+      note.innerHTML = '<span style="color:var(--danger)">Rating should be between 0 and 5.</span>';
+      return;
+    }
+
+    // A total that has gone down is almost always a typo — Google totals
+    // rarely fall, and a wrong figure here quietly corrupts next month's gain.
+    var prior = lastReviewBefore_(currentMonth);
+    if (prior && total < prior.entry.total) {
+      if (!confirm('That is fewer reviews than the ' + prior.key + ' figure of ' + prior.entry.total +
+                   '.\n\nReview totals rarely go down — save anyway?')) return;
+    }
+
+    if (!store.reviews) store.reviews = {};
+    store.reviews[currentMonth] = {
+      total: total,
+      rating: isNaN(rating) ? null : rating,
+      recordedOn: new Date().toISOString(),
+      source: 'manual'
+    };
+    saveStore();
+    renderReviews_();
+  }
+
+  /* Pulls the live total straight from the Google Business Profile via the
+     backend, records it against the current month, and lets renderReviews_
+     work out the gain. Runs by itself once a month so Paul never has to think
+     about it; the manual fields stay as a fallback if the Places API isn't
+     configured or Google is unreachable. */
+  var reviewsFetching = false;
+
+  function fetchGoogleReviews(manual) {
+    if (reviewsFetching || !SCRIPT_URL) return Promise.resolve();
+    reviewsFetching = true;
+
+    var note = document.getElementById('reviewNote');
+    var btn = document.getElementById('reviewRefreshBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    if (manual && note) note.textContent = 'Checking Google…';
+
+    return fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'getGoogleReviews', password: getPassword() })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.status === 'success') {
+          if (!store.reviews) store.reviews = {};
+          store.reviews[currentMonth] = {
+            total: res.total,
+            rating: res.rating,
+            recordedOn: new Date().toISOString(),
+            source: 'google'
+          };
+          saveStore();
+          renderReviews_();
+        } else if (res.status === 'not_configured') {
+          // Perfectly fine — manual entry still works.
+          if (manual && note) {
+            note.innerHTML = '<span style="color:var(--warning)">Google isn’t connected yet, so enter the totals by hand. ' +
+              'Add GOOGLE_PLACES_API_KEY and GOOGLE_PLACE_ID in Apps Script to make this automatic.</span>';
+          }
+        } else if (manual && note) {
+          note.innerHTML = '<span style="color:var(--danger)">Could not read from Google: ' +
+            escapeHtml_(res.message || 'unknown error') + '</span>';
+        }
+      })
+      .catch(function () {
+        if (manual && note) note.innerHTML = '<span style="color:var(--danger)">Could not reach the server to check Google.</span>';
+      })
+      .then(function () {
+        reviewsFetching = false;
+        if (btn) { btn.disabled = false; btn.textContent = 'Refresh from Google'; }
+      });
+  }
+
+  /* Refresh at most once a day, and only when this month has no reading yet
+     or the stored one is stale — so opening the app repeatedly doesn't spend
+     API calls for a number that barely moves. */
+  function maybeAutoFetchReviews_() {
+    if (!SCRIPT_URL) return;
+    // Nothing to authenticate with yet — unlockApp() calls back in once there is.
+    if (!getPassword()) return;
+    var entry = (store.reviews || {})[currentMonth];
+    if (entry && entry.recordedOn) {
+      var ageHours = (Date.now() - new Date(entry.recordedOn).getTime()) / 3600000;
+      if (ageHours < 24) return;
+    }
+    fetchGoogleReviews(false);
+  }
+
+  function renderReviews_() {
+    var reviews = store.reviews || {};
+    var current = reviews[currentMonth];
+    var note = document.getElementById('reviewNote');
+    if (!note) return;
+
+    var totalEl = document.getElementById('reviewTotalInput');
+    var ratingEl = document.getElementById('reviewRatingInput');
+
+    if (!current) {
+      setText('reviewTotal', '—');
+      setText('reviewRating', '—');
+      setText('reviewStars', '');
+      var gainEl = document.getElementById('reviewGain');
+      gainEl.className = 'reviews-sub';
+      gainEl.textContent = 'Nothing recorded for ' + (formatMonth(currentMonth) || 'this month');
+      if (totalEl) totalEl.value = '';
+      if (ratingEl) ratingEl.value = '';
+      note.textContent = 'Check your Google Business Profile and enter this month’s totals — the app works out how many were gained.';
+      return;
+    }
+
+    setText('reviewTotal', String(current.total));
+    if (totalEl) totalEl.value = current.total;
+    if (ratingEl) ratingEl.value = current.rating != null ? current.rating : '';
+
+    if (current.rating != null) {
+      setText('reviewRating', current.rating.toFixed(1));
+      var pctFilled = Math.min(100, Math.max(0, current.rating / 5 * 100));
+      document.getElementById('reviewStars').innerHTML =
+        '<span class="stars-wrap"><span class="stars-bg">★★★★★</span>' +
+        '<span class="stars-fg" style="width:' + pctFilled.toFixed(1) + '%">★★★★★</span></span>';
+    } else {
+      setText('reviewRating', '—');
+      setText('reviewStars', '');
+    }
+
+    var prior = lastReviewBefore_(currentMonth);
+    var gEl = document.getElementById('reviewGain');
+    if (!prior) {
+      gEl.className = 'reviews-sub';
+      gEl.textContent = 'First month recorded — next month will show the gain';
+    } else {
+      var gain = current.total - prior.entry.total;
+      // If a month was skipped, the gain covers that whole gap — say so rather
+      // than calling it "this month".
+      var span = prior.key === prevMonthKey_(currentMonth)
+        ? ' this month'
+        : ' since ' + (formatMonth(prior.key) || prior.key);
+      gEl.className = 'reviews-sub' + (gain > 0 ? ' gain' : '');
+      gEl.textContent = gain > 0 ? '+' + gain + ' new review' + (gain === 1 ? '' : 's') + span
+        : gain === 0 ? 'No new reviews' + span
+        : gain + ' vs ' + (formatMonth(prior.key) || prior.key);
+    }
+    var when = new Date(current.recordedOn);
+    var sameDay = when.toDateString() === new Date().toDateString();
+    var whenTxt = sameDay
+      ? 'today at ' + when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+      : when.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+    note.textContent = (current.source === 'google' ? 'Read from Google ' : 'Entered manually ') + whenTxt + '.';
+  }
+
+  function toggleManualReviews() {
+    var box = document.getElementById('reviewManualEntry');
+    var link = document.getElementById('reviewManualToggle');
+    var open = box.style.display !== 'none';
+    box.style.display = open ? 'none' : 'flex';
+    link.textContent = open ? 'Enter manually' : 'Hide manual entry';
   }
 
   /* ═══════════════ Reporting month label ═══════════════ */
@@ -972,6 +1394,8 @@
     renderChecklist();
     updateProgress();
     updateMonthLabels();
+    renderReviews_();
+    maybeAutoFetchReviews_();
   });
 
   /* ═══════════════ File uploads ═══════════════ */
@@ -1067,6 +1491,93 @@
     return { ok: false, text: result.error || 'Unsupported file' };
   }
 
+  /* When the Test Quality Information export lands, actually use it: parse the
+     figures out and swap them into the dashboard, replacing the placeholder.
+     Returns a short description for the upload card, or null if this wasn't
+     that file. */
+  function applyTestQualityFile_(inputId, result) {
+    if (inputId !== 'fileRating') return null;
+    if (result.kind !== 'spreadsheet' || result.error || !result.rows) return null;
+
+    var parsed = parseTestQuality_(result.rows);
+    if (parsed.error) return { ok: false, text: parsed.error };
+
+    TEST_QUALITY = parsed;
+
+    // Keep each month's headline figures so the trend builds up over time.
+    // Keyed by period, so re-uploading the same month corrects it rather
+    // than adding a duplicate point.
+    if (parsed.period) {
+      if (!store.testQuality) store.testQuality = {};
+      store.testQuality[parsed.period] = {
+        period: parsed.period,
+        siteFailed: parsed.site.failed,
+        nationalFailed: parsed.national.failed,
+        tests: parsed.site.tests,
+        avgTime: parsed.site.avgTime
+      };
+      // Keep the full breakdown for the most recent upload so the tables are
+      // still populated when the app is reopened.
+      store.testQualityLatest = parsed;
+      saveStore();
+    }
+
+    renderTestQuality_();
+    applyTestQualityToDashboard_();
+    renderStanding_();
+    buildRatingChart();
+
+    var active = parsed.testers.filter(function (t) { return t.tests > 0; }).length;
+    return {
+      ok: true,
+      text: (parsed.period ? parsed.period + ' · ' : '') + parsed.site.tests + ' tests · ' +
+            active + ' active tester' + (active === 1 ? '' : 's')
+    };
+  }
+
+  /* Push the real figures into the headline dashboard cards, so the top of the
+     page stops showing sample numbers once a genuine export is loaded. */
+  function applyTestQualityToDashboard_() {
+    var d = TEST_QUALITY;
+    if (!d || d.isSample) return;
+
+    var passRate = Math.max(0, 100 - d.site.failed);
+    var natPass = Math.max(0, 100 - d.national.failed);
+
+    setText('kpiTests', String(d.site.tests));
+    setText('kpiTestsSub', d.period ? d.period : 'This reporting month');
+
+    setText('kpiPassRate', passRate.toFixed(0) + '%');
+    setHTML_('kpiPassCompare', '<span>National ' + natPass.toFixed(0) + '%</span>' +
+      deltaChip_(passRate, natPass, true, 'pts'));
+
+    setText('kpiFailRate', d.site.failed.toFixed(0) + '%');
+    setHTML_('kpiFailCompare', '<span>National ' + d.national.failed.toFixed(0) + '%</span>' +
+      deltaChip_(d.site.failed, d.national.failed, false, 'pts'));
+
+    setText('kpiAvgTime', Math.round(d.site.avgTime) + ' min');
+    setHTML_('kpiAvgTimeCompare', '<span>National ' + Math.round(d.national.avgTime) + ' min</span>');
+
+    // The sample-data banner is no longer true once real figures are in.
+    var banner = document.getElementById('sampleBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  function setHTML_(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+  /* Compares Mortlake against the national figure. Says plainly whether the
+     site is above or below and whether that's good — an arrow alone is
+     ambiguous, since a lower failure rate is good but a lower pass rate is
+     not. */
+  function deltaChip_(siteValue, nationalValue, higherIsBetter, unit) {
+    var diff = siteValue - nationalValue;
+    if (Math.abs(diff) < 0.5) return '<span class="badge neutral">same as national</span>';
+    var above = diff > 0;
+    var good = higherIsBetter ? above : !above;
+    return '<span class="badge ' + (good ? 'success' : 'warning') + '">' +
+      Math.abs(diff).toFixed(0) + ' ' + unit + ' ' + (above ? 'above' : 'below') + '</span>';
+  }
+
   function wireFileInput(inputId, listId, singleFile, statusId) {
     var input = document.getElementById(inputId);
     input.addEventListener('change', function () {
@@ -1089,7 +1600,7 @@
           parsedFileData[inputId] = result;
           if (!statusId) return;
           var el = document.getElementById(statusId);
-          var summary = describeParsedResult_(result);
+          var summary = applyTestQualityFile_(inputId, result) || describeParsedResult_(result);
           if (summary.ok) {
             el.className = 'upload-status uploaded';
             el.innerHTML = ICON_UPLOADED + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
@@ -1163,7 +1674,7 @@
         parsedFileData[inputId] = result;
         if (!statusId) return;
         var el = document.getElementById(statusId);
-        var summary = describeParsedResult_(result);
+        var summary = applyTestQualityFile_(inputId, result) || describeParsedResult_(result);
         el.className = 'upload-status ' + (summary.ok ? 'uploaded' : 'warn');
         el.innerHTML = (summary.ok ? ICON_UPLOADED : ICON_WARN) +
           '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
@@ -1240,7 +1751,47 @@
     var dateVal = row.querySelector('.calDate').value;
     var s = computeCalStatus(dateVal);
     var cell = row.querySelector('.cal-status');
-    cell.innerHTML = '<span>' + s.text + '</span>' + (s.badge ? '<span class="badge ' + s.cls + '">' + s.badge + '</span>' : '');
+    var lastDone = row.dataset.lastDone || '';
+    var lastLine = lastDone
+      ? '<div class="cal-lastdone">Done ' + new Date(lastDone).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + '</div>'
+      : '';
+    cell.innerHTML = '<div class="cal-status-main"><span>' + s.text + '</span>' +
+      (s.badge ? '<span class="badge ' + s.cls + '">' + s.badge + '</span>' : '') + '</div>' + lastLine;
+  }
+
+  /* Marking a calibration done is the common action — the certificate comes
+     back and the clock restarts. Rather than making Paul work out and type a
+     new date, this records today as the last done date and pushes the next
+     due date forward by the same interval he was already using (falling back
+     to a year, the usual cycle). He can still edit the date afterwards. */
+  var DEFAULT_CAL_MONTHS = 12;
+
+  function markCalibrationDone(row) {
+    var dateInput = row.querySelector('.calDate');
+    var name = row.querySelector('.calName').value.trim() || 'this equipment';
+    var previousDue = dateInput.value;
+    var lastDone = row.dataset.lastDone;
+
+    // Work out the interval actually in use, if we have enough history.
+    var months = DEFAULT_CAL_MONTHS;
+    if (previousDue && lastDone) {
+      var gapDays = Math.round((new Date(previousDue) - new Date(lastDone)) / 86400000);
+      if (gapDays > 25) months = Math.max(1, Math.round(gapDays / 30.44));
+    }
+
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var next = new Date(today);
+    next.setMonth(next.getMonth() + months);
+
+    if (!confirm('Mark ' + name + ' as calibrated today?\n\nNext due will be set to ' +
+                 next.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) +
+                 ' (' + months + ' months). You can change the date afterwards.')) return;
+
+    row.dataset.lastDone = today.toISOString().slice(0, 10);
+    dateInput.value = next.toISOString().slice(0, 10);
+    renderCalStatus(row);
+    refreshStatuses();
+    persistCalibration();
   }
 
   function updateCalEmptyState() {
@@ -1259,8 +1810,12 @@
       '<input type="text" class="calSerial" placeholder="Serial no." aria-label="Serial number">' +
       '<input type="date" class="calDate" aria-label="Next due date">' +
       '<div class="cal-status"></div>' +
-      '<button type="button" class="cal-remove" aria-label="Remove equipment">&times;</button>';
+      '<div class="cal-actions">' +
+        '<button type="button" class="cal-done" title="Mark as calibrated today">✓ Done</button>' +
+        '<button type="button" class="cal-remove" aria-label="Remove equipment">&times;</button>' +
+      '</div>';
 
+    row.querySelector('.cal-done').addEventListener('click', function () { markCalibrationDone(row); });
     row.querySelector('.cal-remove').addEventListener('click', function () {
       row.remove();
       updateCalEmptyState();
@@ -1275,6 +1830,7 @@
       row.querySelector('.calName').value = prefill.name || '';
       row.querySelector('.calSerial').value = prefill.serial || '';
       row.querySelector('.calDate').value = prefill.date || '';
+      if (prefill.lastDone) row.dataset.lastDone = prefill.lastDone;
     }
     document.getElementById('calRows').appendChild(row);
     renderCalStatus(row);
@@ -1359,6 +1915,12 @@
     return QC_EXPECTED_DOCS.filter(function (t) { return t !== 'emissions_test'; });
   }
   var qcSortResults = [];
+
+  /* The scanned pages themselves, kept so they can be reproduced at the back
+     of the printed report as supporting evidence. DVSA expect the QC records
+     to be available, so the report is far more useful with the actual
+     paperwork attached than with a summary alone. Held in memory only. */
+  var qcEvidencePages = [];
 
   // Claude rejects images over 10MB. Scans are often 2500x3500+ at high DPI,
   // so pages are downscaled and JPEG-encoded before sending — comfortably
@@ -1581,6 +2143,7 @@
     statusEl.textContent = '';
     document.getElementById('qcGroupsContainer').innerHTML = '';
     qcSortResults = [];
+    qcEvidencePages = [];
 
     var progress = makeProgress('qc');
     progress.start('Opening files…');
@@ -1592,11 +2155,33 @@
         return runWithConcurrency_(allPages, function (pageImg) {
           return analyzePageOnServer_(pageImg).then(function (res) {
             qcSortResults.push({ label: pageImg.label, response: res });
+
+            // Keep the page image plus whatever was read off it, so the
+            // printed report can reproduce it as labelled evidence.
+            var a = (res.status === 'success' && res.result) ? res.result : {};
+            qcEvidencePages.push({
+              label: pageImg.label,
+              base64: pageImg.base64,
+              mimeType: pageImg.mimeType,
+              reg: looksLikeRealPlate_(a.registration) ? normalizeReg_(a.registration) : '',
+              docType: a.document_type && a.document_type !== 'other' ? a.document_type : '',
+              tester: a.tester_name || '',
+              testDate: a.test_date || '',
+              qcFlag: !!a.qc_flag
+            });
           });
         }, function (done, total) { progress.set(done, total); });
       })
       .then(function () {
         progress.finish();
+        // Group the evidence by vehicle so each car's pages print together,
+        // with anything unidentified at the end.
+        qcEvidencePages.sort(function (a, b) {
+          if (a.reg === b.reg) return a.label < b.label ? -1 : 1;
+          if (!a.reg) return 1;
+          if (!b.reg) return -1;
+          return a.reg < b.reg ? -1 : 1;
+        });
         renderQcGroups_();
         btn.disabled = false;
         btn.textContent = 'Sort scanned pages';
@@ -1974,35 +2559,154 @@
      January 2026 numbers, kept as the placeholder so the layout is checked
      against something truthful — they are replaced wholesale the moment a
      real .xlsx export is parsed. */
-  var TEST_QUALITY = {
-    period: 'Jan-26',
-    isSample: true,
-    testers: [
-      { name: 'Ivaylo Dimitrov',  tests: 189, avgTime: 44, failed: 23 },
-      { name: 'Stuart Attridge',  tests: 11,  avgTime: 44, failed: 9 },
-      { name: 'Paul Townsend',    tests: 7,   avgTime: 45, failed: 0 },
-      { name: 'Rowley Barrett',   tests: 2,   avgTime: 48, failed: 0 },
-      { name: 'Gavin Lee Murton', tests: 0,   avgTime: 0,  failed: 0 },
-      { name: 'Paul McGrath',     tests: 0,   avgTime: 0,  failed: 0 }
-    ],
-    site:     { tests: 209, avgTime: 44, failed: 21 },
-    national: { tests: 52,  avgTime: 43, failed: 28 },
-    failureCategories: [
-      { name: 'Lamps, reflectors & electrical', site: 52.3, national: 44.1 },
-      { name: 'Tyres',                          site: 25.0, national: 20.0 },
-      { name: 'Suspension',                     site: 22.7, national: 21.8 },
-      { name: 'Body, chassis, structure',       site: 15.9, national: 13.6 },
-      { name: 'Brakes',                         site: 15.9, national: 23.0 },
-      { name: 'Steering',                       site: 11.4, national: 8.3 },
-      { name: 'Seat belts & restraints',        site: 6.8,  national: 3.5 },
-      { name: 'Noise, emissions & leaks',       site: 4.5,  national: 11.5 },
-      { name: 'Identification of the vehicle',  site: 2.3,  national: 1.2 },
-      { name: 'Road wheels',                    site: 0.0,  national: 1.4 }
-    ]
-  };
+  /* Populated the moment a Test Quality Information export is uploaded, and
+     restored from the last upload on future visits. Deliberately empty to
+     begin with — showing invented performance figures on a compliance
+     dashboard would be worse than showing none. */
+  var TEST_QUALITY = null;
+
+  /* Reads a DVSA "Test Quality Information" export into the shape above.
+     The file is a grid rather than a tidy table: a few header lines, then a
+     row of tester names ending in "Site average" / "National average", then
+     labelled metric rows. Rather than trusting fixed row/column positions —
+     which would break the moment DVSA adds a tester or a category — it finds
+     the header row and reads everything relative to that. */
+  function parseTestQuality_(rows) {
+    function raw(r, c) { return (rows[r] && rows[r][c] != null) ? rows[r][c] : ''; }
+    function cell(r, c) { var v = raw(r, c); return v === '' ? '' : String(v).trim(); }
+    function num(v) {
+      if (v == null) return 0;
+      var n = parseFloat(String(v).replace('%', '').trim());
+      return isNaN(n) ? 0 : n;
+    }
+    /* Percentages are awkward: the spreadsheet reader turns "30%" into the
+       number 0.3, while a plain "30" stays 30. Anything at or below 1 is
+       therefore a fraction and needs scaling — including 1.0, which is 100%,
+       since these columns are always percentage-formatted in the export. */
+    function pct(r, c) {
+      var v = raw(r, c);
+      if (v === '' || v == null) return 0;
+      if (typeof v === 'number') return v <= 1 ? v * 100 : v;
+      var s = String(v).trim();
+      var n = parseFloat(s.replace('%', ''));
+      if (isNaN(n)) return 0;
+      if (s.indexOf('%') > -1) return n;         // "30%" → 30
+      return n <= 1 ? n * 100 : n;               // bare fraction → scale
+    }
+    function findRow(label) {
+      for (var r = 0; r < rows.length; r++) {
+        if (cell(r, 0).toLowerCase() === label.toLowerCase()) return r;
+      }
+      return -1;
+    }
+
+    // Locate the tester header row by the two columns that always terminate it.
+    var headerRow = -1, siteCol = -1, nationalCol = -1;
+    for (var r = 0; r < rows.length && headerRow === -1; r++) {
+      var row = rows[r] || [];
+      for (var c = 0; c < row.length; c++) {
+        var v = String(row[c] || '').trim().toLowerCase();
+        if (v === 'site average') { siteCol = c; headerRow = r; }
+        if (v === 'national average') nationalCol = c;
+      }
+    }
+    if (headerRow === -1 || siteCol === -1) {
+      return { error: 'This does not look like a Test Quality Information export — no "Site average" column found.' };
+    }
+    if (nationalCol === -1) nationalCol = siteCol + 1;
+
+    // Tester columns sit between the label column and "Site average".
+    var testerCols = [];
+    for (var c = 1; c < siteCol; c++) {
+      if (cell(headerRow, c)) testerCols.push(c);
+    }
+
+    var testsRow   = findRow('Tests done');
+    var ageRow     = findRow('Average vehicle age');
+    var timeRow    = findRow('Average test time');
+    var failedRow  = findRow('Tests failed');
+    if (testsRow === -1 || failedRow === -1) {
+      return { error: 'Could not find the "Tests done" / "Tests failed" rows in this file.' };
+    }
+
+    var testers = testerCols.map(function (c) {
+      return {
+        name: cell(headerRow, c),
+        id: cell(headerRow + 1, c),
+        tests: num(cell(testsRow, c)),
+        avgAge: ageRow > -1 ? num(cell(ageRow, c)) : 0,
+        avgTime: timeRow > -1 ? num(cell(timeRow, c)) : 0,
+        failed: pct(failedRow, c)
+      };
+    });
+
+    function totals(col) {
+      return {
+        tests: num(cell(testsRow, col)),
+        avgAge: ageRow > -1 ? num(cell(ageRow, col)) : 0,
+        avgTime: timeRow > -1 ? num(cell(timeRow, col)) : 0,
+        failed: pct(failedRow, col)
+      };
+    }
+
+    // Everything after the "Failures by category" heading, until the rows run out.
+    var catStart = findRow('Failures by category');
+    var failureCategories = [];
+    if (catStart > -1) {
+      for (var r2 = catStart + 1; r2 < rows.length; r2++) {
+        var label = cell(r2, 0);
+        if (!label) continue;
+        failureCategories.push({
+          name: label,
+          site: pct(r2, siteCol),
+          national: pct(r2, nationalCol)
+        });
+      }
+    }
+
+    // Period sits in the first few lines, formatted like "Jul-26".
+    var period = '';
+    for (var r3 = 0; r3 < Math.min(rows.length, 8) && !period; r3++) {
+      var v3 = cell(r3, 0);
+      if (/^[A-Za-z]{3}-\d{2}$/.test(v3)) period = v3;
+    }
+
+    return {
+      period: period || null,
+      vts: cell(1, 0) || null,
+      station: cell(0, 0) || null,
+      testers: testers,
+      site: totals(siteCol),
+      national: totals(nationalCol),
+      failureCategories: failureCategories,
+      isSample: false
+    };
+  }
+
+  /* Percentages come out of the spreadsheet as floats and can carry binary
+     rounding noise (28.000000000000004) — tidy them for display. */
+  function fmtPct_(v) {
+    var n = Math.round((v || 0) * 10) / 10;
+    return (n % 1 === 0 ? n.toFixed(0) : n.toFixed(1)) + '%';
+  }
 
   function renderTestQuality_() {
     var d = TEST_QUALITY;
+
+    // Nothing uploaded yet — say so plainly rather than showing empty tables.
+    if (!d) {
+      var empty = '<tr><td colspan="4" style="color:var(--text-tertiary);padding:18px 10px;text-align:center">' +
+                  'Upload this month&rsquo;s Test Quality Information export to see these figures.</td></tr>';
+      var tt = document.querySelector('#testerTable tbody');
+      var ft = document.querySelector('#failureTable tbody');
+      if (tt) tt.innerHTML = empty;
+      if (ft) ft.innerHTML = empty;
+      setText('testerNote', '');
+      setText('failureNote', '');
+      ['kpiTests', 'kpiPassRate', 'kpiFailRate', 'kpiAvgTime'].forEach(function (id) { setText(id, '—'); });
+      ['kpiTestsSub', 'kpiPassCompare', 'kpiFailCompare', 'kpiAvgTimeCompare'].forEach(function (id) { setText(id, ''); });
+      return;
+    }
 
     // By tester — busiest first, and skip anyone who did no tests this month.
     var rows = d.testers.filter(function (t) { return t.tests > 0; })
@@ -2010,15 +2714,15 @@
       .map(function (t) {
         return '<tr><td>' + escapeHtml_(t.name) + '</td>' +
                '<td class="mort-col">' + t.tests + '</td>' +
-               '<td>' + t.avgTime + ' min</td>' +
-               '<td>' + t.failed + '%</td></tr>';
+               '<td>' + Math.round(t.avgTime) + ' min</td>' +
+               '<td>' + fmtPct_(t.failed) + '</td></tr>';
       }).join('');
     rows += '<tr><td><strong>Site total</strong></td>' +
             '<td class="mort-col"><strong>' + d.site.tests + '</strong></td>' +
-            '<td><strong>' + d.site.avgTime + ' min</strong></td>' +
-            '<td><strong>' + d.site.failed + '%</strong></td></tr>' +
+            '<td><strong>' + Math.round(d.site.avgTime) + ' min</strong></td>' +
+            '<td><strong>' + fmtPct_(d.site.failed) + '</strong></td></tr>' +
             '<tr><td>National average</td><td>' + d.national.tests + '</td>' +
-            '<td>' + d.national.avgTime + ' min</td><td>' + d.national.failed + '%</td></tr>';
+            '<td>' + Math.round(d.national.avgTime) + ' min</td><td>' + fmtPct_(d.national.failed) + '</td></tr>';
     document.querySelector('#testerTable tbody').innerHTML = rows;
 
     var inactive = d.testers.filter(function (t) { return t.tests === 0; }).length;
@@ -2027,7 +2731,11 @@
 
     // Failures by category — worst gap vs national first, since that's what
     // a DVSA examiner would pick up on.
-    var cats = d.failureCategories.slice().sort(function (a, b) {
+    // Categories where neither the site nor the nation records any failures
+    // (bus supplementary tests, speed limiters) are just noise on this table.
+    var cats = d.failureCategories.filter(function (c) {
+      return c.site > 0 || c.national > 0;
+    }).sort(function (a, b) {
       return (b.site - b.national) - (a.site - a.national);
     });
     document.querySelector('#failureTable tbody').innerHTML = cats.map(function (c) {
@@ -2048,31 +2756,61 @@
       above + ' of ' + cats.length + ' categories above the national average.');
   }
 
-  /* ═══════════════ Rating trend chart (sample data) ═══════════════ */
-  var RATING_TREND_SAMPLE = {
-    months: ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
-    mortlake: [78, 82, 85, 88, 90, 92],
-    national: [74, 75, 75, 76, 77, 78]
-  };
+  /* ═══════════════ Failure-rate trend ═══════════════
+     Built purely from months actually uploaded — no invented history. Each
+     parsed Test Quality export is kept, so the trend fills in as Paul does
+     his monthly download. With fewer than two months there is nothing to
+     plot, and the panel says so rather than drawing a fake line. */
+  function monthKeyToSort_(period) {
+    // "Jul-26" → 2026-07 so months order correctly regardless of upload order.
+    var months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+    var m = /^([A-Za-z]{3})-(\d{2})$/.exec(period || '');
+    if (!m) return period || '';
+    var mm = months[m[1].toLowerCase()] || 0;
+    return '20' + m[2] + '-' + String(mm).padStart(2, '0');
+  }
+
+  function getTrendHistory_() {
+    var hist = store.testQuality || {};
+    return Object.keys(hist)
+      .map(function (k) { return hist[k]; })
+      .filter(function (e) { return e && e.period; })
+      .sort(function (a, b) { return monthKeyToSort_(a.period) < monthKeyToSort_(b.period) ? -1 : 1; });
+  }
 
   function buildRatingChart() {
     var svg = document.getElementById('ratingChart');
+    if (!svg) return;
+    var history = getTrendHistory_();
+
+    if (history.length < 2) {
+      svg.innerHTML = '';
+      svg.style.display = 'none';
+      setText('trendNote', history.length === 0
+        ? 'No months uploaded yet. Upload a Test Quality Information export to start building the trend.'
+        : 'Only one month uploaded so far (' + escapeHtml_(history[0].period) + ') — upload another month to see a trend.');
+      return;
+    }
+    svg.style.display = 'block';
+
     var W = 640, H = 190, padL = 8, padR = 8, padT = 12, padB = 22;
-    var months = RATING_TREND_SAMPLE.months;
-    var allVals = RATING_TREND_SAMPLE.mortlake.concat(RATING_TREND_SAMPLE.national);
-    var minV = Math.min.apply(null, allVals) - 6;
+    var labelsArr = history.map(function (e) { return e.period; });
+    var site = history.map(function (e) { return e.siteFailed; });
+    var national = history.map(function (e) { return e.nationalFailed; });
+    var allVals = site.concat(national);
+    var minV = Math.max(0, Math.min.apply(null, allVals) - 6);
     var maxV = Math.max.apply(null, allVals) + 6;
 
-    function x(i) { return padL + (W - padL - padR) * (i / (months.length - 1)); }
-    function y(v) { return padT + (H - padT - padB) * (1 - (v - minV) / (maxV - minV)); }
+    function x(i) { return padL + (W - padL - padR) * (i / Math.max(1, labelsArr.length - 1)); }
+    function y(v) { return padT + (H - padT - padB) * (1 - (v - minV) / Math.max(1, maxV - minV)); }
     function pathFor(vals) {
       return vals.map(function (v, i) { return (i === 0 ? 'M' : 'L') + x(i).toFixed(1) + ',' + y(v).toFixed(1); }).join(' ');
     }
     function areaFor(vals) {
       return pathFor(vals) + ' L' + x(vals.length - 1).toFixed(1) + ',' + y(minV).toFixed(1) + ' L' + x(0).toFixed(1) + ',' + y(minV).toFixed(1) + ' Z';
     }
-    var labels = months.map(function (m, i) {
-      return '<text x="' + x(i).toFixed(1) + '" y="' + (H - 6) + '" font-size="10" fill="#9a9a9a" text-anchor="middle" font-family="inherit">' + m + '</text>';
+    var labels = labelsArr.map(function (m, i) {
+      return '<text x="' + x(i).toFixed(1) + '" y="' + (H - 6) + '" font-size="10" fill="#9a9a9a" text-anchor="middle" font-family="inherit">' + escapeHtml_(m) + '</text>';
     }).join('');
 
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -2081,13 +2819,26 @@
       '<defs><linearGradient id="mortlakeFill" x1="0" y1="0" x2="0" y2="1">' +
         '<stop offset="0%" stop-color="#d4a600" stop-opacity="0.16"/><stop offset="100%" stop-color="#d4a600" stop-opacity="0"/>' +
       '</linearGradient></defs>' +
-      '<path d="' + areaFor(RATING_TREND_SAMPLE.mortlake) + '" fill="url(#mortlakeFill)" stroke="none"/>' +
-      '<path d="' + pathFor(RATING_TREND_SAMPLE.national) + '" fill="none" stroke="#c9c9c5" stroke-width="2" stroke-dasharray="5 4"/>' +
-      '<path d="' + pathFor(RATING_TREND_SAMPLE.mortlake) + '" fill="none" stroke="#d4a600" stroke-width="2.5"/>' +
+      '<path d="' + areaFor(site) + '" fill="url(#mortlakeFill)" stroke="none"/>' +
+      '<path d="' + pathFor(national) + '" fill="none" stroke="#c9c9c5" stroke-width="2" stroke-dasharray="5 4"/>' +
+      '<path d="' + pathFor(site) + '" fill="none" stroke="#d4a600" stroke-width="2.5"/>' +
       labels;
+
+    setText('trendNote', 'Failure rate by month, from ' + history.length + ' uploaded export' +
+      (history.length === 1 ? '' : 's') + '. Lower is better.');
+  }
+
+  // Restore the last uploaded Test Quality figures so reopening the app shows
+  // real data rather than blanks.
+  if (store.testQualityLatest) {
+    TEST_QUALITY = store.testQualityLatest;
+    applyTestQualityToDashboard_();
   }
   buildRatingChart();
   renderTestQuality_();
+  renderStanding_();
+  renderReviews_();
+  maybeAutoFetchReviews_();
 
   /* ═══════════════ Generate report ═══════════════ */
   // Builds a clean, printable monthly compliance report from everything the
@@ -2156,28 +2907,155 @@
       return '<tr><td>' + escapeHtml_(c.name || '—') + '</td><td>' + escapeHtml_(c.serial || '—') + '</td><td>' + dateTxt + '</td><td>' + s.text + (s.badge ? ' (' + s.badge + ')' : '') + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="pr-na">No equipment recorded.</td></tr>';
 
+    // Performance block — only if a real export has been parsed.
+    var perfBlock;
+    if (TEST_QUALITY && TEST_QUALITY.site) {
+      var d = TEST_QUALITY;
+      var passRate = Math.max(0, 100 - d.site.failed);
+      var natPass = Math.max(0, 100 - d.national.failed);
+      function kpi(label, value, sub) {
+        return '<div class="pr-kpi"><div class="pr-kpi-label">' + label + '</div>' +
+               '<div class="pr-kpi-value">' + value + '</div>' +
+               '<div class="pr-kpi-sub">' + sub + '</div></div>';
+      }
+      perfBlock =
+        '<div class="pr-kpis">' +
+          kpi('Tests carried out', d.site.tests, escapeHtml_(d.period || monthLabel)) +
+          kpi('Initial pass rate', fmtPct_(passRate), 'National ' + fmtPct_(natPass)) +
+          kpi('Failure rate', fmtPct_(d.site.failed), 'National ' + fmtPct_(d.national.failed)) +
+          kpi('Average test time', Math.round(d.site.avgTime) + ' min', 'National ' + Math.round(d.national.avgTime) + ' min') +
+        '</div>';
+
+      // Per-tester table
+      var tRows = d.testers.filter(function (t) { return t.tests > 0; })
+        .sort(function (a, b) { return b.tests - a.tests; })
+        .map(function (t) {
+          return '<tr><td>' + escapeHtml_(t.name) + '</td><td class="pr-mine">' + t.tests + '</td>' +
+                 '<td>' + Math.round(t.avgTime) + ' min</td><td>' + fmtPct_(t.failed) + '</td></tr>';
+        }).join('');
+      perfBlock += '<table><thead><tr><th>Tester</th><th>Tests</th><th>Avg time</th><th>Failed</th></tr></thead><tbody>' +
+        tRows +
+        '<tr><td><b>Site total</b></td><td class="pr-mine"><b>' + d.site.tests + '</b></td>' +
+        '<td><b>' + Math.round(d.site.avgTime) + ' min</b></td><td><b>' + fmtPct_(d.site.failed) + '</b></td></tr>' +
+        '<tr><td>National average</td><td>' + d.national.tests + '</td><td>' + Math.round(d.national.avgTime) +
+        ' min</td><td>' + fmtPct_(d.national.failed) + '</td></tr></tbody></table>';
+
+      // Failure categories, worst gap first
+      var cats = d.failureCategories.filter(function (c) { return c.site > 0 || c.national > 0; })
+        .sort(function (a, b) { return (b.site - b.national) - (a.site - a.national); });
+      if (cats.length) {
+        perfBlock += '<h2>Failures by category</h2><table><thead><tr><th>Category</th><th>Site</th><th>National</th><th>vs national</th></tr></thead><tbody>' +
+          cats.map(function (c) {
+            var diff = c.site - c.national;
+            var pill = Math.abs(diff) < 0.05 ? '<span class="pill pill-na">level</span>'
+              : '<span class="pill ' + (diff > 0 ? 'pill-warn' : 'pill-yes') + '">' +
+                (diff > 0 ? '+' : '−') + Math.abs(diff).toFixed(1) + '</span>';
+            return '<tr><td>' + escapeHtml_(c.name) + '</td><td class="pr-mine">' + fmtPct_(c.site) +
+                   '</td><td>' + fmtPct_(c.national) + '</td><td>' + pill + '</td></tr>';
+          }).join('') + '</tbody></table>';
+      }
+    } else {
+      perfBlock = '<div class="pr-note">No Test Quality Information export was loaded for this month, so no performance figures are included.</div>';
+    }
+
+    // Headline standing — same real comparison the dashboard leads with.
+    var outcomeBlock = '';
+    if (TEST_QUALITY && TEST_QUALITY.site) {
+      var sFail = TEST_QUALITY.site.failed;
+      var nFail = TEST_QUALITY.national.failed;
+      var gap = sFail - nFail;
+      var toneCls, verdictTxt;
+      if (Math.abs(gap) <= STANDING_TOLERANCE) { toneCls = 'good';   verdictTxt = 'In line with the national average'; }
+      else if (gap < 0)                        { toneCls = 'middle'; verdictTxt = 'Failing fewer vehicles than average'; }
+      else                                     { toneCls = '';       verdictTxt = 'Failing more vehicles than average'; }
+      outcomeBlock =
+        '<div class="pr-outcome ' + toneCls + '">' +
+          '<div><div class="pr-outcome-label">Testing standard against national average</div>' +
+          '<div class="pr-outcome-level">' + escapeHtml_(verdictTxt) + '</div>' +
+          '<div class="pr-outcome-when">Failure rate ' + fmtPct_(sFail) + ' vs national ' + fmtPct_(nFail) +
+          ' (' + (gap > 0 ? '+' : gap < 0 ? '−' : '') + Math.abs(gap).toFixed(Math.abs(gap) % 1 === 0 ? 0 : 1) + ' pts)' +
+          '</div></div>' +
+        '</div>';
+    } else {
+      outcomeBlock = '<div class="pr-note">No Test Quality Information export was loaded, so no national comparison is included.</div>';
+    }
+
+    // Google reviews for this month, if recorded.
+    var reviewsBlock = '';
+    var rv = (store.reviews || {})[currentMonth];
+    if (rv) {
+      var priorRv = lastReviewBefore_(currentMonth);
+      var gainTxt = priorRv
+        ? (function () {
+            var g = rv.total - priorRv.entry.total;
+            var sp = priorRv.key === prevMonthKey_(currentMonth)
+              ? ' this month'
+              : ' since ' + (formatMonth(priorRv.key) || priorRv.key);
+            return g > 0 ? '+' + g + sp : g === 0 ? 'No change' + sp : g + sp;
+          })()
+        : 'First month recorded';
+      reviewsBlock =
+        '<h2>Google reviews</h2>' +
+        '<div class="pr-kpis">' +
+          '<div class="pr-kpi"><div class="pr-kpi-label">Total reviews</div><div class="pr-kpi-value">' + rv.total +
+            '</div><div class="pr-kpi-sub">' + escapeHtml_(gainTxt) + '</div></div>' +
+          '<div class="pr-kpi"><div class="pr-kpi-label">Average rating</div><div class="pr-kpi-value">' +
+            (rv.rating != null ? rv.rating.toFixed(1) : '—') + '</div><div class="pr-kpi-sub">out of 5</div></div>' +
+        '</div>';
+    }
+
+    // QC evidence — the scanned pages themselves, appended at the back.
+    var evidenceBlock = '';
+    if (qcEvidencePages.length) {
+      evidenceBlock = '<div class="pr-pagebreak"></div><h2>Appendix — QC paperwork evidence</h2>' +
+        '<div class="pr-note">' + qcEvidencePages.length + ' scanned page' +
+        (qcEvidencePages.length === 1 ? '' : 's') + ' of quality-control paperwork, reproduced as supporting evidence.</div>' +
+        qcEvidencePages.map(function (p, i) {
+          var caption = p.reg ? p.reg + (p.docType ? ' — ' + p.docType.replace(/_/g, ' ') : '') : p.label;
+          var meta = [];
+          if (p.tester) meta.push('Tester: ' + p.tester);
+          if (p.testDate) meta.push(p.testDate);
+          if (p.qcFlag) meta.push('Marked as QC test');
+          meta.push(p.label);
+          return '<div class="pr-evidence-page">' +
+                   '<div class="pr-evidence-head">Evidence ' + (i + 1) + ' — ' + escapeHtml_(caption) + '</div>' +
+                   '<div class="pr-evidence-meta">' + escapeHtml_(meta.join(' · ')) + '</div>' +
+                   '<img class="pr-evidence-img" src="data:' + p.mimeType + ';base64,' + p.base64 + '" alt="">' +
+                 '</div>';
+        }).join('');
+    }
+
     return '' +
       '<div class="pr-header">' +
         '<div><img class="pr-logo" src="assets/mortlake-logo.png" alt="Mortlake Garage">' +
-          '<h1>Monthly DVSA Compliance Report</h1>' +
+          '<div class="pr-title">Monthly DVSA Compliance Report</div>' +
           '<div class="pr-station">Mortlake Station Garage · VTS 22453 · 29 Sheen Lane, Mortlake, London SW14 8HY</div>' +
         '</div>' +
-        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong><br>Generated ' + escapeHtml_(generated) + '</div>' +
+        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>Generated ' + escapeHtml_(generated) + '</div>' +
       '</div>' +
 
-      '<h2>DVSA performance</h2>' +
-      '<div class="pr-note">Performance figures are populated automatically once this month\'s Test Quality Information and test-log exports are parsed. Files attached to this report:</div>' +
-      '<table><thead><tr><th>Export</th><th>Status</th><th>File</th></tr></thead><tbody>' + dvsaRows + '</tbody></table>' +
-      '<div class="pr-note">QC paperwork pages attached this session: ' + qc + '.</div>' +
+      outcomeBlock +
+
+      '<h2>DVSA performance</h2>' + perfBlock +
 
       '<h2>Self-assessment checklist</h2>' +
-      '<div class="pr-summary"><span><b>' + pct + '%</b> complete</span><span><b>' + done + ' / ' + total + '</b> items answered</span><span><b>' + flagged + '</b> flagged for action</span></div>' +
+      '<div class="pr-kpis">' +
+        '<div class="pr-kpi"><div class="pr-kpi-label">Complete</div><div class="pr-kpi-value">' + pct + '%</div><div class="pr-kpi-sub">' + done + ' of ' + total + ' answered</div></div>' +
+        '<div class="pr-kpi"><div class="pr-kpi-label">Flagged for action</div><div class="pr-kpi-value">' + flagged + '</div><div class="pr-kpi-sub">items marked No</div></div>' +
+        '<div class="pr-kpi"><div class="pr-kpi-label">QC evidence</div><div class="pr-kpi-value">' + qcEvidencePages.length + '</div><div class="pr-kpi-sub">pages attached</div></div>' +
+      '</div>' +
       '<table><thead><tr><th>Item</th><th class="col-status">Result</th><th class="col-note">Action required</th></tr></thead><tbody>' + checklistRows + '</tbody></table>' +
+
+      reviewsBlock +
 
       '<h2>Equipment &amp; calibration</h2>' +
       '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
 
-      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>';
+      '<h2>Files attached</h2>' +
+      '<table><thead><tr><th>Export</th><th>Status</th><th>File</th></tr></thead><tbody>' + dvsaRows + '</tbody></table>' +
+
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>' +
+      evidenceBlock;
   }
 
   function handleGenerate() {
