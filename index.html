@@ -1341,6 +1341,16 @@
     var el = document.getElementById('clSave');
     if (!el) return;
     clearTimeout(clSaveTimer);
+
+    // If the server copy never arrived, no upload will follow this save — so
+    // say "on this computer only" now rather than a bare "Saved" that implies
+    // a backup which is not going to happen.
+    if (SCRIPT_URL && getPassword() && !syncDownDone) {
+      el.className = 'cs-save is-error';
+      el.textContent = 'Saved on this computer only';
+      return;
+    }
+
     el.className = 'cs-save is-saved';
     el.textContent = 'Saved';
     clSaveTimer = setTimeout(function () {
@@ -1463,6 +1473,7 @@
   document.getElementById('fMonth').addEventListener('change', function () {
     currentMonth = document.getElementById('fMonth').value;
     persistMonth();
+    clearUploadsOnMonthChange_();
     loadChecklistForMonth(currentMonth);
     renderChecklist();
     updateProgress();
@@ -1501,6 +1512,36 @@
   // (just a picture of a page, no text underneath) can't be read this way —
   // that needs the separate "smart scan" feature, not this one.
   var parsedFileData = {}; // inputId -> { kind, rows, sheetNames, pageCount, hasText, error }
+
+  /* Uploaded files belong to the month they were uploaded for. They are held in
+     memory, not per month, so leaving them in place when the reporting month
+     changes would attach one month's MOT paperwork to another month's report —
+     the appendix would print July's scans under an August heading. Clear
+     everything and say so, rather than silently carrying it over. */
+  function clearUploadsOnMonthChange_() {
+    var hadFiles = singleFileInputs.some(function (id) { return pickedFiles[id].length; }) ||
+                   pickedFiles.fileQcScans.length > 0;
+    if (!hadFiles) return;
+
+    singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
+    pickedFiles.fileQcScans = [];
+    parsedFileData = {};
+    qcEvidencePages = [];
+    qcSortResults = [];
+
+    DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
+    renderFileList('fileQcScans', 'listQcScans', null);
+    var groups = document.getElementById('qcGroupsContainer');
+    if (groups) groups.innerHTML = '';
+    var sortBtn = document.getElementById('sortScansBtn');
+    if (sortBtn) sortBtn.disabled = true;
+    var sortStatus = document.getElementById('qcSortStatus');
+    if (sortStatus) {
+      sortStatus.innerHTML = '<span style="color:var(--text-secondary)">Uploads cleared &mdash; ' +
+        'they belonged to the previous month. Upload this month&rsquo;s files.</span>';
+    }
+    refreshStatuses();
+  }
 
   function readUploadedFile_(file) {
     var ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -2515,10 +2556,15 @@
 
     var groups = {};
     var needsReview = [];
+    var failedToRead = 0;
 
     qcSortResults.forEach(function (item) {
       var res = item.response;
-      if (res.status !== 'success') { needsReview.push({ label: item.label, reason: res.message || 'Could not read this page' }); return; }
+      if (res.status !== 'success') {
+        failedToRead++;
+        needsReview.push({ label: item.label, reason: res.message || 'Could not read this page' });
+        return;
+      }
       var a = res.result;
       var reg = normalizeReg_(a.registration);
       if (!looksLikeRealPlate_(reg)) {
@@ -2536,8 +2582,23 @@
     });
 
     var regKeys = Object.keys(groups).sort();
-    statusEl.textContent = regKeys.length + ' vehicle' + (regKeys.length === 1 ? '' : 's') + ' found across ' + qcSortResults.length + ' page' + (qcSortResults.length === 1 ? '' : 's') +
-      (needsReview.length ? ' · ' + needsReview.length + ' need' + (needsReview.length === 1 ? 's' : '') + ' manual check' : '');
+
+    // If every page failed to reach the reader, "0 vehicles found" reads like
+    // a clean result on paperwork with nothing on it. Say what actually
+    // happened instead.
+    if (failedToRead === qcSortResults.length && qcSortResults.length) {
+      statusEl.innerHTML = '<span style="color:var(--danger)">Could not read any of the ' +
+        qcSortResults.length + ' page' + (qcSortResults.length === 1 ? '' : 's') +
+        ' — the server could not be reached, or the scan step failed. Nothing has been sorted.</span>';
+    } else {
+      statusEl.textContent = regKeys.length + ' vehicle' + (regKeys.length === 1 ? '' : 's') +
+        ' found across ' + qcSortResults.length + ' page' + (qcSortResults.length === 1 ? '' : 's') +
+        (failedToRead ? ' · ' + failedToRead + ' could not be read' : '') +
+        (needsReview.length - failedToRead > 0
+          ? ' · ' + (needsReview.length - failedToRead) + ' need' +
+            (needsReview.length - failedToRead === 1 ? 's' : '') + ' manual check'
+          : '');
+    }
 
     regKeys.forEach(function (reg) {
       var g = groups[reg];
