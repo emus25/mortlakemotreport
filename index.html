@@ -157,34 +157,6 @@
     .standing-value { font-size: 32px; }
   }
 
-  /* ══════════ Dashboard: Google reviews ══════════ */
-  .reviews-card { padding: 20px 22px; }
-  .reviews-figures { display: flex; gap: 44px; flex-wrap: wrap; }
-  .reviews-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); }
-  .reviews-value { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin-top: 3px; }
-  .reviews-sub { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
-  .reviews-sub.gain { color: var(--success); font-weight: 600; }
-  .reviews-stars { font-size: 15px; letter-spacing: 1px; margin-top: 3px; height: 19px; }
-  /* Five grey stars with a gold copy clipped to the exact rating width, so 4.6
-     reads as 4.6 rather than being rounded up to five full stars. */
-  .stars-wrap { position: relative; display: inline-block; }
-  .stars-bg { color: #dcdcdc; }
-  .stars-fg { position: absolute; left: 0; top: 0; overflow: hidden; white-space: nowrap; color: #f0a92b; }
-  .reviews-actions { display: flex; gap: 10px; align-items: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); flex-wrap: wrap; }
-  .reviews-manual-toggle {
-    background: none; border: none; font-family: inherit; font-size: 12px; color: var(--text-secondary);
-    text-decoration: underline; cursor: pointer; padding: 4px;
-  }
-  .reviews-manual-toggle:hover { color: var(--text); }
-  .reviews-entry { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; }
-  .reviews-note { font-size: 12px; color: var(--text-tertiary); margin-top: 12px; }
-  .reviews-source { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
-
-  @media (max-width: 560px) {
-    .reviews-figures { gap: 22px; }
-    .reviews-entry { flex-direction: column; align-items: stretch; }
-  }
-
   /* ══════════ Dashboard: hero ══════════ */
   .hero { display: grid; grid-template-columns: 1.4fr 1px 1fr; gap: 28px; padding: 24px 28px; align-items: center; }
   .hero-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); margin-bottom: 10px; }
@@ -450,9 +422,28 @@
   .filter-btn.active { background: var(--brand-tint); color: #7a6600; }
   .toolbar-spacer { flex: 1; }
 
-  .checklist-cat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-bottom: 10px; overflow: hidden; transition: opacity .15s; }
+  /* Multi-column so 22 sections don't run down one long page. Grid rather than
+     CSS columns: columns rebalance when a section is expanded, which shuffles
+     unrelated cards between columns under the user's cursor. Grid cells hold
+     their position — opening one card only grows that card. */
+  #checklistContainer { display: grid; gap: 10px; align-items: start; }
+  @media (min-width: 760px)  { #checklistContainer { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1180px) { #checklistContainer { grid-template-columns: repeat(3, 1fr); } }
+
+  .checklist-cat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; transition: opacity .15s; }
   .checklist-cat.filtered-out { display: none; }
   .checklist-cat.complete { background: var(--surface-subtle); }
+
+  /* Traffic lights: green once a section is fully answered and clean, red as
+     soon as anything in it is marked No. Red wins over green — a flagged
+     section must never look finished. */
+  .checklist-cat.has-fail { background: var(--danger-bg); border-color: var(--danger); }
+  .checklist-cat.has-fail .checklist-cat-title { color: var(--danger); }
+  .checklist-cat.has-fail .cat-count { color: var(--danger); font-weight: 700; }
+  .checklist-cat.has-fail .cat-check { display: none; }
+  .cat-cross { width: 18px; height: 18px; color: var(--danger); display: none; }
+  .checklist-cat.has-fail .cat-cross { display: block; }
+  .cat-flag { font-size: 11px; font-weight: 700; color: var(--danger); white-space: nowrap; }
   .checklist-cat-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 0 16px; min-height: 58px; cursor: pointer; user-select: none;
@@ -478,8 +469,16 @@
 
   .check-item { border-top: 1px solid var(--border); padding: 12px 2px; }
   .check-item:first-child { border-top: none; }
-  .check-item-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .check-item-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .check-item-text { font-size: 13px; color: var(--text); line-height: 1.45; flex: 1; }
+  /* Per-item light, so a failed line is obvious without reading the buttons. */
+  .item-light {
+    width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
+    background: var(--border); transition: background .15s ease;
+  }
+  .check-item.is-yes .item-light { background: var(--success); }
+  .check-item.is-no  .item-light { background: var(--danger); }
+  .check-item.is-no .check-item-text { color: var(--danger); font-weight: 600; }
   .check-pills { display: flex; gap: 6px; flex-shrink: 0; }
   .check-pill {
     padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
@@ -608,6 +607,50 @@
   .pr-doc .col-status { width: 104px; }
   .pr-doc .col-note { width: 32%; color: #444; }
   .pr-doc .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
+  /* ── One-page summary (page 1 of the report) ── */
+  .pr-doc .pr-summary { padding-top: 2px; }
+  .pr-doc .pr-sum-banner {
+    border-left: 4px solid #999; background: #f7f7f5;
+    padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 14px 0 16px;
+  }
+  .pr-doc .pr-sum-banner.good   { border-left-color: #2f7d4a; background: #f2f9f4; }
+  .pr-doc .pr-sum-banner.middle { border-left-color: #a66a00; background: #fdf6e9; }
+  .pr-doc .pr-sum-banner.na     { border-left-color: #bbb; }
+  .pr-doc .pr-sum-banner-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
+  .pr-doc .pr-sum-banner-verdict { font-size: 24px; font-weight: bold; margin-top: 3px; }
+  .pr-doc .pr-sum-banner.good   .pr-sum-banner-verdict { color: #2f7d4a; }
+  .pr-doc .pr-sum-banner.middle .pr-sum-banner-verdict { color: #a66a00; }
+  .pr-doc .pr-sum-banner-sub { font-size: 11px; color: #555; margin-top: 4px; }
+
+  .pr-doc .pr-sum-tiles {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px;
+  }
+  .pr-doc .pr-sum-tile { border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
+  .pr-doc .pr-sum-tile.ok   { border-color: #cfe4d6; background: #f7fbf8; }
+  .pr-doc .pr-sum-tile.warn { border-color: #ecd9b0; background: #fdf9f1; }
+  .pr-doc .pr-sum-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; }
+  .pr-doc .pr-sum-value { font-size: 23px; font-weight: bold; margin: 2px 0 1px; }
+  .pr-doc .pr-sum-sub { font-size: 10px; color: #666; }
+
+  .pr-doc .pr-sum-actions { margin-bottom: 12px; table-layout: fixed; }
+  .pr-doc .pr-sum-actions th { font-size: 9px; }
+  /* One line per row, so the page height stays predictable. */
+  .pr-doc .pr-sum-actions td {
+    font-size: 10.5px; padding: 4px 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .pr-doc .pr-sum-actions th:nth-child(1), .pr-doc .pr-sum-actions td:nth-child(1) { width: 46%; }
+  .pr-doc .pr-sum-actions th:nth-child(2), .pr-doc .pr-sum-actions td:nth-child(2) { width: 24%; }
+  .pr-doc .pr-sum-clear {
+    border: 1px solid #cfe4d6; background: #f2f9f4; color: #2f7d4a;
+    border-radius: 8px; padding: 12px 14px; font-size: 12px; font-weight: bold; margin-bottom: 14px;
+  }
+  .pr-doc .pr-sum-foot {
+    border-top: 1px solid #ddd; padding-top: 10px; font-size: 10px; color: #555;
+    display: flex; justify-content: space-between; gap: 16px; align-items: flex-end;
+  }
+  .pr-doc .pr-sum-sign { white-space: nowrap; color: #333; }
+
   .pr-doc .pr-charts { display: flex; gap: 14px; margin: 12px 0 4px; }
   .pr-doc .pr-chart { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
   .pr-doc .pr-chart-title { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; margin-bottom: 6px; }
@@ -845,76 +888,39 @@
         </div>
       </div>
 
-      <!-- Google reviews -->
+      <!-- This month's report: what's uploaded, answered and tracked -->
       <div class="section">
         <div class="section-head">
-          <h2>Google reviews</h2>
-          <span class="section-desc">Customer feedback — recorded monthly</span>
+          <h2>This month&rsquo;s report</h2>
+          <span class="section-desc">What&rsquo;s done and what still needs attention</span>
         </div>
-        <div class="card panel reviews-card">
-          <div class="reviews-figures">
-            <div class="reviews-block">
-              <div class="reviews-label">Total reviews</div>
-              <div class="reviews-value" id="reviewTotal">&mdash;</div>
-              <div class="reviews-sub" id="reviewGain">No figure recorded yet</div>
-            </div>
-            <div class="reviews-block">
-              <div class="reviews-label">Average rating</div>
-              <div class="reviews-value" id="reviewRating">&mdash;</div>
-              <div class="reviews-stars" id="reviewStars"></div>
-            </div>
-          </div>
-
-          <div class="reviews-actions">
-            <button type="button" class="btn btn-secondary btn-sm" id="reviewRefreshBtn" onclick="fetchGoogleReviews(true)">Refresh from Google</button>
-            <button type="button" class="reviews-manual-toggle" id="reviewManualToggle" onclick="toggleManualReviews()">Enter manually</button>
-          </div>
-
-          <div class="reviews-entry" id="reviewManualEntry" style="display:none">
-            <label class="outcome-field">
-              <span>Total reviews on Google</span>
-              <input type="number" id="reviewTotalInput" min="0" step="1" placeholder="e.g. 214">
-            </label>
-            <label class="outcome-field">
-              <span>Average rating</span>
-              <input type="number" id="reviewRatingInput" min="0" max="5" step="0.1" placeholder="e.g. 4.8">
-            </label>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="saveReviews()">Save for this month</button>
-          </div>
-          <div class="reviews-note" id="reviewNote"></div>
-        </div>
-      </div>
-
-      <!-- Monthly overview status cards -->
-      <div class="section">
-        <div class="section-head"><h2>This month's report</h2><span class="section-desc">What's done and what still needs attention</span></div>
         <div class="status-grid">
-          <button type="button" class="status-card" onclick="switchTab('report')">
+          <div class="status-card" tabindex="0" role="button" onclick="switchTab('report')">
             <div class="sc-label">DVSA files</div>
             <div class="sc-value" id="tileDvsaFiles">0 / 3</div>
-            <div class="sc-sub" id="tileDvsaSub">3 files required</div>
-          </button>
-          <button type="button" class="status-card" onclick="switchTab('report')">
+            <div class="sc-sub" id="tileDvsaSub"></div>
+          </div>
+          <div class="status-card" tabindex="0" role="button" onclick="switchTab('report')">
             <div class="sc-label">QC paperwork</div>
             <div class="sc-value" id="tileQcScans">0</div>
             <div class="sc-sub" id="tileQcSub">pages added</div>
-          </button>
-          <button type="button" class="status-card" onclick="switchTab('checklist')">
+          </div>
+          <div class="status-card" tabindex="0" role="button" onclick="switchTab('checklist')">
             <div class="sc-label">Checklist</div>
             <div class="sc-value" id="tileChecklist">0 / 61</div>
             <div class="sc-sub" id="tileChecklistSub">0% complete</div>
             <div class="status-progress"><span id="tileChecklistBar" style="width:0%"></span></div>
-          </button>
-          <button type="button" class="status-card" onclick="scrollToCalibration()">
+          </div>
+          <div class="status-card" tabindex="0" role="button" onclick="scrollToCalibration()">
             <div class="sc-label">Equipment</div>
             <div class="sc-value" id="tileEquipment">0</div>
-            <div class="sc-sub" id="tileEquipmentSub">tracked</div>
-          </button>
-          <button type="button" class="status-card" onclick="scrollToCalibration()">
+            <div class="sc-sub" id="tileEquipmentSub">items tracked</div>
+          </div>
+          <div class="status-card" tabindex="0" role="button" onclick="scrollToCalibration()">
             <div class="sc-label">Calibration</div>
             <div class="sc-value" id="tileDueSoon">0</div>
             <div class="sc-sub" id="tileDueSub">due soon</div>
-          </button>
+          </div>
         </div>
       </div>
 
@@ -1123,15 +1129,8 @@
   function unlockApp() {
     document.getElementById('lockScreen').style.display = 'none';
     document.getElementById('appRoot').style.display = 'block';
-    // Pull the server copy first so a new laptop starts with the real history,
-    // then top up this month's review reading.
-    if (typeof syncDown_ === 'function') {
-      syncDown_().then(function () {
-        if (typeof maybeAutoFetchReviews_ === 'function') maybeAutoFetchReviews_();
-      });
-    } else if (typeof maybeAutoFetchReviews_ === 'function') {
-      maybeAutoFetchReviews_();
-    }
+    // Pull the server copy first so a new laptop starts with the real history.
+    if (typeof syncDown_ === 'function') syncDown_();
   }
 
   function submitLockScreen() {
@@ -1193,8 +1192,8 @@
   /* ═══════════════ Persistence ═══════════════ */
   // localStorage is the working copy — instant, offline, survives a refresh.
   // It is also backed up to the server (see syncUp_ / syncDown_) so that a new
-  // laptop or a cleared browser doesn't lose the history. Past review totals
-  // in particular cannot be recovered from Google, so losing them is permanent.
+  // laptop or a cleared browser doesn't lose the checklist history, calibration
+  // dates or monthly DVSA figures.
   // Scanned paperwork and DVSA exports are NOT backed up — those stay
   // process-and-discard by design.
   var STORE_KEY = 'mortlake_report_v1';
@@ -1235,7 +1234,6 @@
         action: 'saveAppData',
         password: getPassword(),
         data: {
-          reviews: store.reviews || {},
           calibration: store.calibration || [],
           months: store.months || {},
           testQuality: store.testQuality || {}
@@ -1271,9 +1269,6 @@
         if (!res.hasData || !res.data) { setSyncStatus_('saved'); return; }
         syncSuppressed = true;
         var d = res.data;
-        if (d.reviews && Object.keys(d.reviews).length) {
-          store.reviews = Object.assign({}, store.reviews || {}, d.reviews);
-        }
         var calChanged = false;
         if (d.calibration && d.calibration.length) { store.calibration = d.calibration; calChanged = true; }
         if (d.months && Object.keys(d.months).length) {
@@ -1296,7 +1291,6 @@
         loadChecklistForMonth(currentMonth);
         renderChecklist();
         updateProgress();
-        renderReviews_();
         refreshStatuses();
         if (tqChanged) {
           TEST_QUALITY = testQualityForMonth_(currentMonth) || null;
@@ -1452,223 +1446,6 @@
     setText('standingNote', note);
   }
 
-  /* ═══════════════ Google reviews ═══════════════
-     Google's API exposes a running total, never a per-month figure, so the
-     number gained in a month can only come from comparing totals. Paul enters
-     the total he sees on his Business Profile and the app works out the gain
-     against whichever earlier month was last recorded — so it still reads
-     correctly if a month gets skipped. */
-  function prevMonthKey_(key) {
-    var p = (key || '').split('-');
-    if (p.length !== 2) return null;
-    var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1;
-    if (m < 1) { m = 12; y--; }
-    return y + '-' + String(m).padStart(2, '0');
-  }
-
-  // Walk back up to two years to find the most recent earlier reading.
-  function lastReviewBefore_(key) {
-    var reviews = store.reviews || {};
-    var k = prevMonthKey_(key);
-    for (var i = 0; i < 24 && k; i++) {
-      if (reviews[k] && typeof reviews[k].total === 'number') return { key: k, entry: reviews[k] };
-      k = prevMonthKey_(k);
-    }
-    return null;
-  }
-
-  function saveReviews() {
-    var totalEl = document.getElementById('reviewTotalInput');
-    var ratingEl = document.getElementById('reviewRatingInput');
-    var note = document.getElementById('reviewNote');
-
-    var total = parseInt(totalEl.value, 10);
-    if (isNaN(total) || total < 0) {
-      note.innerHTML = '<span style="color:var(--danger)">Enter the total number of Google reviews.</span>';
-      return;
-    }
-    var rating = parseFloat(ratingEl.value);
-    if (ratingEl.value !== '' && (isNaN(rating) || rating < 0 || rating > 5)) {
-      note.innerHTML = '<span style="color:var(--danger)">Rating should be between 0 and 5.</span>';
-      return;
-    }
-
-    // A total that has gone down is almost always a typo — Google totals
-    // rarely fall, and a wrong figure here quietly corrupts next month's gain.
-    var prior = lastReviewBefore_(currentMonth);
-    if (prior && total < prior.entry.total) {
-      if (!confirm('That is fewer reviews than the ' + prior.key + ' figure of ' + prior.entry.total +
-                   '.\n\nReview totals rarely go down — save anyway?')) return;
-    }
-
-    if (!store.reviews) store.reviews = {};
-    store.reviews[currentMonth] = {
-      total: total,
-      rating: isNaN(rating) ? null : rating,
-      recordedOn: new Date().toISOString(),
-      source: 'manual'
-    };
-    saveStore();
-    renderReviews_();
-  }
-
-  /* Pulls the live total straight from the Google Business Profile via the
-     backend, records it against the current month, and lets renderReviews_
-     work out the gain. Runs by itself once a month so Paul never has to think
-     about it; the manual fields stay as a fallback if the Places API isn't
-     configured or Google is unreachable. */
-  var reviewsFetching = false;
-
-  // Google only ever reports the total as it stands right now, so that figure
-  // can only honestly be recorded against the current calendar month. Writing
-  // it against an earlier month would backdate a number that was never true
-  // then — past months have to be typed in from what was actually recorded.
-  function thisMonthKey_() {
-    var d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
-  }
-
-  function fetchGoogleReviews(manual) {
-    if (reviewsFetching || !SCRIPT_URL) return Promise.resolve();
-
-    if (currentMonth !== thisMonthKey_()) {
-      var noteEl = document.getElementById('reviewNote');
-      if (manual && noteEl) {
-        noteEl.innerHTML = '<span style="color:var(--warning)">Google only reports today’s total, ' +
-          'so it can’t be recorded against ' + escapeHtml_(formatMonth(currentMonth) || 'a past month') +
-          '. Use “Enter manually” for past months.</span>';
-      }
-      return Promise.resolve();
-    }
-
-    reviewsFetching = true;
-
-    var note = document.getElementById('reviewNote');
-    var btn = document.getElementById('reviewRefreshBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
-    if (manual && note) note.textContent = 'Checking Google…';
-
-    return fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'getGoogleReviews', password: getPassword() })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (res.status === 'success') {
-          if (!store.reviews) store.reviews = {};
-          store.reviews[currentMonth] = {
-            total: res.total,
-            rating: res.rating,
-            recordedOn: new Date().toISOString(),
-            source: 'google'
-          };
-          saveStore();
-          renderReviews_();
-        } else if (res.status === 'not_configured') {
-          // Perfectly fine — manual entry still works.
-          if (manual && note) {
-            note.innerHTML = '<span style="color:var(--warning)">Google isn’t connected yet, so enter the totals by hand. ' +
-              'Add GOOGLE_PLACES_API_KEY and GOOGLE_PLACE_ID in Apps Script to make this automatic.</span>';
-          }
-        } else if (manual && note) {
-          note.innerHTML = '<span style="color:var(--danger)">Could not read from Google: ' +
-            escapeHtml_(res.message || 'unknown error') + '</span>';
-        }
-      })
-      .catch(function () {
-        if (manual && note) note.innerHTML = '<span style="color:var(--danger)">Could not reach the server to check Google.</span>';
-      })
-      .then(function () {
-        reviewsFetching = false;
-        if (btn) { btn.disabled = false; btn.textContent = 'Refresh from Google'; }
-      });
-  }
-
-  /* Refresh at most once a day, and only when this month has no reading yet
-     or the stored one is stale — so opening the app repeatedly doesn't spend
-     API calls for a number that barely moves. */
-  function maybeAutoFetchReviews_() {
-    if (!SCRIPT_URL) return;
-    // Nothing to authenticate with yet — unlockApp() calls back in once there is.
-    if (!getPassword()) return;
-    var entry = (store.reviews || {})[currentMonth];
-    if (entry && entry.recordedOn) {
-      var ageHours = (Date.now() - new Date(entry.recordedOn).getTime()) / 3600000;
-      if (ageHours < 24) return;
-    }
-    fetchGoogleReviews(false);
-  }
-
-  function renderReviews_() {
-    var reviews = store.reviews || {};
-    var current = reviews[currentMonth];
-    var note = document.getElementById('reviewNote');
-    if (!note) return;
-
-    var totalEl = document.getElementById('reviewTotalInput');
-    var ratingEl = document.getElementById('reviewRatingInput');
-
-    if (!current) {
-      setText('reviewTotal', '—');
-      setText('reviewRating', '—');
-      setText('reviewStars', '');
-      var gainEl = document.getElementById('reviewGain');
-      gainEl.className = 'reviews-sub';
-      gainEl.textContent = 'Nothing recorded for ' + (formatMonth(currentMonth) || 'this month');
-      if (totalEl) totalEl.value = '';
-      if (ratingEl) ratingEl.value = '';
-      note.textContent = 'Check your Google Business Profile and enter this month’s totals — the app works out how many were gained.';
-      return;
-    }
-
-    setText('reviewTotal', String(current.total));
-    if (totalEl) totalEl.value = current.total;
-    if (ratingEl) ratingEl.value = current.rating != null ? current.rating : '';
-
-    if (current.rating != null) {
-      setText('reviewRating', current.rating.toFixed(1));
-      var pctFilled = Math.min(100, Math.max(0, current.rating / 5 * 100));
-      document.getElementById('reviewStars').innerHTML =
-        '<span class="stars-wrap"><span class="stars-bg">★★★★★</span>' +
-        '<span class="stars-fg" style="width:' + pctFilled.toFixed(1) + '%">★★★★★</span></span>';
-    } else {
-      setText('reviewRating', '—');
-      setText('reviewStars', '');
-    }
-
-    var prior = lastReviewBefore_(currentMonth);
-    var gEl = document.getElementById('reviewGain');
-    if (!prior) {
-      gEl.className = 'reviews-sub';
-      gEl.textContent = 'First month recorded — next month will show the gain';
-    } else {
-      var gain = current.total - prior.entry.total;
-      // If a month was skipped, the gain covers that whole gap — say so rather
-      // than calling it "this month".
-      var span = prior.key === prevMonthKey_(currentMonth)
-        ? ' this month'
-        : ' since ' + (formatMonth(prior.key) || prior.key);
-      gEl.className = 'reviews-sub' + (gain > 0 ? ' gain' : '');
-      gEl.textContent = gain > 0 ? '+' + gain + ' new review' + (gain === 1 ? '' : 's') + span
-        : gain === 0 ? 'No new reviews' + span
-        : gain + ' vs ' + (formatMonth(prior.key) || prior.key);
-    }
-    var when = new Date(current.recordedOn);
-    var sameDay = when.toDateString() === new Date().toDateString();
-    var whenTxt = sameDay
-      ? 'today at ' + when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-      : when.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-    note.textContent = (current.source === 'google' ? 'Read from Google ' : 'Entered manually ') + whenTxt + '.';
-  }
-
-  function toggleManualReviews() {
-    var box = document.getElementById('reviewManualEntry');
-    var link = document.getElementById('reviewManualToggle');
-    var open = box.style.display !== 'none';
-    box.style.display = open ? 'none' : 'flex';
-    link.textContent = open ? 'Enter manually' : 'Hide manual entry';
-  }
-
   /* ═══════════════ Reporting month label ═══════════════ */
   function formatMonth(val) {
     if (!val) return '';
@@ -1690,8 +1467,6 @@
     renderChecklist();
     updateProgress();
     updateMonthLabels();
-    renderReviews_();
-    maybeAutoFetchReviews_();
 
     // Show the DVSA figures belonging to the month now selected.
     TEST_QUALITY = testQualityForMonth_(currentMonth);
@@ -2614,7 +2389,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 10;
+  var EXPECTED_BACKEND_VERSION = 11;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -2915,6 +2690,7 @@
   var checklistFilter = 'all';
 
   var CHECK_ICON = '<svg class="cat-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var CROSS_ICON = '<svg class="cat-cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
   var CHEVRON = '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
 
   function renderChecklist() {
@@ -2927,7 +2703,9 @@
       catEl.innerHTML =
         '<div class="checklist-cat-head" tabindex="0" role="button" aria-expanded="false">' +
           '<div class="checklist-cat-title">' + escapeHtml_(cat.cat) + (cat.auto ? ' <span class="badge-auto">Auto</span>' : '') + '</div>' +
-          '<div class="checklist-cat-meta">' + CHECK_ICON + '<span class="cat-count">0 / ' + cat.items.length + '</span>' + CHEVRON + '</div>' +
+          '<div class="checklist-cat-meta">' + CHECK_ICON + CROSS_ICON +
+            '<span class="cat-flag"></span>' +
+            '<span class="cat-count">0 / ' + cat.items.length + '</span>' + CHEVRON + '</div>' +
         '</div>' +
         '<div class="checklist-cat-body"></div>';
 
@@ -2955,6 +2733,7 @@
         item.className = 'check-item';
         item.innerHTML =
           '<div class="check-item-row">' +
+            '<span class="item-light" aria-hidden="true"></span>' +
             '<div class="check-item-text">' + escapeHtml_(text) + '</div>' +
             '<div class="check-pills">' +
               '<button type="button" class="check-pill yes" data-val="yes">Yes</button>' +
@@ -2973,6 +2752,8 @@
           yesBtn.classList.toggle('active', v === 'yes');
           noBtn.classList.toggle('active', v === 'no');
           noteWrap.classList.toggle('show', v === 'no');
+          item.classList.toggle('is-yes', v === 'yes');
+          item.classList.toggle('is-no', v === 'no');
           persistChecklistState();
           updateProgress();
         }
@@ -2982,8 +2763,8 @@
 
         // Restore any previously saved answer / note for this item.
         var saved = checklistState[key];
-        if (saved === 'yes') { yesBtn.classList.add('active'); }
-        else if (saved === 'no') { noBtn.classList.add('active'); noteWrap.classList.add('show'); }
+        if (saved === 'yes') { yesBtn.classList.add('active'); item.classList.add('is-yes'); }
+        else if (saved === 'no') { noBtn.classList.add('active'); noteWrap.classList.add('show'); item.classList.add('is-no'); }
         if (checklistNotes[key]) { noteInput.value = checklistNotes[key]; }
 
         body.appendChild(item);
@@ -3036,10 +2817,19 @@
     // Per-category count + complete styling
     document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
       var ci = parseInt(catEl.dataset.catIndex, 10);
-      var itemCount = CHECKLIST[ci].items.length, doneCount = 0;
-      for (var ii = 0; ii < itemCount; ii++) { if (checklistState[ci + '-' + ii]) doneCount++; }
+      var itemCount = CHECKLIST[ci].items.length, doneCount = 0, failCount = 0;
+      for (var ii = 0; ii < itemCount; ii++) {
+        var v = checklistState[ci + '-' + ii];
+        if (v) doneCount++;
+        if (v === 'no') failCount++;
+      }
       catEl.querySelector('.cat-count').textContent = doneCount + ' / ' + itemCount;
-      catEl.classList.toggle('complete', doneCount === itemCount);
+      // A section with a No is red whether or not it's fully answered — a
+      // flagged section must never read as finished.
+      catEl.classList.toggle('has-fail', failCount > 0);
+      catEl.classList.toggle('complete', doneCount === itemCount && failCount === 0);
+      catEl.querySelector('.cat-flag').textContent =
+        failCount ? failCount + ' to fix' : '';
     });
 
     var pct = total ? Math.round(done / total * 100) : 0;
@@ -3408,8 +3198,6 @@
   buildRatingChart();
   renderTestQuality_();
   renderStanding_();
-  renderReviews_();
-  maybeAutoFetchReviews_();
 
   /* ═══════════════ Generate report ═══════════════ */
   // Builds a clean, printable monthly compliance report from everything the
@@ -3542,27 +3330,122 @@
       perfBlock = '<div class="pr-note">No Test Quality Information export was loaded for this month, so no performance figures are included.</div>';
     }
 
-    // Headline standing — same real comparison the dashboard leads with.
-    var outcomeBlock = '';
-    if (TEST_QUALITY && TEST_QUALITY.site) {
-      var sFail = TEST_QUALITY.site.failed;
-      var nFail = TEST_QUALITY.national.failed;
-      var gap = sFail - nFail;
-      var toneCls, verdictTxt;
-      if (Math.abs(gap) <= STANDING_TOLERANCE) { toneCls = 'good';   verdictTxt = 'In line with the national average'; }
-      else if (gap < 0)                        { toneCls = 'middle'; verdictTxt = 'Failing fewer vehicles than average'; }
-      else                                     { toneCls = '';       verdictTxt = 'Failing more vehicles than average'; }
-      outcomeBlock =
-        '<div class="pr-outcome ' + toneCls + '">' +
-          '<div><div class="pr-outcome-label">Testing standard against national average</div>' +
-          '<div class="pr-outcome-level">' + escapeHtml_(verdictTxt) + '</div>' +
-          '<div class="pr-outcome-when">Failure rate ' + fmtPct_(sFail) + ' vs national ' + fmtPct_(nFail) +
-          ' (' + (gap > 0 ? '+' : gap < 0 ? '−' : '') + Math.abs(gap).toFixed(Math.abs(gap) % 1 === 0 ? 0 : 1) + ' pts)' +
-          '</div></div>' +
-        '</div>';
-    } else {
-      outcomeBlock = '<div class="pr-note">No Test Quality Information export was loaded, so no national comparison is included.</div>';
-    }
+
+    /* ── One-page summary ──────────────────────────────────────────────
+       Page 1 of the report: everything Paul needs at a glance, with the
+       detail following behind it. Built from the same values as the full
+       report so the two can never disagree, and deliberately kept to a
+       single page — headline, the numbers that matter, and what still
+       needs doing. */
+    var summaryBlock = (function () {
+      var rows = [];
+
+      // Headline verdict
+      var verdictTxt = 'No DVSA export loaded', verdictCls = 'na', verdictSub = '';
+      if (TEST_QUALITY && TEST_QUALITY.site) {
+        var sF = TEST_QUALITY.site.failed, nF = TEST_QUALITY.national.failed, g = sF - nF;
+        if (Math.abs(g) <= STANDING_TOLERANCE) { verdictCls = 'good'; verdictTxt = 'In line with the national average'; }
+        else if (g < 0) { verdictCls = 'middle'; verdictTxt = 'Failing fewer vehicles than average'; }
+        else { verdictCls = ''; verdictTxt = 'Failing more vehicles than average'; }
+        verdictSub = 'Failure rate ' + fmtPct_(sF) + ' vs national ' + fmtPct_(nF) +
+          ' (' + (g > 0 ? '+' : g < 0 ? '−' : '') +
+          Math.abs(g).toFixed(Math.abs(g) % 1 === 0 ? 0 : 1) + ' pts)';
+      }
+
+      function tile(label, value, sub, tone) {
+        return '<div class="pr-sum-tile' + (tone ? ' ' + tone : '') + '">' +
+               '<div class="pr-sum-label">' + label + '</div>' +
+               '<div class="pr-sum-value">' + value + '</div>' +
+               '<div class="pr-sum-sub">' + (sub || '') + '</div></div>';
+      }
+
+      // Tiles
+      var tiles = '';
+      tiles += tile('Tests carried out',
+        TEST_LOG ? TEST_LOG.total : (TEST_QUALITY && TEST_QUALITY.site ? TEST_QUALITY.site.tests : '&mdash;'),
+        TEST_LOG ? TEST_LOG.passed + ' passed &middot; ' + TEST_LOG.failed + ' failed'
+                 : (TEST_QUALITY && TEST_QUALITY.site ? 'initial tests' : 'no data loaded'));
+      tiles += tile('Failure rate',
+        TEST_QUALITY && TEST_QUALITY.site ? fmtPct_(TEST_QUALITY.site.failed) : '&mdash;',
+        TEST_QUALITY && TEST_QUALITY.site ? 'National ' + fmtPct_(TEST_QUALITY.national.failed) : '');
+      tiles += tile('Checklist', pct + '%', done + ' of ' + total + ' answered',
+        flagged ? 'warn' : 'ok');
+      tiles += tile('Flagged for action', flagged, flagged === 1 ? 'item marked No' : 'items marked No',
+        flagged ? 'warn' : 'ok');
+
+      // Calibration — anything overdue or due soon is the thing worth surfacing.
+      var calDue = calList.filter(function (c) {
+        var s = computeCalStatus(c.date);
+        return s.badge && /due|overdue/i.test(s.badge);
+      });
+      tiles += tile('Equipment', calList.length, calDue.length ? calDue.length + ' due soon' : 'all in date',
+        calDue.length ? 'warn' : 'ok');
+
+      var qcVehicles = {};
+      qcEvidencePages.forEach(function (p) { if (p.reg) qcVehicles[p.reg] = true; });
+      var qcCount = Object.keys(qcVehicles).length;
+      tiles += tile('QC checks', qcCount || (qcEvidencePages.length ? '&mdash;' : 0),
+        qcEvidencePages.length
+          ? (qcCount ? 'vehicles with paperwork' : 'pages not sorted yet')
+          : 'no paperwork attached');
+
+      // What still needs doing — the actionable half of the page.
+      var actions = [];
+      CHECKLIST.forEach(function (cat, ci) {
+        cat.items.forEach(function (t, ii) {
+          if (checklistState[ci + '-' + ii] === 'no') {
+            actions.push({ what: t, cat: cat.cat, note: checklistNotes[ci + '-' + ii] || '' });
+          }
+        });
+      });
+      calDue.forEach(function (c) {
+        var s = computeCalStatus(c.date);
+        actions.push({ what: (c.name || 'Equipment') + ' calibration ' + (s.badge || 'due'),
+                       cat: 'Equipment', note: c.date || '' });
+      });
+
+      // Row count and text length are both capped so this page can never spill
+      // onto a second sheet — the full detail is in the report behind it.
+      var ACTION_ROWS = 8;
+      function clip(s, n) {
+        s = String(s || '');
+        return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : s;
+      }
+      var actionBlock = actions.length
+        ? '<table class="pr-sum-actions"><thead><tr><th>Needs attention</th><th>Section</th><th>Action noted</th></tr></thead><tbody>' +
+          actions.slice(0, ACTION_ROWS).map(function (a) {
+            return '<tr><td>' + escapeHtml_(clip(a.what, 62)) + '</td><td class="pr-na">' +
+                   escapeHtml_(clip(a.cat, 26)) + '</td><td>' +
+                   (a.note ? escapeHtml_(clip(a.note, 34)) : '<span class="pr-na">&mdash;</span>') + '</td></tr>';
+          }).join('') +
+          (actions.length > ACTION_ROWS ? '<tr><td colspan="3" class="pr-na">+ ' + (actions.length - ACTION_ROWS) +
+            ' more &mdash; see the full checklist overleaf</td></tr>' : '') +
+          '</tbody></table>'
+        : '<div class="pr-sum-clear">Nothing outstanding &mdash; every checklist item answered Yes and all equipment in date.</div>';
+
+      // Evidence line
+      var vehicles = {};
+      qcEvidencePages.forEach(function (p) { if (p.reg) vehicles[p.reg] = true; });
+      var vehCount = Object.keys(vehicles).length;
+      var evidenceLine = qcEvidencePages.length
+        ? qcEvidencePages.length + ' page' + (qcEvidencePages.length === 1 ? '' : 's') +
+          ' of QC paperwork attached' + (vehCount ? ' covering ' + vehCount + ' vehicle' + (vehCount === 1 ? '' : 's') +
+          ' (' + Object.keys(vehicles).join(', ') + ')' : '') + '.'
+        : 'No QC paperwork attached to this report.';
+
+      return '<div class="pr-summary">' +
+        '<div class="pr-sum-banner ' + verdictCls + '">' +
+          '<div class="pr-sum-banner-label">Testing standard against national average</div>' +
+          '<div class="pr-sum-banner-verdict">' + escapeHtml_(verdictTxt) + '</div>' +
+          (verdictSub ? '<div class="pr-sum-banner-sub">' + verdictSub + '</div>' : '') +
+        '</div>' +
+        '<div class="pr-sum-tiles">' + tiles + '</div>' +
+        actionBlock +
+        '<div class="pr-sum-foot">' + escapeHtml_(evidenceLine) +
+          '<span class="pr-sum-sign">Signed &nbsp;__________________________ &nbsp; Date &nbsp;____________</span>' +
+        '</div>' +
+      '</div><div class="pr-pagebreak"></div>';
+    })();
 
     // Test-log charts — same slice data as the dashboard, so the two can never
     // tell a different story.
@@ -3585,30 +3468,6 @@
             legendHTML_(ts) + '</div></div>' +
         '</div>' +
         '<div class="pr-note">' + escapeHtml_(facts.join(' · ')) + '</div>';
-    }
-
-    // Google reviews for this month, if recorded.
-    var reviewsBlock = '';
-    var rv = (store.reviews || {})[currentMonth];
-    if (rv) {
-      var priorRv = lastReviewBefore_(currentMonth);
-      var gainTxt = priorRv
-        ? (function () {
-            var g = rv.total - priorRv.entry.total;
-            var sp = priorRv.key === prevMonthKey_(currentMonth)
-              ? ' this month'
-              : ' since ' + (formatMonth(priorRv.key) || priorRv.key);
-            return g > 0 ? '+' + g + sp : g === 0 ? 'No change' + sp : g + sp;
-          })()
-        : 'First month recorded';
-      reviewsBlock =
-        '<h2>Google reviews</h2>' +
-        '<div class="pr-kpis">' +
-          '<div class="pr-kpi"><div class="pr-kpi-label">Total reviews</div><div class="pr-kpi-value">' + rv.total +
-            '</div><div class="pr-kpi-sub">' + escapeHtml_(gainTxt) + '</div></div>' +
-          '<div class="pr-kpi"><div class="pr-kpi-label">Average rating</div><div class="pr-kpi-value">' +
-            (rv.rating != null ? rv.rating.toFixed(1) : '—') + '</div><div class="pr-kpi-sub">out of 5</div></div>' +
-        '</div>';
     }
 
     // QC evidence — the scanned pages themselves, appended at the back.
@@ -3641,8 +3500,10 @@
         '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>Generated ' + escapeHtml_(generated) + '</div>' +
       '</div>' +
 
-      outcomeBlock +
+      summaryBlock +
 
+      // The standing banner lives on the summary page now; repeating it here
+      // just duplicated the same sentence a page later.
       '<h2>DVSA performance</h2>' + perfBlock +
 
       logBlock +
@@ -3654,8 +3515,6 @@
         '<div class="pr-kpi"><div class="pr-kpi-label">QC evidence</div><div class="pr-kpi-value">' + qcEvidencePages.length + '</div><div class="pr-kpi-sub">pages attached</div></div>' +
       '</div>' +
       '<table><thead><tr><th>Item</th><th class="col-status">Result</th><th class="col-note">Action required</th></tr></thead><tbody>' + checklistRows + '</tbody></table>' +
-
-      reviewsBlock +
 
       '<h2>Equipment &amp; calibration</h2>' +
       '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
