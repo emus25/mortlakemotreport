@@ -204,6 +204,19 @@
     padding: 3px 9px; border-radius: 6px; line-height: 1.3; white-space: nowrap;
   }
   .badge svg { width: 12px; height: 12px; }
+  /* Donut charts — dashboard and report share the same markup. */
+  .donut-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  .donut { flex: 0 0 auto; line-height: 0; }
+  .donut-legend { flex: 1; min-width: 160px; }
+  .chart-legend-list { list-style: none; margin: 0; padding: 0; }
+  .chart-legend-list li {
+    display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0;
+  }
+  .chart-legend-list .lg-dot { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+  .chart-legend-list .lg-name { flex: 1; color: var(--text); }
+  .chart-legend-list .lg-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  @media (max-width: 560px) { .donut-row { justify-content: center; } }
+
   .sync-status { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
   @media (max-width: 900px) { .sync-status { display: none; } }
   .badge.success { background: var(--success-bg); color: var(--success); }
@@ -595,6 +608,15 @@
   .pr-doc .col-status { width: 104px; }
   .pr-doc .col-note { width: 32%; color: #444; }
   .pr-doc .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
+  .pr-doc .pr-charts { display: flex; gap: 14px; margin: 12px 0 4px; }
+  .pr-doc .pr-chart { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
+  .pr-doc .pr-chart-title { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; margin-bottom: 6px; }
+  .pr-doc .pr-chart-row { display: flex; align-items: center; gap: 12px; }
+  .pr-doc .chart-legend-list { list-style: none; margin: 0; padding: 0; flex: 1; }
+  .pr-doc .chart-legend-list li { display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 1.5px 0; }
+  .pr-doc .chart-legend-list .lg-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+  .pr-doc .chart-legend-list .lg-name { flex: 1; }
+  .pr-doc .chart-legend-list .lg-val { color: #666; }
   .pr-doc .pr-foot { margin-top: 24px; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
 
   /* QC evidence pages appended at the back of the report. */
@@ -763,6 +785,31 @@
           </div>
           <svg id="ratingChart" style="width:100%;height:190px;display:block"></svg>
           <div class="panel-note" id="trendNote"></div>
+        </div>
+      </div>
+
+      <!-- Test log breakdown — hidden until a test log is uploaded -->
+      <div class="section" id="testLogSection" style="display:none">
+        <div class="section-head">
+          <h2>This month's tests</h2>
+          <span class="section-desc">From the test log export — every test carried out</span>
+        </div>
+        <div class="grid-2">
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">Outcomes</span></div>
+            <div class="donut-row">
+              <div class="donut" id="outcomeDonut"></div>
+              <div class="donut-legend" id="outcomeLegend"></div>
+            </div>
+            <div class="panel-note" id="testLogNote"></div>
+          </div>
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">Tests by tester</span></div>
+            <div class="donut-row">
+              <div class="donut" id="testerDonut"></div>
+              <div class="donut-legend" id="testerLegend"></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1651,6 +1698,8 @@
     applyTestQualityToDashboard_();
     renderTestQuality_();
     renderStanding_();
+    TEST_LOG = (store.testLog || {})[currentMonth] || null;
+    renderTestLogCharts_();
   });
 
   /* ═══════════════ File uploads ═══════════════ */
@@ -1785,6 +1834,180 @@
     };
   }
 
+  /* ═══════════════ Test log ═══════════════
+     The two test-log exports were previously only listed as "attached". They
+     are the richest data Paul has — one row per test with tester, outcome,
+     type and duration — so they now drive the outcome and workload charts.
+     Both exports hold the same rows in a different order, so either will do. */
+  var TEST_LOG = null;
+
+  function parseTestLog_(rows) {
+    if (!rows || rows.length < 2) return { error: 'That file has no rows in it.' };
+
+    var head = -1, col = {};
+    for (var r = 0; r < Math.min(12, rows.length); r++) {
+      var names = rows[r].map(function (c) { return String(c).trim().toLowerCase(); });
+      if (names.indexOf('result') > -1 && names.indexOf('registration') > -1) {
+        head = r;
+        names.forEach(function (n, i) { col[n] = i; });
+        break;
+      }
+    }
+    if (head === -1) return { error: 'This does not look like a test log — no Result/Registration columns found.' };
+
+    var tests = [];
+    for (var i = head + 1; i < rows.length; i++) {
+      var row = rows[i];
+      var reg = String(row[col['registration']] || '').trim();
+      var result = String(row[col['result']] || '').trim().toUpperCase();
+      if (!reg && !result) continue;
+      // Durations and dates arrive as Excel serials: a duration is a fraction
+      // of a day, a date/time is days since 1899-12-30.
+      var durRaw = row[col['test duration']];
+      var minutes = (typeof durRaw === 'number') ? durRaw * 24 * 60 : null;
+      var dtRaw = row[col['test date/time']];
+      var day = null;
+      if (typeof dtRaw === 'number') {
+        var d = new Date(Date.UTC(1899, 11, 30) + Math.floor(dtRaw) * 86400000);
+        day = d.toISOString().slice(0, 10);
+      }
+      tests.push({
+        reg: reg.toUpperCase().replace(/\s+/g, ''),
+        make: String(row[col['make']] || '').trim(),
+        tester: String(row[col['user id']] || '').trim(),
+        type: String(row[col['test type']] || '').trim(),
+        result: result,
+        minutes: minutes,
+        day: day
+      });
+    }
+    if (!tests.length) return { error: 'No test rows found in that file.' };
+
+    var out = { tests: tests, total: tests.length, passed: 0, failed: 0, other: 0,
+                retests: 0, byTester: {}, byDay: {}, durations: [] };
+    tests.forEach(function (t) {
+      if (t.result === 'PASSED') out.passed++;
+      else if (t.result === 'FAILED') out.failed++;
+      else out.other++;
+      if (/re-?test/i.test(t.type)) out.retests++;
+      if (t.tester) out.byTester[t.tester] = (out.byTester[t.tester] || 0) + 1;
+      if (t.day) out.byDay[t.day] = (out.byDay[t.day] || 0) + 1;
+      if (typeof t.minutes === 'number' && t.minutes > 0) out.durations.push(t.minutes);
+    });
+    out.durations.sort(function (a, b) { return a - b; });
+    out.medianMinutes = out.durations.length
+      ? out.durations[Math.floor(out.durations.length / 2)] : null;
+    // DVSA look closely at tests completed unusually quickly.
+    out.under30 = out.durations.filter(function (m) { return m < 30; }).length;
+    return out;
+  }
+
+  /* Donut chart as inline SVG — no chart library, so it prints identically in
+     the PDF and works with no internet. Segments are drawn as stroked arcs on
+     one circle using dash offsets, which keeps the markup tiny. */
+  var CHART_COLOURS = ['#c9a227', '#7b8794', '#4a7c59', '#a8552f', '#5b6b8a', '#8a6d3b', '#96a3a8'];
+
+  function donutSVG_(slices, centreValue, centreLabel, size) {
+    var total = slices.reduce(function (s, x) { return s + x.value; }, 0);
+    if (!total) return '';
+    var S = size || 150, R = 54, C = 2 * Math.PI * R, cx = S / 2, cy = S / 2;
+    var offset = 0;
+    var arcs = slices.map(function (s, i) {
+      var len = s.value / total * C;
+      var seg = '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" ' +
+        'stroke="' + (s.colour || CHART_COLOURS[i % CHART_COLOURS.length]) + '" stroke-width="20" ' +
+        'stroke-dasharray="' + len.toFixed(2) + ' ' + (C - len).toFixed(2) + '" ' +
+        'stroke-dashoffset="' + (-offset).toFixed(2) + '"/>';
+      offset += len;
+      return seg;
+    }).join('');
+    var centre = centreValue != null
+      ? '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" font-size="24" font-weight="700" fill="#1a1a1a">' +
+          escapeHtml_(String(centreValue)) + '</text>' +
+        '<text x="' + cx + '" y="' + (cy + 15) + '" text-anchor="middle" font-size="10" fill="#666">' +
+          escapeHtml_(centreLabel || '') + '</text>'
+      : '';
+    return '<svg viewBox="0 0 ' + S + ' ' + S + '" width="' + S + '" height="' + S + '" role="img">' +
+           '<g transform="rotate(-90 ' + cx + ' ' + cy + ')">' + arcs + '</g>' + centre + '</svg>';
+  }
+
+  function legendHTML_(slices) {
+    var total = slices.reduce(function (s, x) { return s + x.value; }, 0) || 1;
+    return '<ul class="chart-legend-list">' + slices.map(function (s, i) {
+      var pct = Math.round(s.value / total * 100);
+      return '<li><span class="lg-dot" style="background:' +
+        (s.colour || CHART_COLOURS[i % CHART_COLOURS.length]) + '"></span>' +
+        '<span class="lg-name">' + escapeHtml_(s.label) + '</span>' +
+        '<span class="lg-val">' + s.value + ' &middot; ' + pct + '%</span></li>';
+    }).join('') + '</ul>';
+  }
+
+  /* Slices for the two charts, shared by the dashboard and the printed report
+     so they can never disagree. */
+  function outcomeSlices_(d) {
+    return [
+      { label: 'Passed', value: d.passed, colour: '#4a7c59' },
+      { label: 'Failed', value: d.failed, colour: '#a8552f' }
+    ].concat(d.other ? [{ label: 'Other / aborted', value: d.other, colour: '#96a3a8' }] : []);
+  }
+
+  function testerSlices_(d) {
+    var names = (TEST_QUALITY && TEST_QUALITY.testers) ? TEST_QUALITY.testers : [];
+    return Object.keys(d.byTester)
+      .sort(function (a, b) { return d.byTester[b] - d.byTester[a]; })
+      .map(function (id, i) {
+        // The test log gives tester IDs; the Test Quality export gives names.
+        var match = names.filter(function (t) { return t.id === id; })[0];
+        return { label: match && match.name ? match.name : id, value: d.byTester[id],
+                 colour: CHART_COLOURS[i % CHART_COLOURS.length] };
+      });
+  }
+
+  function renderTestLogCharts_() {
+    var wrap = document.getElementById('testLogSection');
+    if (!wrap) return;
+    var d = TEST_LOG;
+    if (!d || !d.total) { wrap.style.display = 'none'; return; }
+    wrap.style.display = '';
+
+    var oc = outcomeSlices_(d);
+    setHTML_('outcomeDonut', donutSVG_(oc, d.total, 'tests'));
+    setHTML_('outcomeLegend', legendHTML_(oc));
+
+    var ts = testerSlices_(d);
+    setHTML_('testerDonut', donutSVG_(ts, ts.length, ts.length === 1 ? 'tester' : 'testers'));
+    setHTML_('testerLegend', legendHTML_(ts));
+
+    setText('testLogNote',
+      d.retests + ' re-test' + (d.retests === 1 ? '' : 's') +
+      (d.medianMinutes ? ' · median test ' + Math.round(d.medianMinutes) + ' min' : '') +
+      (d.under30 ? ' · ' + d.under30 + ' under 30 min' : ''));
+  }
+
+  function applyTestLogFile_(inputId, result) {
+    if (inputId !== 'fileLogDate' && inputId !== 'fileLogDuration') return null;
+    if (result.kind !== 'spreadsheet' || result.error || !result.rows) return null;
+
+    var parsed = parseTestLog_(result.rows);
+    if (parsed.error) return { ok: false, text: parsed.error };
+
+    TEST_LOG = parsed;
+    // Keep only the aggregates. 244 raw test rows would blow the 9KB-per-value
+    // limit on Script Properties, and nothing on screen or in the report needs
+    // the individual rows once the totals are worked out.
+    if (!store.testLog) store.testLog = {};
+    store.testLog[currentMonth] = {
+      total: parsed.total, passed: parsed.passed, failed: parsed.failed,
+      other: parsed.other, retests: parsed.retests, byTester: parsed.byTester,
+      byDay: parsed.byDay, medianMinutes: parsed.medianMinutes, under30: parsed.under30
+    };
+    saveStore();
+    renderTestLogCharts_();
+
+    return { ok: true, text: parsed.total + ' tests · ' + parsed.passed + ' passed, ' +
+             parsed.failed + ' failed · ' + Object.keys(parsed.byTester).length + ' testers' };
+  }
+
   /* Push the real figures into the headline dashboard cards, so the top of the
      page stops showing sample numbers once a genuine export is loaded. */
   function applyTestQualityToDashboard_() {
@@ -1866,7 +2089,9 @@
           parsedFileData[inputId] = result;
           if (!statusId) return;
           var el = document.getElementById(statusId);
-          var summary = applyTestQualityFile_(inputId, result) || describeParsedResult_(result);
+          var summary = applyTestQualityFile_(inputId, result) ||
+                        applyTestLogFile_(inputId, result) ||
+                        describeParsedResult_(result);
           if (summary.ok) {
             el.className = 'upload-status uploaded';
             el.innerHTML = ICON_UPLOADED + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
@@ -3178,6 +3403,8 @@
   // happened to be loaded last.
   TEST_QUALITY = testQualityForMonth_(currentMonth) || null;
   applyTestQualityToDashboard_();
+  TEST_LOG = (store.testLog || {})[currentMonth] || null;
+  renderTestLogCharts_();
   buildRatingChart();
   renderTestQuality_();
   renderStanding_();
@@ -3337,6 +3564,29 @@
       outcomeBlock = '<div class="pr-note">No Test Quality Information export was loaded, so no national comparison is included.</div>';
     }
 
+    // Test-log charts — same slice data as the dashboard, so the two can never
+    // tell a different story.
+    var logBlock = '';
+    if (TEST_LOG && TEST_LOG.total) {
+      var d2 = TEST_LOG;
+      var oc = outcomeSlices_(d2), ts = testerSlices_(d2);
+      var facts = [];
+      facts.push(d2.retests + ' re-test' + (d2.retests === 1 ? '' : 's'));
+      if (d2.medianMinutes) facts.push('median test ' + Math.round(d2.medianMinutes) + ' min');
+      if (d2.under30) facts.push(d2.under30 + ' completed in under 30 min');
+      logBlock =
+        '<h2>This month&rsquo;s tests</h2>' +
+        '<div class="pr-charts">' +
+          '<div class="pr-chart"><div class="pr-chart-title">Outcomes</div>' +
+            '<div class="pr-chart-row">' + donutSVG_(oc, d2.total, 'tests', 130) +
+            legendHTML_(oc) + '</div></div>' +
+          '<div class="pr-chart"><div class="pr-chart-title">Tests by tester</div>' +
+            '<div class="pr-chart-row">' + donutSVG_(ts, ts.length, ts.length === 1 ? 'tester' : 'testers', 130) +
+            legendHTML_(ts) + '</div></div>' +
+        '</div>' +
+        '<div class="pr-note">' + escapeHtml_(facts.join(' · ')) + '</div>';
+    }
+
     // Google reviews for this month, if recorded.
     var reviewsBlock = '';
     var rv = (store.reviews || {})[currentMonth];
@@ -3394,6 +3644,8 @@
       outcomeBlock +
 
       '<h2>DVSA performance</h2>' + perfBlock +
+
+      logBlock +
 
       '<h2>Self-assessment checklist</h2>' +
       '<div class="pr-kpis">' +
