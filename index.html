@@ -417,6 +417,18 @@
   .checklist-summary .cs-bar { flex: 1; min-width: 160px; height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
   .checklist-summary .cs-bar > span { display: block; height: 100%; background: var(--brand); border-radius: 5px; transition: width .25s ease; }
   .checklist-summary .cs-flag { font-size: 13px; color: var(--warning); font-weight: 600; }
+  .checklist-summary .cs-save {
+    font-size: 12px; color: var(--text-tertiary); display: inline-flex; align-items: center; gap: 5px;
+    white-space: nowrap; transition: color .2s ease;
+  }
+  .checklist-summary .cs-save::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border); transition: background .2s ease;
+  }
+  .checklist-summary .cs-save.is-saved { color: var(--success); font-weight: 600; }
+  .checklist-summary .cs-save.is-saved::before { background: var(--success); }
+  .checklist-summary .cs-save.is-error { color: var(--danger); font-weight: 600; }
+  .checklist-summary .cs-save.is-error::before { background: var(--danger); }
 
   .checklist-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .filter-group { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
@@ -519,88 +531,117 @@
      header band, KPI tiles, coloured status pills, and the QC evidence pages
      appended at the back. Print colours are forced on, otherwise browsers
      strip backgrounds and the whole thing loses its meaning. */
-  #printReport { display: none; color: #1a1a1a; font-family: Arial, Helvetica, sans-serif; }
-  #printReport * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pr-doc { color: #1a1a1a; font-family: Arial, Helvetica, sans-serif; }
+  .pr-doc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
-  #printReport .pr-header {
+  .pr-doc .pr-header {
     display: flex; align-items: center; justify-content: space-between; gap: 20px;
     background: #757575; color: #fff; padding: 16px 20px; border-radius: 10px; margin-bottom: 6px;
   }
-  #printReport .pr-logo { height: 34px; width: auto; }
-  #printReport .pr-title { font-size: 19px; font-weight: bold; letter-spacing: -.01em; }
-  #printReport .pr-station { font-size: 11px; color: #f0f0ee; margin-top: 3px; }
-  #printReport .pr-meta { font-size: 11px; text-align: right; line-height: 1.7; color: #fff; }
-  #printReport .pr-meta strong { font-size: 15px; display: block; }
+  .pr-doc .pr-logo { height: 34px; width: auto; }
+  .pr-doc .pr-title { font-size: 19px; font-weight: bold; letter-spacing: -.01em; }
+  .pr-doc .pr-station { font-size: 11px; color: #f0f0ee; margin-top: 3px; }
+  .pr-doc .pr-meta { font-size: 11px; text-align: right; line-height: 1.7; color: #fff; }
+  .pr-doc .pr-meta strong { font-size: 15px; display: block; }
 
-  #printReport h2 {
+  .pr-doc h2 {
     font-size: 13px; margin: 22px 0 10px; padding-bottom: 5px;
     border-bottom: 2px solid #ffd400; text-transform: uppercase; letter-spacing: .04em;
   }
 
   /* Outcome banner — mirrors the dashboard traffic light. */
-  #printReport .pr-outcome {
+  .pr-doc .pr-outcome {
     display: flex; align-items: center; justify-content: space-between; gap: 16px;
     border-left: 6px solid #999; background: #f7f7f5; border-radius: 8px; padding: 14px 18px; margin: 14px 0 4px;
   }
-  #printReport .pr-outcome.good   { border-left-color: #2f7d4a; background: #f2f9f4; }
-  #printReport .pr-outcome.middle { border-left-color: #a66a00; background: #fdf6e9; }
-  #printReport .pr-outcome.bad    { border-left-color: #b54747; background: #fbf0f0; }
-  #printReport .pr-outcome-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
-  #printReport .pr-outcome-level { font-size: 22px; font-weight: bold; margin-top: 2px; }
-  #printReport .pr-outcome.good   .pr-outcome-level { color: #2f7d4a; }
-  #printReport .pr-outcome.middle .pr-outcome-level { color: #a66a00; }
-  #printReport .pr-outcome.bad    .pr-outcome-level { color: #b54747; }
-  #printReport .pr-outcome-when { font-size: 11px; color: #555; margin-top: 3px; }
+  .pr-doc .pr-outcome.good   { border-left-color: #2f7d4a; background: #f2f9f4; }
+  .pr-doc .pr-outcome.middle { border-left-color: #a66a00; background: #fdf6e9; }
+  .pr-doc .pr-outcome.bad    { border-left-color: #b54747; background: #fbf0f0; }
+  .pr-doc .pr-outcome-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #666; }
+  .pr-doc .pr-outcome-level { font-size: 22px; font-weight: bold; margin-top: 2px; }
+  .pr-doc .pr-outcome.good   .pr-outcome-level { color: #2f7d4a; }
+  .pr-doc .pr-outcome.middle .pr-outcome-level { color: #a66a00; }
+  .pr-doc .pr-outcome.bad    .pr-outcome-level { color: #b54747; }
+  .pr-doc .pr-outcome-when { font-size: 11px; color: #555; margin-top: 3px; }
 
   /* KPI tiles, like the dashboard's performance row. */
-  #printReport .pr-kpis { display: flex; gap: 10px; margin: 12px 0 4px; }
-  #printReport .pr-kpi { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
-  #printReport .pr-kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; }
-  #printReport .pr-kpi-value { font-size: 21px; font-weight: bold; margin: 3px 0 1px; }
-  #printReport .pr-kpi-sub { font-size: 10px; color: #666; }
+  .pr-doc .pr-kpis { display: flex; gap: 10px; margin: 12px 0 4px; }
+  .pr-doc .pr-kpi { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
+  .pr-doc .pr-kpi-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; }
+  .pr-doc .pr-kpi-value { font-size: 21px; font-weight: bold; margin: 3px 0 1px; }
+  .pr-doc .pr-kpi-sub { font-size: 10px; color: #666; }
 
-  #printReport table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px; }
-  #printReport th, #printReport td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ececea; vertical-align: top; }
-  #printReport th { background: #f2f2f0; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #555; }
-  #printReport .pr-cat td { background: #fafaf8; font-weight: bold; }
-  #printReport td.pr-mine { background: #fffdf0; font-weight: bold; }
+  .pr-doc table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 6px; }
+  .pr-doc th, .pr-doc td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ececea; vertical-align: top; }
+  .pr-doc th { background: #f2f2f0; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #555; }
+  .pr-doc .pr-cat td { background: #fafaf8; font-weight: bold; }
+  .pr-doc td.pr-mine { background: #fffdf0; font-weight: bold; }
 
   /* Status pills instead of bare words. */
-  #printReport .pill { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
-  #printReport .pill-yes  { background: #e8f4ec; color: #2f7d4a; }
-  #printReport .pill-no   { background: #fbeaea; color: #b54747; }
-  #printReport .pill-na   { background: #f0f0ee; color: #888; }
-  #printReport .pill-warn { background: #fbf3e3; color: #a66a00; }
-  #printReport .pr-na { color: #999; }
+  .pr-doc .pill { display: inline-block; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .pr-doc .pill-yes  { background: #e8f4ec; color: #2f7d4a; }
+  .pr-doc .pill-no   { background: #fbeaea; color: #b54747; }
+  .pr-doc .pill-na   { background: #f0f0ee; color: #888; }
+  .pr-doc .pill-warn { background: #fbf3e3; color: #a66a00; }
+  .pr-doc .pr-na { color: #999; }
   /* Two stacked bars per row: the national average behind in grey, Mortlake's
      own figure in front, turning amber where it sits above the average. */
-  #printReport .pr-barcol { width: 34%; }
-  #printReport .pr-numcol { width: 62px; }
-  #printReport .pr-bar { position: relative; height: 14px; background: #f4f4f2; border-radius: 3px; overflow: hidden; }
-  #printReport .pr-bar-nat  { position: absolute; left: 0; top: 0; height: 14px; background: #d8d8d4; }
-  #printReport .pr-bar-site { position: absolute; left: 0; top: 3px; height: 8px; background: #c9a227; border-radius: 2px; }
-  #printReport .pr-bar-site.over { background: #d08b1f; }
-  #printReport .col-status { width: 104px; }
-  #printReport .col-note { width: 32%; color: #444; }
-  #printReport .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
-  #printReport .pr-foot { margin-top: 24px; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
+  .pr-doc .pr-barcol { width: 34%; }
+  .pr-doc .pr-numcol { width: 62px; }
+  .pr-doc .pr-bar { position: relative; height: 14px; background: #f4f4f2; border-radius: 3px; overflow: hidden; }
+  .pr-doc .pr-bar-nat  { position: absolute; left: 0; top: 0; height: 14px; background: #d8d8d4; }
+  .pr-doc .pr-bar-site { position: absolute; left: 0; top: 3px; height: 8px; background: #c9a227; border-radius: 2px; }
+  .pr-doc .pr-bar-site.over { background: #d08b1f; }
+  .pr-doc .col-status { width: 104px; }
+  .pr-doc .col-note { width: 32%; color: #444; }
+  .pr-doc .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
+  .pr-doc .pr-foot { margin-top: 24px; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 8px; }
 
   /* QC evidence pages appended at the back of the report. */
-  #printReport .pr-evidence-page { page-break-before: always; break-before: page; padding-top: 6px; }
-  #printReport .pr-evidence-head { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
-  #printReport .pr-evidence-meta { font-size: 10px; color: #666; margin-bottom: 8px; }
-  #printReport .pr-evidence-img {
+  .pr-doc .pr-evidence-page { page-break-before: always; break-before: page; padding-top: 6px; }
+  .pr-doc .pr-evidence-head { font-size: 12px; font-weight: bold; margin-bottom: 4px; }
+  .pr-doc .pr-evidence-meta { font-size: 10px; color: #666; margin-bottom: 8px; }
+  .pr-doc .pr-evidence-img {
     width: 100%; max-height: 232mm; object-fit: contain; border: 1px solid #ddd; border-radius: 4px;
   }
   /* Sideways scans are rotated in the image data itself before they get here
      (see rotateImageBase64_), so no transform is needed — CSS rotation is
      unreliable across print engines and fights the page box. */
-  #printReport .pr-pagebreak { page-break-before: always; break-before: page; }
+  .pr-doc .pr-pagebreak { page-break-before: always; break-before: page; }
+
+  /* The print copy stays hidden on screen; the preview copy is the one people
+     look at. Only the print copy goes to paper, so the preview's own chrome
+     (toolbar, page shadow) can never end up in the PDF. */
+  #printReport { display: none; }
+
+  .preview-overlay {
+    position: fixed; inset: 0; z-index: 200; background: var(--surface-subtle, #f4f4f2);
+    display: flex; flex-direction: column;
+  }
+  .preview-bar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px 20px; background: var(--surface, #fff);
+    border-bottom: 1px solid var(--border, #e2e2df); flex-wrap: wrap;
+  }
+  .preview-title { font-size: 15px; font-weight: 700; }
+  .preview-month { font-size: 12px; color: var(--text-secondary, #666); margin-top: 1px; }
+  .preview-actions { display: flex; gap: 10px; }
+  .preview-scroll { flex: 1; overflow: auto; padding: 24px 16px 48px; }
+  /* Sized to the printable width of A4 so what's on screen matches the paper. */
+  .preview-page {
+    width: 180mm; max-width: 100%; margin: 0 auto; background: #fff;
+    padding: 15mm; border-radius: 4px; box-shadow: 0 2px 14px rgba(0,0,0,.10);
+  }
+  @media (max-width: 640px) {
+    .preview-scroll { padding: 12px 8px 32px; }
+    .preview-page { padding: 10mm 8mm; }
+    .preview-bar { padding: 10px 12px; }
+  }
 
   @media print {
     @page { margin: 15mm; }
     html, body { background: #fff !important; }
-    #lockScreen, #appRoot { display: none !important; }
+    #lockScreen, #appRoot, .preview-overlay { display: none !important; }
     #printReport { display: block !important; }
   }
 </style>
@@ -962,6 +1003,9 @@
         </div>
         <div class="cs-bar"><span id="clBar" style="width:0%"></span></div>
         <span class="cs-flag" id="clFlag"></span>
+        <!-- There is no Save button because answers save as they're ticked;
+             this says so, and confirms each one, so that isn't a leap of faith. -->
+        <span class="cs-save" id="clSave">Answers save automatically</span>
       </div>
 
       <div class="checklist-toolbar">
@@ -981,8 +1025,26 @@
   </div>
 </div>
 
+<!-- On-screen preview of the finished report, shown before any print dialog so
+     the month and figures can be checked first. -->
+<div id="reportPreview" class="preview-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Report preview">
+  <div class="preview-bar">
+    <div class="preview-titles">
+      <div class="preview-title">Report preview</div>
+      <div class="preview-month" id="previewMonth"></div>
+    </div>
+    <div class="preview-actions">
+      <button type="button" class="btn btn-secondary" id="previewClose" onclick="closePreview()">Back</button>
+      <button type="button" class="btn btn-primary" onclick="printPreview()">Print / Save as PDF</button>
+    </div>
+  </div>
+  <div class="preview-scroll">
+    <div class="preview-page pr-doc" id="previewBody"></div>
+  </div>
+</div>
+
 <!-- Printable report — hidden on screen, shown only when printing / saving to PDF -->
-<div id="printReport"></div>
+<div id="printReport" class="pr-doc"></div>
 
 <script>
   /* ═══════════════ Auth (unchanged behaviour) ═══════════════ */
@@ -1202,6 +1264,15 @@
   }
 
   function setSyncStatus_(state) {
+    // Mirror a backup failure onto the checklist, where the user is actually
+    // looking — "Saved" there must not imply a backup that didn't happen.
+    var cl = document.getElementById('clSave');
+    if (cl && state === 'error') {
+      clearTimeout(clSaveTimer);
+      cl.className = 'cs-save is-error';
+      cl.textContent = 'Saved on this computer only';
+    }
+
     var el = document.getElementById('syncStatus');
     if (!el) return;
     var map = {
@@ -1218,6 +1289,23 @@
   function persistChecklistState() {
     store.months[currentMonth] = { state: checklistState, notes: checklistNotes };
     saveStore();
+    flashChecklistSaved_();
+  }
+
+  /* Confirms each answer as it's recorded. The tick is instant because it is
+     saved locally first; the wording then follows the server backup so a
+     failed backup can't masquerade as a completed save. */
+  var clSaveTimer = null;
+  function flashChecklistSaved_() {
+    var el = document.getElementById('clSave');
+    if (!el) return;
+    clearTimeout(clSaveTimer);
+    el.className = 'cs-save is-saved';
+    el.textContent = 'Saved';
+    clSaveTimer = setTimeout(function () {
+      el.className = 'cs-save';
+      el.textContent = 'Answers save automatically';
+    }, 2500);
   }
   function persistCalibration() {
     var list = [];
@@ -1761,6 +1849,8 @@
       var newFiles = Array.prototype.slice.call(input.files);
       newFiles.forEach(function (f) { pickedFiles[inputId].push(f); });
       input.value = '';
+      // The scan set has changed, so any pages already converted are stale.
+      if (inputId === 'fileQcScans') qcEvidencePages = [];
       renderFileList(inputId, listId, statusId);
       refreshStatuses();
 
@@ -1798,6 +1888,7 @@
       row.innerHTML = '<span>' + escapeHtml_(f.name) + '</span><button type="button" aria-label="Remove file">&times;</button>';
       row.querySelector('button').addEventListener('click', function () {
         pickedFiles[inputId].splice(i, 1);
+        if (inputId === 'fileQcScans') qcEvidencePages = [];
         renderFileList(inputId, listId, statusId);
         refreshStatuses();
       });
@@ -2283,6 +2374,18 @@
 
   function normalizeReg_(reg) { return (reg || '').toUpperCase().replace(/\s+/g, ''); }
 
+  /* Guards against non-registrations being treated as vehicles — the VTS
+     number 22453 appears on nearly every sheet, and page headers throw up
+     other stray codes. A real UK plate always mixes letters and digits. */
+  var VTS_NUMBER = '22453';
+  function looksLikeRealPlate_(reg) {
+    var r = normalizeReg_(reg);
+    if (!r || r === VTS_NUMBER) return false;
+    if (r.length < 5 || r.length > 8) return false;
+    if (!/^[A-Z0-9]+$/.test(r)) return false;
+    return /[A-Z]/.test(r) && /[0-9]/.test(r);
+  }
+
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
@@ -2418,7 +2521,14 @@
       if (res.status !== 'success') { needsReview.push({ label: item.label, reason: res.message || 'Could not read this page' }); return; }
       var a = res.result;
       var reg = normalizeReg_(a.registration);
-      if (!reg) { needsReview.push({ label: item.label, reason: 'Registration not readable' }); return; }
+      if (!looksLikeRealPlate_(reg)) {
+        needsReview.push({
+          label: item.label,
+          reason: reg ? 'No vehicle registration on this page (read "' + reg + '")'
+                      : 'Registration not readable'
+        });
+        return;
+      }
       if (a.confidence === 'low') needsReview.push({ label: item.label, reason: 'Low-confidence read — check by hand' });
       if (!groups[reg]) groups[reg] = { pages: [], testers: {} };
       groups[reg].pages.push(a);
@@ -3305,10 +3415,66 @@
       evidenceBlock;
   }
 
-  function handleGenerate() {
-    document.getElementById('printReport').innerHTML = buildReportHTML();
-    window.print();
+  /* Generate now shows the finished report on screen first. Going straight to
+     the print dialog gave no chance to check the month, the figures or that
+     the QC evidence came through before committing it to paper. */
+  /* The evidence appendix used to be a by-product of the smart sort, so
+     uploading the paperwork and going straight to Generate produced a report
+     with nothing attached. The pages are now converted on demand here too, so
+     what was uploaded always reaches the back of the report — sorted or not. */
+  function ensureQcEvidence_() {
+    var files = pickedFiles.fileQcScans;
+    if (!files.length || qcEvidencePages.length) return Promise.resolve();
+
+    if (typeof pdfjsLib === 'undefined') {
+      return Promise.reject(new Error('PDF reader failed to load — the assets/lib folder is missing from this site.'));
+    }
+
+    return Promise.all(files.map(fileToPageImages_)).then(function (nested) {
+      var allPages = [].concat.apply([], nested);
+      qcEvidencePages = allPages.map(function (p) {
+        return {
+          label: p.label, base64: p.base64, mimeType: p.mimeType,
+          reg: '', docType: '', tester: '', testDate: '', qcFlag: false
+        };
+      });
+    });
   }
+
+  function handleGenerate() {
+    var btns = document.querySelectorAll('button[onclick="handleGenerate()"]');
+    btns.forEach(function (b) { b.disabled = true; });
+    var restore = function () { btns.forEach(function (b) { b.disabled = false; }); };
+
+    ensureQcEvidence_()
+      .then(function () {
+        document.getElementById('printReport').innerHTML = buildReportHTML();
+        document.getElementById('previewBody').innerHTML = buildReportHTML();
+        setText('previewMonth', formatMonth(currentMonth) || '');
+        document.getElementById('reportPreview').style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        document.getElementById('previewClose').focus();
+      })
+      .catch(function (err) {
+        // Never generate a report that silently omits the evidence.
+        alert('Could not attach the scanned paperwork:\n\n' + err.message +
+              '\n\nThe report has not been generated.');
+      })
+      .then(restore, restore);
+  }
+
+  function closePreview() {
+    document.getElementById('reportPreview').style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  function printPreview() { window.print(); }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && document.getElementById('reportPreview').style.display === 'flex') {
+      closePreview();
+    }
+  });
 </script>
 
 </body>
