@@ -616,6 +616,13 @@
   .pr-doc .pr-log tr { page-break-inside: avoid; break-inside: avoid; }
   .pr-doc .pr-fail { color: #b54747; font-weight: bold; }
 
+  /* The checklist owns its sheet: nothing above it, nothing after it. */
+  .pr-doc .pr-checklist-sheet {
+    page-break-before: always; break-before: page;
+    page-break-after: always;  break-after: page;
+  }
+  .pr-doc .pr-checklist-sheet h2 { margin-top: 0; }
+
   /* Two-column checklist */
   .pr-doc .pr-cl-cols { column-count: 2; column-gap: 8mm; margin-bottom: 8px; }
   .pr-doc .pr-cl-group { break-inside: avoid-column; }
@@ -626,10 +633,29 @@
   .pr-doc .pr-cl-group:first-child .pr-cl-cat { margin-top: 0; }
   .pr-doc .pr-cl-item { break-inside: avoid; padding: 2.5px 6px; border-bottom: 1px solid #f0f0ee; }
   .pr-doc .pr-cl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  /* An unbroken string (a long serial, a pasted URL) would otherwise run out
+     of its column rather than wrapping. */
+  .pr-doc .pr-cl-text, .pr-doc .pr-cl-note { overflow-wrap: anywhere; word-break: break-word; }
   .pr-doc .pr-cl-text { font-size: 9.5px; line-height: 1.35; }
   .pr-doc .pr-cl-item.is-no .pr-cl-text { color: #b54747; font-weight: bold; }
   .pr-doc .pr-cl-item .pill { flex: 0 0 auto; font-size: 8.5px; padding: 1px 6px; }
-  .pr-doc .pr-cl-note { font-size: 8.5px; color: #b54747; margin-top: 2px; padding-left: 2px; }
+  /* Pending actions box — outlined in red at the top of the checklist sheet. */
+  .pr-doc .pr-pending {
+    border: 1.5px solid #b54747; border-radius: 6px; padding: 8px 10px; margin: 0 0 10px;
+    break-inside: avoid;
+  }
+  .pr-doc .pr-pending-head {
+    font-size: 10px; font-weight: bold; color: #b54747; text-transform: uppercase;
+    letter-spacing: .04em; margin-bottom: 5px;
+  }
+  .pr-doc .pr-pending-row {
+    display: grid; grid-template-columns: 1.5fr 1fr 1.6fr; gap: 10px;
+    font-size: 9.5px; padding: 3px 0; border-top: 1px solid #f0e2e2; align-items: baseline;
+  }
+  .pr-doc .pr-pending-row:first-of-type { border-top: none; }
+  .pr-doc .pr-pending-what { font-weight: bold; overflow-wrap: anywhere; }
+  .pr-doc .pr-pending-cat { color: #777; }
+  .pr-doc .pr-pending-note { color: #444; overflow-wrap: anywhere; }
   /* ── One-page summary (page 1 of the report) ── */
   .pr-doc .pr-summary { padding-top: 2px; }
   .pr-doc .pr-sum-banner {
@@ -3372,15 +3398,41 @@
         var pill = v === 'yes' ? '<span class="pill pill-yes">Yes</span>'
           : v === 'no' ? '<span class="pill pill-no">No</span>'
           : '<span class="pill pill-na">Not answered</span>';
-        var note = (v === 'no' && checklistNotes[ci + '-' + ii])
-          ? '<div class="pr-cl-note">' + escapeHtml_(checklistNotes[ci + '-' + ii]) + '</div>' : '';
+        // Notes are collected into the pending-actions box at the top of the
+        // sheet rather than printed under each item — they are rare, and
+        // inline they pushed the list past a double-sided A4.
         return '<div class="pr-cl-item' + (v === 'no' ? ' is-no' : '') + '">' +
                  '<div class="pr-cl-row"><span class="pr-cl-text">' + escapeHtml_(t) + '</span>' + pill + '</div>' +
-                 note +
                '</div>';
       }).join('');
       return '<div class="pr-cl-group">' + head + items + '</div>';
     }).join('');
+
+    /* Everything marked No, gathered into one outlined box at the top of the
+       checklist sheet. Flagged items are rare, so this keeps the list itself
+       to clean one-line rows while putting the things that need doing where
+       they get seen first. */
+    var pendingItems = [];
+    CHECKLIST.forEach(function (cat, ci) {
+      cat.items.forEach(function (t, ii) {
+        if (checklistState[ci + '-' + ii] !== 'no') return;
+        pendingItems.push({ what: t, cat: cat.cat, note: checklistNotes[ci + '-' + ii] || '' });
+      });
+    });
+    var pendingBlock = pendingItems.length
+      ? '<div class="pr-pending">' +
+          '<div class="pr-pending-head">Pending actions &mdash; ' + pendingItems.length +
+            ' item' + (pendingItems.length === 1 ? '' : 's') + ' marked No</div>' +
+          pendingItems.map(function (p) {
+            return '<div class="pr-pending-row">' +
+                     '<span class="pr-pending-what">' + escapeHtml_(p.what) + '</span>' +
+                     '<span class="pr-pending-cat">' + escapeHtml_(p.cat) + '</span>' +
+                     (p.note ? '<span class="pr-pending-note">' + escapeHtml_(p.note) + '</span>'
+                             : '<span class="pr-pending-note pr-na">No action noted</span>') +
+                   '</div>';
+          }).join('') +
+        '</div>'
+      : '';
 
     // Calibration
     var calList = [];
@@ -3671,13 +3723,19 @@
 
       logBlock +
 
-      '<h2>VTS site assessment checklist</h2>' +
-      '<div class="pr-kpis">' +
-        '<div class="pr-kpi"><div class="pr-kpi-label">Complete</div><div class="pr-kpi-value">' + pct + '%</div><div class="pr-kpi-sub">' + done + ' of ' + total + ' answered</div></div>' +
-        '<div class="pr-kpi"><div class="pr-kpi-label">Flagged for action</div><div class="pr-kpi-value">' + flagged + '</div><div class="pr-kpi-sub">items marked No</div></div>' +
-        '<div class="pr-kpi"><div class="pr-kpi-label">QC evidence</div><div class="pr-kpi-value">' + qcEvidencePages.length + '</div><div class="pr-kpi-sub">pages attached</div></div>' +
+      /* The checklist gets its own sheet — a page break before and after — so
+         it prints as a self-contained double-sided A4 that can be pulled out,
+         signed and filed without carrying half of another section with it. */
+      '<div class="pr-checklist-sheet">' +
+        '<h2>VTS site assessment checklist</h2>' +
+        '<div class="pr-kpis">' +
+          '<div class="pr-kpi"><div class="pr-kpi-label">Complete</div><div class="pr-kpi-value">' + pct + '%</div><div class="pr-kpi-sub">' + done + ' of ' + total + ' answered</div></div>' +
+          '<div class="pr-kpi"><div class="pr-kpi-label">Flagged for action</div><div class="pr-kpi-value">' + flagged + '</div><div class="pr-kpi-sub">items marked No</div></div>' +
+          '<div class="pr-kpi"><div class="pr-kpi-label">QC evidence</div><div class="pr-kpi-value">' + qcEvidencePages.length + '</div><div class="pr-kpi-sub">pages attached</div></div>' +
+        '</div>' +
+        pendingBlock +
+        '<div class="pr-cl-cols">' + checklistRows + '</div>' +
       '</div>' +
-      '<div class="pr-cl-cols">' + checklistRows + '</div>' +
 
       '<h2>Equipment &amp; calibration</h2>' +
       '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
