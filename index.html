@@ -189,6 +189,19 @@
   .chart-legend-list .lg-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
   @media (max-width: 560px) { .donut-row { justify-content: center; } }
 
+  /* Horizontal bar rows — shared by the dashboard and the printed report. */
+  .bar-rows { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: grid; grid-template-columns: 96px 1fr 62px; gap: 10px; align-items: center; font-size: 12px; }
+  .bar-label { color: var(--text-secondary, #666); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar-track { position: relative; height: 14px; background: var(--surface-subtle, #f4f4f2); border-radius: 3px; overflow: hidden; }
+  .bar-fill { display: block; height: 100%; background: #c9a227; border-radius: 3px; }
+  .bar-fill.is-quick { background: #d08b1f; }
+  .bar-fill.is-thin { opacity: .38; }
+  .bar-marker { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #6b6b66; }
+  .bar-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text, #1a1a1a); }
+  .bar-value small { font-weight: 400; color: var(--text-tertiary, #999); }
+  .bar-note { font-size: 11px; color: var(--text-tertiary, #999); margin-top: 8px; line-height: 1.4; }
+
   .sync-status { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
   @media (max-width: 900px) { .sync-status { display: none; } }
   .badge.success { background: var(--success-bg); color: var(--success); }
@@ -704,6 +717,14 @@
   .pr-doc .pr-chart { flex: 1; border: 1px solid #e2e2df; border-radius: 8px; padding: 10px 12px; }
   .pr-doc .pr-chart-title { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #777; margin-bottom: 6px; }
   .pr-doc .pr-chart-row { display: flex; align-items: center; gap: 12px; }
+  /* Bar rows, tightened for print. */
+  .pr-doc .bar-row { grid-template-columns: 74px 1fr 52px; gap: 7px; font-size: 9px; }
+  .pr-doc .bar-rows { gap: 4px; }
+  .pr-doc .bar-track { height: 10px; background: #f4f4f2; }
+  .pr-doc .bar-label { color: #666; }
+  .pr-doc .bar-value { color: #1a1a1a; }
+  .pr-doc .bar-value small { color: #999; }
+  .pr-doc .bar-note { font-size: 8.5px; color: #777; margin-top: 5px; }
   .pr-doc .chart-legend-list { list-style: none; margin: 0; padding: 0; flex: 1; }
   .pr-doc .chart-legend-list li { display: flex; align-items: center; gap: 6px; font-size: 10px; padding: 1.5px 0; }
   .pr-doc .chart-legend-list .lg-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
@@ -901,6 +922,18 @@
               <div class="donut" id="testerDonut"></div>
               <div class="donut-legend" id="testerLegend"></div>
             </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:14px">
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">How long tests took</span></div>
+            <div id="durationBars"></div>
+            <div class="panel-note" id="durationNote"></div>
+          </div>
+          <div class="card panel">
+            <div class="panel-head"><span class="panel-title">Failure rate by tester</span></div>
+            <div id="testerFailBars"></div>
           </div>
         </div>
       </div>
@@ -1752,21 +1785,53 @@
     if (!tests.length) return { error: 'No test rows found in that file.' };
 
     var out = { tests: tests, total: tests.length, passed: 0, failed: 0, other: 0,
-                retests: 0, byTester: {}, byDay: {}, durations: [] };
+                retests: 0, byTester: {}, testerStats: {}, byDay: {}, durations: [] };
     tests.forEach(function (t) {
       if (t.result === 'PASSED') out.passed++;
       else if (t.result === 'FAILED') out.failed++;
       else out.other++;
       if (/re-?test/i.test(t.type)) out.retests++;
-      if (t.tester) out.byTester[t.tester] = (out.byTester[t.tester] || 0) + 1;
+      if (t.tester) {
+        out.byTester[t.tester] = (out.byTester[t.tester] || 0) + 1;
+        // Per-tester pass/fail: DVSA's risk model looks for outlier testers,
+        // not just outlier sites, so the split per person is the useful view.
+        var s = out.testerStats[t.tester] || (out.testerStats[t.tester] = { tests: 0, failed: 0 });
+        s.tests++;
+        if (t.result === 'FAILED') s.failed++;
+      }
       if (t.day) out.byDay[t.day] = (out.byDay[t.day] || 0) + 1;
       if (typeof t.minutes === 'number' && t.minutes > 0) out.durations.push(t.minutes);
     });
     out.durations.sort(function (a, b) { return a - b; });
-    out.medianMinutes = out.durations.length
-      ? out.durations[Math.floor(out.durations.length / 2)] : null;
-    // DVSA look closely at tests completed unusually quickly.
-    out.under30 = out.durations.filter(function (m) { return m < 30; }).length;
+
+    /* Test duration only means something for INITIAL tests. A re-test rechecks
+       just the items that failed, so a few minutes is normal and counting those
+       as "unusually quick" invents a problem that isn't there. Rows recording
+       under a minute are not real durations either — they are logged entries
+       with no time captured — so they are reported separately rather than
+       dragging the figures down. */
+    var initial = tests.filter(function (t) { return !/re-?test/i.test(t.type); });
+    var timed = initial
+      .filter(function (t) { return typeof t.minutes === 'number' && t.minutes >= 1; })
+      .map(function (t) { return t.minutes; })
+      .sort(function (a, b) { return a - b; });
+
+    out.initialTests = initial.length;
+    out.timedInitial = timed.length;
+    out.noDuration = tests.filter(function (t) {
+      return typeof t.minutes !== 'number' || t.minutes < 1;
+    }).length;
+    out.medianMinutes = timed.length ? timed[Math.floor(timed.length / 2)] : null;
+    out.shortestMinutes = timed.length ? timed[0] : null;
+    // Unusually quick INITIAL tests are the thing DVSA actually look at.
+    out.under30 = timed.filter(function (m) { return m < 30; }).length;
+
+    var BANDS = [[0,30,'Under 30 min'],[30,40,'30–39 min'],[40,50,'40–49 min'],
+                 [50,60,'50–59 min'],[60,1e9,'60 min +']];
+    out.durationBands = BANDS.map(function (b) {
+      return { label: b[2], from: b[0],
+               count: timed.filter(function (m) { return m >= b[0] && m < b[1]; }).length };
+    });
     return out;
   }
 
@@ -1831,6 +1896,67 @@
       });
   }
 
+  /* Horizontal bars as plain markup — prints identically to screen, no library.
+     The under-30-minute band is drawn in amber because that is the range DVSA
+     treat as worth a second look. */
+  function durationBarsHTML_(d) {
+    var bands = d.durationBands || [];
+    var max = bands.reduce(function (m, b) { return Math.max(m, b.count); }, 0) || 1;
+    return '<div class="bar-rows">' + bands.map(function (b) {
+      var pct = b.count / max * 100;
+      return '<div class="bar-row">' +
+        '<span class="bar-label">' + escapeHtml_(b.label) + '</span>' +
+        '<span class="bar-track"><span class="bar-fill' + (b.from < 30 ? ' is-quick' : '') +
+          '" style="width:' + pct.toFixed(1) + '%"></span></span>' +
+        '<span class="bar-value">' + b.count + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  /* Failure rate per tester against the site average — the comparison DVSA's
+     outlier detection is actually built on. */
+  function testerFailureHTML_(d) {
+    var stats = d.testerStats || {};
+    var siteRate = d.total ? d.failed / d.total * 100 : 0;
+    var names = (TEST_QUALITY && TEST_QUALITY.testers) ? TEST_QUALITY.testers : [];
+    var rows = Object.keys(stats)
+      .sort(function (a, b) { return stats[b].tests - stats[a].tests; })
+      .map(function (id) {
+        var s = stats[id];
+        var rate = s.tests ? s.failed / s.tests * 100 : 0;
+        var match = names.filter(function (t) { return t.id === id; })[0];
+        var label = (match && match.name) ? match.name : id;
+        // Too few tests to read anything into the percentage.
+        var thin = s.tests < 10;
+        return '<div class="bar-row">' +
+          '<span class="bar-label">' + escapeHtml_(label) + '</span>' +
+          '<span class="bar-track"><span class="bar-fill' + (thin ? ' is-thin' : '') +
+            '" style="width:' + Math.min(100, rate).toFixed(1) + '%"></span>' +
+            '<span class="bar-marker" style="left:' + Math.min(100, siteRate).toFixed(1) + '%"></span>' +
+          '</span>' +
+          '<span class="bar-value">' + rate.toFixed(0) + '%<small> · ' + s.tests + '</small></span></div>';
+      }).join('');
+    return '<div class="bar-rows">' + rows + '</div>' +
+      '<div class="bar-note">Bar is that tester&rsquo;s failure rate; the line marks the site average of ' +
+      siteRate.toFixed(0) + '%. Faded bars did fewer than 10 tests, so the percentage means little.</div>';
+  }
+
+  /* One sentence saying what the duration spread actually means, so a clean
+     profile reads as clean rather than leaving Paul to interpret bars. */
+  function durationVerdict_(d) {
+    if (!d.timedInitial) return 'No initial tests with a recorded duration this month.';
+    var parts = [];
+    parts.push(d.timedInitial + ' initial test' + (d.timedInitial === 1 ? '' : 's') +
+      ', shortest ' + Math.round(d.shortestMinutes) + ' min, median ' + Math.round(d.medianMinutes) + ' min.');
+    parts.push(d.under30
+      ? d.under30 + ' under 30 minutes — DVSA treat unusually quick tests as worth a closer look.'
+      : 'None under 30 minutes, which is the position DVSA expect to see.');
+    if (d.noDuration) {
+      parts.push(d.noDuration + ' row' + (d.noDuration === 1 ? '' : 's') +
+        ' in the log carry no recorded duration and are left out of these figures.');
+    }
+    return parts.join(' ');
+  }
+
   function renderTestLogCharts_() {
     var wrap = document.getElementById('testLogSection');
     if (!wrap) return;
@@ -1847,9 +1973,13 @@
     setHTML_('testerLegend', legendHTML_(ts));
 
     setText('testLogNote',
-      d.retests + ' re-test' + (d.retests === 1 ? '' : 's') +
-      (d.medianMinutes ? ' · median test ' + Math.round(d.medianMinutes) + ' min' : '') +
-      (d.under30 ? ' · ' + d.under30 + ' under 30 min' : ''));
+      d.initialTests + ' initial test' + (d.initialTests === 1 ? '' : 's') +
+      ' · ' + d.retests + ' re-test' + (d.retests === 1 ? '' : 's') +
+      (d.medianMinutes ? ' · median ' + Math.round(d.medianMinutes) + ' min' : ''));
+
+    setHTML_('durationBars', durationBarsHTML_(d));
+    setText('durationNote', durationVerdict_(d));
+    setHTML_('testerFailBars', testerFailureHTML_(d));
   }
 
   function applyTestLogFile_(inputId, result) {
@@ -1872,7 +2002,10 @@
     store.testLog[currentMonth] = {
       total: parsed.total, passed: parsed.passed, failed: parsed.failed,
       other: parsed.other, retests: parsed.retests, byTester: parsed.byTester,
-      byDay: parsed.byDay, medianMinutes: parsed.medianMinutes, under30: parsed.under30
+      byDay: parsed.byDay, medianMinutes: parsed.medianMinutes, under30: parsed.under30,
+      initialTests: parsed.initialTests, timedInitial: parsed.timedInitial,
+      noDuration: parsed.noDuration, shortestMinutes: parsed.shortestMinutes,
+      durationBands: parsed.durationBands, testerStats: parsed.testerStats
     };
     saveStore();
     renderTestLogCharts_();
@@ -3637,8 +3770,8 @@
       var oc = outcomeSlices_(d2), ts = testerSlices_(d2);
       var facts = [];
       facts.push(d2.retests + ' re-test' + (d2.retests === 1 ? '' : 's'));
-      if (d2.medianMinutes) facts.push('median test ' + Math.round(d2.medianMinutes) + ' min');
-      if (d2.under30) facts.push(d2.under30 + ' completed in under 30 min');
+      if (d2.initialTests != null) facts.push(d2.initialTests + ' initial tests');
+      if (d2.medianMinutes) facts.push('median initial test ' + Math.round(d2.medianMinutes) + ' min');
       logBlock =
         '<h2>This month&rsquo;s tests</h2>' +
         '<div class="pr-charts">' +
@@ -3648,6 +3781,14 @@
           '<div class="pr-chart"><div class="pr-chart-title">Tests by tester</div>' +
             '<div class="pr-chart-row">' + donutSVG_(ts, ts.length, ts.length === 1 ? 'tester' : 'testers', 130) +
             legendHTML_(ts) + '</div></div>' +
+        '</div>' +
+        '<div class="pr-charts">' +
+          '<div class="pr-chart"><div class="pr-chart-title">How long tests took</div>' +
+            durationBarsHTML_(d2) +
+            '<div class="pr-note" style="margin:6px 0 0">' + escapeHtml_(durationVerdict_(d2)) +
+            '</div></div>' +
+          '<div class="pr-chart"><div class="pr-chart-title">Failure rate by tester</div>' +
+            testerFailureHTML_(d2) + '</div>' +
         '</div>' +
         '<div class="pr-note">' + escapeHtml_(facts.join(' · ')) + '</div>';
     }
