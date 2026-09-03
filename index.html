@@ -607,6 +607,14 @@
   .pr-doc .col-status { width: 104px; }
   .pr-doc .col-note { width: 32%; color: #444; }
   .pr-doc .pr-note { font-size: 10px; color: #666; margin: 4px 0 10px; }
+  /* Reproduced export tables: many rows, so tighten them and repeat the header
+     on every printed page. */
+  .pr-doc .pr-log { font-size: 9px; }
+  .pr-doc .pr-log th { font-size: 8px; }
+  .pr-doc .pr-log td { padding: 3px 6px; white-space: nowrap; }
+  .pr-doc .pr-log thead { display: table-header-group; }
+  .pr-doc .pr-log tr { page-break-inside: avoid; break-inside: avoid; }
+  .pr-doc .pr-fail { color: #b54747; font-weight: bold; }
   /* ── One-page summary (page 1 of the report) ── */
   .pr-doc .pr-summary { padding-top: 2px; }
   .pr-doc .pr-sum-banner {
@@ -1528,6 +1536,7 @@
     parsedFileData = {};
     qcEvidencePages = [];
     qcSortResults = [];
+    TEST_LOGS = {};
 
     DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
     renderFileList('fileQcScans', 'listQcScans', null);
@@ -1656,6 +1665,8 @@
      type and duration — so they now drive the outcome and workload charts.
      Both exports hold the same rows in a different order, so either will do. */
   var TEST_LOG = null;
+  // inputId -> full parse, so each uploaded export can be reproduced in the report
+  var TEST_LOGS = {};
 
   function parseTestLog_(rows) {
     if (!rows || rows.length < 2) return { error: 'That file has no rows in it.' };
@@ -1808,6 +1819,11 @@
     if (parsed.error) return { ok: false, text: parsed.error };
 
     TEST_LOG = parsed;
+    // Held separately per export so the printed report can reproduce BOTH the
+    // by-date and by-duration logs. TEST_LOG alone only ever held whichever
+    // was uploaded last, so one of the two could never be printed.
+    TEST_LOGS[inputId] = parsed;
+
     // Keep only the aggregates. 244 raw test rows would blow the 9KB-per-value
     // limit on Script Properties, and nothing on screen or in the report needs
     // the individual rows once the totals are worked out.
@@ -3290,13 +3306,42 @@
     });
     var pct = total ? Math.round(done / total * 100) : 0;
 
-    // DVSA files attached this session
+    /* "Attached" used to mean only "this file was uploaded", while nothing of
+       it reached the print-out. Each row now says where in this document the
+       content actually appears, so the table can be trusted. */
     var dvsaRows = DVSA_REPORT_FILES.map(function (d) {
       var f = pickedFiles[d.input][0];
+      if (!f) {
+        return '<tr><td>' + escapeHtml_(d.label) + '</td>' +
+               '<td><span class="pill pill-warn">Not supplied</span></td>' +
+               '<td class="pr-na">—</td><td class="pr-na">—</td></tr>';
+      }
+      var where = d.input === 'fileRating'
+        ? 'Figures in "DVSA performance"'
+        : (TEST_LOGS[d.input] ? 'Reproduced in full at the back' : 'Could not be read');
+      var pill = (d.input === 'fileRating' || TEST_LOGS[d.input]) ? 'pill-yes' : 'pill-warn';
       return '<tr><td>' + escapeHtml_(d.label) + '</td>' +
-        (f ? '<td><span class="pill pill-yes">Attached</span></td><td>' + escapeHtml_(f.name) + '</td>'
-           : '<td><span class="pill pill-warn">Not attached</span></td><td class="pr-na">—</td>') + '</tr>';
+             '<td><span class="pill ' + pill + '">Included</span></td>' +
+             '<td>' + escapeHtml_(f.name) + '</td>' +
+             '<td>' + escapeHtml_(where) + '</td></tr>';
     }).join('');
+
+    // The scanned QC paperwork belongs in this table too — it is the bulk of
+    // the evidence and was never listed.
+    var qcFile = pickedFiles.fileQcScans[0];
+    if (qcFile || qcEvidencePages.length) {
+      dvsaRows += '<tr><td>QC paperwork scans</td>' +
+        '<td><span class="pill ' + (qcEvidencePages.length ? 'pill-yes' : 'pill-warn') + '">' +
+          (qcEvidencePages.length ? 'Included' : 'Not read') + '</span></td>' +
+        '<td>' + escapeHtml_(qcFile ? qcFile.name : '—') + '</td>' +
+        '<td>' + (qcEvidencePages.length
+          ? qcEvidencePages.length + ' page' + (qcEvidencePages.length === 1 ? '' : 's') + ' reproduced at the back'
+          : '<span class="pr-na">—</span>') + '</td></tr>';
+    } else {
+      dvsaRows += '<tr><td>QC paperwork scans</td>' +
+        '<td><span class="pill pill-warn">Not supplied</span></td>' +
+        '<td class="pr-na">—</td><td class="pr-na">—</td></tr>';
+    }
     var qc = pickedFiles.fileQcScans.length;
 
     // Checklist detail
@@ -3531,6 +3576,39 @@
         '<div class="pr-note">' + escapeHtml_(facts.join(' · ')) + '</div>';
     }
 
+    /* Reproduce the DVSA exports themselves. Listing them as "attached" while
+       printing none of their content meant the report referred to evidence it
+       did not contain — no use to anyone reading the paper copy. Excel can't be
+       embedded in a print-out, so each export is re-rendered as a table: the
+       same rows, in a form that actually prints. */
+    function logAppendix_(inputId, title) {
+      var log = TEST_LOGS[inputId];
+      var file = pickedFiles[inputId][0];
+      if (!log || !log.tests || !log.tests.length) return '';
+      var rows = log.tests.map(function (t) {
+        return '<tr>' +
+          '<td>' + escapeHtml_(t.day || '—') + '</td>' +
+          '<td>' + escapeHtml_(t.reg || '—') + '</td>' +
+          '<td>' + escapeHtml_(t.make || '—') + '</td>' +
+          '<td>' + escapeHtml_(t.tester || '—') + '</td>' +
+          '<td>' + escapeHtml_(t.type || '—') + '</td>' +
+          '<td class="' + (t.result === 'FAILED' ? 'pr-fail' : '') + '">' + escapeHtml_(t.result || '—') + '</td>' +
+          '<td>' + (typeof t.minutes === 'number' ? Math.round(t.minutes) + ' min' : '—') + '</td>' +
+        '</tr>';
+      }).join('');
+      return '<div class="pr-pagebreak"></div>' +
+        '<h2>' + escapeHtml_(title) + '</h2>' +
+        '<div class="pr-note">Reproduced in full from ' +
+          escapeHtml_(file ? file.name : 'the uploaded export') + ' &mdash; ' +
+          log.tests.length + ' test' + (log.tests.length === 1 ? '' : 's') + '.</div>' +
+        '<table class="pr-log"><thead><tr><th>Date</th><th>Registration</th><th>Make</th>' +
+        '<th>Tester</th><th>Type</th><th>Result</th><th>Duration</th></tr></thead><tbody>' +
+        rows + '</tbody></table>';
+    }
+
+    var exportsBlock = logAppendix_('fileLogDate', 'Appendix — test log by date') +
+                       logAppendix_('fileLogDuration', 'Appendix — test log by duration');
+
     // QC evidence — the scanned pages themselves, appended at the back.
     var evidenceBlock = '';
     if (qcEvidencePages.length) {
@@ -3569,7 +3647,7 @@
 
       logBlock +
 
-      '<h2>Self-assessment checklist</h2>' +
+      '<h2>VTS site assessment checklist</h2>' +
       '<div class="pr-kpis">' +
         '<div class="pr-kpi"><div class="pr-kpi-label">Complete</div><div class="pr-kpi-value">' + pct + '%</div><div class="pr-kpi-sub">' + done + ' of ' + total + ' answered</div></div>' +
         '<div class="pr-kpi"><div class="pr-kpi-label">Flagged for action</div><div class="pr-kpi-value">' + flagged + '</div><div class="pr-kpi-sub">items marked No</div></div>' +
@@ -3581,9 +3659,12 @@
       '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
 
       '<h2>Files attached</h2>' +
-      '<table><thead><tr><th>Export</th><th>Status</th><th>File</th></tr></thead><tbody>' + dvsaRows + '</tbody></table>' +
+      '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
+        dvsaRows + '</tbody></table>' +
 
       '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>' +
+
+      exportsBlock +
       evidenceBlock;
   }
 
