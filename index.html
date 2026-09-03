@@ -615,6 +615,21 @@
   .pr-doc .pr-log thead { display: table-header-group; }
   .pr-doc .pr-log tr { page-break-inside: avoid; break-inside: avoid; }
   .pr-doc .pr-fail { color: #b54747; font-weight: bold; }
+
+  /* Two-column checklist */
+  .pr-doc .pr-cl-cols { column-count: 2; column-gap: 8mm; margin-bottom: 8px; }
+  .pr-doc .pr-cl-group { break-inside: avoid-column; }
+  .pr-doc .pr-cl-cat {
+    font-size: 9.5px; font-weight: bold; background: #f2f2f0; padding: 3px 6px;
+    border-radius: 3px; margin: 7px 0 3px; break-after: avoid;
+  }
+  .pr-doc .pr-cl-group:first-child .pr-cl-cat { margin-top: 0; }
+  .pr-doc .pr-cl-item { break-inside: avoid; padding: 2.5px 6px; border-bottom: 1px solid #f0f0ee; }
+  .pr-doc .pr-cl-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .pr-doc .pr-cl-text { font-size: 9.5px; line-height: 1.35; }
+  .pr-doc .pr-cl-item.is-no .pr-cl-text { color: #b54747; font-weight: bold; }
+  .pr-doc .pr-cl-item .pill { flex: 0 0 auto; font-size: 8.5px; padding: 1px 6px; }
+  .pr-doc .pr-cl-note { font-size: 8.5px; color: #b54747; margin-top: 2px; padding-left: 2px; }
   /* ── One-page summary (page 1 of the report) ── */
   .pr-doc .pr-summary { padding-top: 2px; }
   .pr-doc .pr-sum-banner {
@@ -3345,17 +3360,26 @@
     var qc = pickedFiles.fileQcScans.length;
 
     // Checklist detail
+    /* Laid out in two columns rather than one long table. 22 sections and 61
+       items down a single column ran to several sheets; flowing them side by
+       side roughly halves it. Blocks rather than table rows, because a table
+       cannot be split across columns — each item is kept whole with
+       break-inside so nothing is cut in half at a column or page edge. */
     var checklistRows = CHECKLIST.map(function (cat, ci) {
-      var head = '<tr class="pr-cat"><td colspan="3">' + escapeHtml_(cat.cat) + '</td></tr>';
+      var head = '<div class="pr-cl-cat">' + escapeHtml_(cat.cat) + '</div>';
       var items = cat.items.map(function (t, ii) {
         var v = checklistState[ci + '-' + ii];
-        var statusCell = v === 'yes' ? '<td class="col-status"><span class="pill pill-yes">Yes</span></td>'
-          : v === 'no' ? '<td class="col-status"><span class="pill pill-no">No</span></td>'
-          : '<td class="col-status"><span class="pill pill-na">Not answered</span></td>';
-        var note = (v === 'no' && checklistNotes[ci + '-' + ii]) ? escapeHtml_(checklistNotes[ci + '-' + ii]) : '';
-        return '<tr><td>' + escapeHtml_(t) + '</td>' + statusCell + '<td class="col-note">' + note + '</td></tr>';
+        var pill = v === 'yes' ? '<span class="pill pill-yes">Yes</span>'
+          : v === 'no' ? '<span class="pill pill-no">No</span>'
+          : '<span class="pill pill-na">Not answered</span>';
+        var note = (v === 'no' && checklistNotes[ci + '-' + ii])
+          ? '<div class="pr-cl-note">' + escapeHtml_(checklistNotes[ci + '-' + ii]) + '</div>' : '';
+        return '<div class="pr-cl-item' + (v === 'no' ? ' is-no' : '') + '">' +
+                 '<div class="pr-cl-row"><span class="pr-cl-text">' + escapeHtml_(t) + '</span>' + pill + '</div>' +
+                 note +
+               '</div>';
       }).join('');
-      return head + items;
+      return '<div class="pr-cl-group">' + head + items + '</div>';
     }).join('');
 
     // Calibration
@@ -3653,7 +3677,7 @@
         '<div class="pr-kpi"><div class="pr-kpi-label">Flagged for action</div><div class="pr-kpi-value">' + flagged + '</div><div class="pr-kpi-sub">items marked No</div></div>' +
         '<div class="pr-kpi"><div class="pr-kpi-label">QC evidence</div><div class="pr-kpi-value">' + qcEvidencePages.length + '</div><div class="pr-kpi-sub">pages attached</div></div>' +
       '</div>' +
-      '<table><thead><tr><th>Item</th><th class="col-status">Result</th><th class="col-note">Action required</th></tr></thead><tbody>' + checklistRows + '</tbody></table>' +
+      '<div class="pr-cl-cols">' + checklistRows + '</div>' +
 
       '<h2>Equipment &amp; calibration</h2>' +
       '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
