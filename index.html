@@ -202,6 +202,41 @@
   .bar-value small { font-weight: 400; color: var(--text-tertiary, #999); }
   .bar-note { font-size: 11px; color: var(--text-tertiary, #999); margin-top: 8px; line-height: 1.4; }
 
+  /* Calibration certificate results */
+  .cert-card {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 10px 12px; margin-top: 8px; background: var(--surface);
+  }
+  .cert-card.is-other { background: var(--surface-subtle); }
+  .cert-head { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .cert-due { font-size: 12px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+  .cert-meta { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+  .cert-action { margin-top: 8px; }
+  .cert-flag { font-size: 12px; color: var(--warning); font-weight: 600; }
+  .cert-ok { font-size: 12px; color: var(--success); font-weight: 600; }
+
+  .blockers {
+    border: 1.5px solid var(--danger); border-radius: var(--radius-md);
+    background: var(--danger-bg); padding: 14px 16px; margin-bottom: 16px;
+  }
+  .blockers-head { font-size: 13px; font-weight: 700; color: var(--danger); margin-bottom: 8px; }
+  .blockers-list { list-style: none; margin: 0; padding: 0; }
+  .blockers-list li {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    font-size: 13px; padding: 6px 0; border-top: 1px solid rgba(181,71,71,.18);
+  }
+  .blockers-list li:first-child { border-top: none; }
+  .blockers-go {
+    background: none; border: 1px solid var(--danger); color: var(--danger);
+    font-family: inherit; font-size: 11px; font-weight: 700; padding: 3px 10px;
+    border-radius: var(--radius-sm); cursor: pointer; flex: 0 0 auto;
+  }
+  .blockers-go:hover { background: var(--danger); color: #fff; }
+
+  .empty-panel { padding: 26px 22px; text-align: center; }
+  .empty-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .empty-sub { font-size: 13px; color: var(--text-secondary); max-width: 460px; margin: 0 auto 14px; line-height: 1.5; }
+
   .sync-status { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
   @media (max-width: 900px) { .sync-status { display: none; } }
   .badge.success { background: var(--success-bg); color: var(--success); }
@@ -568,6 +603,7 @@
   .pr-doc .pr-station { font-size: 11px; color: #f0f0ee; margin-top: 3px; }
   .pr-doc .pr-meta { font-size: 11px; text-align: right; line-height: 1.7; color: #fff; }
   .pr-doc .pr-meta strong { font-size: 15px; display: block; }
+  .pr-doc .pr-generated { font-size: 9.5px; opacity: .8; }
 
   .pr-doc h2 {
     font-size: 13px; margin: 22px 0 10px; padding-bottom: 5px;
@@ -902,11 +938,18 @@
       </div>
 
       <!-- Test log breakdown — hidden until a test log is uploaded -->
-      <div class="section" id="testLogSection" style="display:none">
+      <div class="section" id="testLogSection">
         <div class="section-head">
           <h2>This month's tests</h2>
           <span class="section-desc">From the test log export — every test carried out</span>
         </div>
+        <div class="card panel empty-panel" id="testLogEmpty">
+          <div class="empty-title">Upload the test log to see these</div>
+          <div class="empty-sub">The outcome and tester charts, test durations and failure rates are all read
+            from the monthly test log export. Add it in the Monthly Report tab and they appear here.</div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('report')">Go to uploads</button>
+        </div>
+        <div id="testLogCharts">
         <div class="grid-2">
           <div class="card panel">
             <div class="panel-head"><span class="panel-title">Outcomes</span></div>
@@ -935,6 +978,7 @@
             <div class="panel-head"><span class="panel-title">Failure rate by tester</span></div>
             <div id="testerFailBars"></div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -1044,6 +1088,8 @@
         <button class="btn btn-primary" onclick="handleGenerate()">Generate Report</button>
       </div>
 
+      <div class="blockers" id="reportBlockers" style="display:none"></div>
+
       <div id="backendWarning" style="display:none;background:var(--warning-bg);color:var(--warning);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:16px"></div>
 
       <!-- DVSA data -->
@@ -1119,6 +1165,35 @@
           </div>
           <div class="qc-sort-status" id="qcSortStatus"></div>
           <div id="qcGroupsContainer"></div>
+        </div>
+      </div>
+
+      <!-- Calibration certificates -->
+      <div class="section">
+        <div class="section-head"><h2>Calibration certificates</h2><span class="section-desc">Upload certificates for the equipment calibrated this month</span></div>
+        <div class="card panel">
+          <label class="dropzone" for="fileCalCerts">
+            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <div class="dz-title">Drag certificates here, or click to browse</div>
+            <div class="dz-sub">Any order — each certificate is read and matched to the equipment list</div>
+            <input type="file" id="fileCalCerts" multiple accept=".pdf,image/*">
+          </label>
+          <div class="qc-count" id="calCertCount">0 pages uploaded</div>
+          <div class="file-list" id="listCalCerts"></div>
+          <details class="qc-how">
+            <summary>How it works</summary>
+            <p>Scan in the calibration certificates as they come back from the engineer. The system reads the equipment, serial number and next-due date off each one, matches it to the equipment list by serial number, and offers to update the due date for you. Every certificate is reproduced at the back of the monthly report as evidence.</p>
+          </details>
+          <button type="button" class="btn btn-secondary btn-sm" id="readCertsBtn" style="margin-top:14px" disabled onclick="runCertScan()">Read certificates</button>
+          <div class="sort-progress" id="calProgress">
+            <div class="sort-progress-bar" id="calProgressBar"><span></span></div>
+            <div class="sort-progress-label">
+              <span id="calProgressText">Preparing…</span>
+              <span class="spl-pct" id="calProgressPct"></span>
+            </div>
+          </div>
+          <div class="qc-sort-status" id="calCertStatus"></div>
+          <div id="calCertResults"></div>
         </div>
       </div>
     </section>
@@ -1556,6 +1631,43 @@
     currentMonth = document.getElementById('fMonth').value;
     persistMonth();
     clearUploadsOnMonthChange_();
+    showSelectedMonth_();
+  });
+
+  /* The month picker defaults to today's month, but the report is usually
+     put together after the month has ended — September's paperwork is done
+     in October. The DVSA exports say which month they cover, so when they
+     disagree with the picker this moves everything over to the files' month.
+     Unlike changing the picker by hand, the uploads are KEPT: they are the
+     right files, it was the picker that was wrong. */
+  function switchToDataMonth_() {
+    var target = dataMonth_();
+    if (!target || target === currentMonth) return;
+    var from = currentMonth;
+
+    // The test-log figures were filed under the picker's month on upload.
+    if (store.testLog && store.testLog[from] && Object.keys(TEST_LOGS).length) {
+      store.testLog[target] = store.testLog[from];
+      delete store.testLog[from];
+    }
+
+    // Checklist answers given under the wrong month are carried across, but
+    // only into a month that has none of its own, and the original is left
+    // in place, so nothing already recorded can be overwritten or lost.
+    var existing = store.months[target];
+    var hasOwn = existing && existing.state && Object.keys(existing.state).length;
+    if (!hasOwn && Object.keys(checklistState).length) {
+      store.months[target] = { state: Object.assign({}, checklistState),
+                               notes: Object.assign({}, checklistNotes) };
+    }
+
+    currentMonth = target;
+    document.getElementById('fMonth').value = currentMonth;
+    persistMonth();
+    showSelectedMonth_();
+  }
+
+  function showSelectedMonth_() {
     loadChecklistForMonth(currentMonth);
     renderChecklist();
     updateProgress();
@@ -1568,7 +1680,41 @@
     renderStanding_();
     TEST_LOG = (store.testLog || {})[currentMonth] || null;
     renderTestLogCharts_();
-  });
+    refreshStatuses();
+  }
+
+  /* Which month the uploaded DVSA data actually covers, as "YYYY-MM", or
+     null when nothing real is loaded. The Test Quality export states its
+     period outright ("Sep-26"). Failing that, the test logs carry a date on
+     every test, so take the month most of them fall in. */
+  function dataMonth_() {
+    if (TEST_QUALITY && !TEST_QUALITY.isSample && TEST_QUALITY.period) {
+      var m = monthKeyToSort_(TEST_QUALITY.period);
+      if (/^\d{4}-\d{2}$/.test(m)) return m;
+    }
+    var counts = {};
+    Object.keys(TEST_LOGS).forEach(function (id) {
+      var byDay = TEST_LOGS[id].byDay || {};
+      Object.keys(byDay).forEach(function (day) {
+        var key = day.slice(0, 7);
+        counts[key] = (counts[key] || 0) + byDay[day];
+      });
+    });
+    var best = null;
+    Object.keys(counts).forEach(function (k) { if (!best || counts[k] > counts[best]) best = k; });
+    return best;
+  }
+
+  /* First and last test dates in the uploaded logs ("YYYY-MM-DD"), or null. */
+  function dataDayRange_() {
+    var days = [];
+    Object.keys(TEST_LOGS).forEach(function (id) {
+      days = days.concat(Object.keys(TEST_LOGS[id].byDay || {}));
+    });
+    if (!days.length) return null;
+    days.sort();
+    return { from: days[0], to: days[days.length - 1] };
+  }
 
   /* ═══════════════ File uploads ═══════════════ */
   // Single-file DVSA inputs + their status/badge elements, plus the multi QC input.
@@ -1579,7 +1725,7 @@
   ];
   var singleFileInputs = DVSA_INPUTS.map(function (d) { return d.input; });
 
-  var pickedFiles = { fileQcScans: [] };
+  var pickedFiles = { fileQcScans: [], fileCalCerts: [] };
   singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
 
   var ICON_UPLOADED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7d4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -1602,18 +1748,26 @@
      everything and say so, rather than silently carrying it over. */
   function clearUploadsOnMonthChange_() {
     var hadFiles = singleFileInputs.some(function (id) { return pickedFiles[id].length; }) ||
-                   pickedFiles.fileQcScans.length > 0;
+                   pickedFiles.fileQcScans.length > 0 || pickedFiles.fileCalCerts.length > 0;
     if (!hadFiles) return;
 
     singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
     pickedFiles.fileQcScans = [];
+    pickedFiles.fileCalCerts = [];
     parsedFileData = {};
     qcEvidencePages = [];
     qcSortResults = [];
+    certEvidencePages = [];
+    certResults = [];
     TEST_LOGS = {};
 
     DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
     renderFileList('fileQcScans', 'listQcScans', null);
+    renderFileList('fileCalCerts', 'listCalCerts', null);
+    var certResultsEl = document.getElementById('calCertResults');
+    if (certResultsEl) certResultsEl.innerHTML = '';
+    var certStatusEl = document.getElementById('calCertStatus');
+    if (certStatusEl) certStatusEl.innerHTML = '';
     var groups = document.getElementById('qcGroupsContainer');
     if (groups) groups.innerHTML = '';
     var sortBtn = document.getElementById('sortScansBtn');
@@ -1961,8 +2115,20 @@
     var wrap = document.getElementById('testLogSection');
     if (!wrap) return;
     var d = TEST_LOG;
-    if (!d || !d.total) { wrap.style.display = 'none'; return; }
+    var empty = document.getElementById('testLogEmpty');
+    var charts = document.getElementById('testLogCharts');
+
+    // Hiding this section when no test log was loaded made the charts look
+    // like they had disappeared. Say what's missing instead.
+    if (!d || !d.total) {
+      wrap.style.display = '';
+      if (empty) empty.style.display = '';
+      if (charts) charts.style.display = 'none';
+      return;
+    }
     wrap.style.display = '';
+    if (empty) empty.style.display = 'none';
+    if (charts) charts.style.display = '';
 
     var oc = outcomeSlices_(d);
     setHTML_('outcomeDonut', donutSVG_(oc, d.total, 'tests'));
@@ -2080,6 +2246,7 @@
       input.value = '';
       // The scan set has changed, so any pages already converted are stale.
       if (inputId === 'fileQcScans') qcEvidencePages = [];
+      if (inputId === 'fileCalCerts') { certEvidencePages = []; certResults = []; }
       renderFileList(inputId, listId, statusId);
       refreshStatuses();
 
@@ -2120,6 +2287,7 @@
       row.querySelector('button').addEventListener('click', function () {
         pickedFiles[inputId].splice(i, 1);
         if (inputId === 'fileQcScans') qcEvidencePages = [];
+        if (inputId === 'fileCalCerts') { certEvidencePages = []; certResults = []; }
         renderFileList(inputId, listId, statusId);
         refreshStatuses();
       });
@@ -2140,6 +2308,7 @@
 
   DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input, d.list, true, d.status); });
   wireFileInput('fileQcScans', 'listQcScans', false, null);
+  wireFileInput('fileCalCerts', 'listCalCerts', false, null);
   // Paint the initial "Required — not uploaded" state on each DVSA card.
   DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
 
@@ -2210,6 +2379,7 @@
 
   // The two big drop areas…
   makeDroppable_(document.querySelector('label[for="fileQcScans"]'), 'fileQcScans', 'listQcScans', false, null);
+  makeDroppable_(document.querySelector('label[for="fileCalCerts"]'), 'fileCalCerts', 'listCalCerts', false, null);
   // …and each DVSA card, so a file can be dropped straight onto the right one.
   DVSA_INPUTS.forEach(function (d) {
     var label = document.querySelector('label[for="' + d.input + '"]');
@@ -2388,6 +2558,11 @@
 
     var sortBtn = document.getElementById('sortScansBtn');
     if (sortBtn) sortBtn.disabled = qc === 0;
+
+    var certs = pickedFiles.fileCalCerts.length;
+    setText('calCertCount', certs + (certs === 1 ? ' page uploaded' : ' pages uploaded'));
+    var certBtn = document.getElementById('readCertsBtn');
+    if (certBtn) certBtn.disabled = certs === 0;
   }
 
   function refreshStatuses() {
@@ -2620,7 +2795,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 11;
+  var EXPECTED_BACKEND_VERSION = 12;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -2647,6 +2822,229 @@
   function hideBackendWarning_() {
     var el = document.getElementById('backendWarning');
     if (el) el.style.display = 'none';
+  }
+
+  /* ═══════════════ Calibration certificates ═══════════════
+     Same shape as the QC scan: every page becomes an image, each is read by
+     the backend, and the pages are kept for the report appendix. The extra
+     step here is matching each certificate to the equipment list by serial
+     number, so Paul can accept a new due date rather than retyping it. */
+  var certResults = [];
+  var certEvidencePages = [];
+
+  function runCertScan() {
+    var files = pickedFiles.fileCalCerts;
+    if (!files.length) return;
+
+    var statusEl = document.getElementById('calCertStatus');
+    var btn = document.getElementById('readCertsBtn');
+
+    if (!SCRIPT_URL) {
+      statusEl.innerHTML = '<span style="color:var(--warning)">Reading certificates needs the Apps Script backend deployed with an Anthropic API key — not connected yet.</span>';
+      return;
+    }
+    checkBackendVersion_();
+    if (typeof pdfjsLib === 'undefined') {
+      statusEl.innerHTML = '<span style="color:var(--danger)">PDF reader failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Reading…';
+    statusEl.textContent = '';
+    document.getElementById('calCertResults').innerHTML = '';
+    certResults = [];
+    certEvidencePages = [];
+
+    var progress = makeProgress('cal');
+    progress.start('Opening files…');
+
+    Promise.all(files.map(fileToPageImages_))
+      .then(function (nested) {
+        var allPages = [].concat.apply([], nested);
+        progress.set(0, allPages.length);
+        return runWithConcurrency_(allPages, function (pageImg) {
+          return analyzeCertOnServer_(pageImg).then(function (res) {
+            certResults.push({ label: pageImg.label, response: res });
+            var a = (res.status === 'success' && res.result) ? res.result : {};
+            certEvidencePages.push({
+              label: pageImg.label,
+              base64: pageImg.base64,
+              mimeType: pageImg.mimeType,
+              equipment: a.equipment_name || '',
+              makeModel: a.make_model || '',
+              serial: a.serial_number || '',
+              certNo: a.certificate_number || '',
+              calibratedOn: a.calibrated_on || '',
+              nextDue: a.next_due || '',
+              by: a.calibrated_by || '',
+              isCert: a.is_calibration_certificate !== false,
+              confidence: a.confidence || ''
+            });
+            var entry = certEvidencePages[certEvidencePages.length - 1];
+            var rot = [90, 180, 270].indexOf(a.rotation) > -1 ? a.rotation : 0;
+            if (rot) {
+              return rotateImageBase64_(entry.base64, entry.mimeType, rot)
+                .then(function (fixed) { if (fixed) entry.base64 = fixed; })
+                .catch(function () {});
+            }
+          });
+        }, function (done, total) { progress.set(done, total); });
+      })
+      .then(function () {
+        progress.finish();
+        certEvidencePages.sort(function (a, b) {
+          var ea = (a.equipment || 'zzz').toLowerCase(), eb = (b.equipment || 'zzz').toLowerCase();
+          return ea === eb ? (a.label < b.label ? -1 : 1) : (ea < eb ? -1 : 1);
+        });
+        renderCertResults_();
+        btn.disabled = false;
+        btn.textContent = 'Read certificates';
+      })
+      .catch(function (err) {
+        progress.fail();
+        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those certificates: ' +
+          escapeHtml_(err.message || 'unknown error') + '</span>';
+        btn.disabled = false;
+        btn.textContent = 'Read certificates';
+      });
+  }
+
+  function analyzeCertOnServer_(pageImg) {
+    if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
+    return fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'analyzeCalibrationCert', password: getPassword(),
+                             imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
+    }).then(function (r) { return r.json(); }).catch(function () {
+      return { status: 'error', message: 'Network error contacting the backend.' };
+    });
+  }
+
+  /* Serial numbers are the only reliable way to tie a certificate to a row in
+     the equipment list — names vary between the certificate and what Paul
+     typed. Compared loosely, since scans lose the odd space or dash. */
+  function loosenSerial_(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+
+  function findCalRowBySerial_(serial) {
+    var want = loosenSerial_(serial);
+    if (!want || want.length < 3) return null;
+    var found = null;
+    document.querySelectorAll('.cal-row').forEach(function (row) {
+      if (found) return;
+      if (loosenSerial_(row.querySelector('.calSerial').value) === want) found = row;
+    });
+    return found;
+  }
+
+  /* Certificates print their dates in all sorts of formats. Parse the common
+     UK ones; anything unrecognised is left for Paul to type rather than
+     guessed at, because a wrong calibration date is worse than a blank one. */
+  function parseCertDate_(txt) {
+    var s = String(txt || '').trim();
+    if (!s) return '';
+    var MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+    var m = /^(\d{1,2})[\/\-. ](\d{1,2})[\/\-. ](\d{2,4})$/.exec(s);
+    if (m) {
+      var yr = m[3].length === 2 ? '20' + m[3] : m[3];
+      return yr + '-' + String(m[2]).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+    }
+    m = /^(\d{1,2})[\s\-]*([A-Za-z]{3,})[\s\-]*(\d{2,4})$/.exec(s);
+    if (m) {
+      var mo = MONTHS[m[2].slice(0, 3).toLowerCase()];
+      if (!mo) return '';
+      var y2 = m[3].length === 2 ? '20' + m[3] : m[3];
+      return y2 + '-' + String(mo).padStart(2, '0') + '-' + String(m[1]).padStart(2, '0');
+    }
+    m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (m) return s;
+    return '';
+  }
+
+  function renderCertResults_() {
+    var statusEl = document.getElementById('calCertStatus');
+    var container = document.getElementById('calCertResults');
+    container.innerHTML = '';
+
+    var failed = certResults.filter(function (r) { return r.response.status !== 'success'; }).length;
+    var certs = certEvidencePages.filter(function (p) { return p.isCert; });
+
+    if (failed === certResults.length && certResults.length) {
+      statusEl.innerHTML = '<span style="color:var(--danger)">Could not read any of the ' + certResults.length +
+        ' page' + (certResults.length === 1 ? '' : 's') +
+        ' — the server could not be reached, or the read failed. Nothing has been recorded.</span>';
+      return;
+    }
+
+    statusEl.textContent = certs.length + ' certificate' + (certs.length === 1 ? '' : 's') +
+      ' read from ' + certResults.length + ' page' + (certResults.length === 1 ? '' : 's') +
+      (failed ? ' · ' + failed + ' could not be read' : '');
+
+    certEvidencePages.forEach(function (p, idx) {
+      var row = document.createElement('div');
+      row.className = 'cert-card' + (p.isCert ? '' : ' is-other');
+      var matchRow = p.serial ? findCalRowBySerial_(p.serial) : null;
+      var parsedDue = parseCertDate_(p.nextDue);
+
+      var bits = [];
+      if (p.makeModel) bits.push(escapeHtml_(p.makeModel));
+      if (p.serial) bits.push('Serial ' + escapeHtml_(p.serial));
+      if (p.certNo) bits.push('Cert ' + escapeHtml_(p.certNo));
+      if (p.calibratedOn) bits.push('Calibrated ' + escapeHtml_(p.calibratedOn));
+      if (p.by) bits.push('By ' + escapeHtml_(p.by));
+
+      var action = '';
+      if (!p.isCert) {
+        action = '<span class="cert-flag">Not a calibration certificate — attached as evidence only</span>';
+      } else if (matchRow && parsedDue) {
+        var current = matchRow.querySelector('.calDate').value;
+        action = current === parsedDue
+          ? '<span class="cert-ok">Matches the equipment list &mdash; due ' + escapeHtml_(fmtDate_(parsedDue)) + '</span>'
+          : '<button type="button" class="btn btn-secondary btn-sm" data-cert="' + idx + '">' +
+            'Update due date to ' + escapeHtml_(fmtDate_(parsedDue)) + '</button>';
+      } else if (matchRow && !parsedDue) {
+        action = '<span class="cert-flag">Matched on serial, but the next-due date could not be read' +
+                 (p.nextDue ? ' (&ldquo;' + escapeHtml_(p.nextDue) + '&rdquo;)' : '') + ' &mdash; set it by hand</span>';
+      } else if (p.serial) {
+        action = '<span class="cert-flag">No equipment in the list with serial ' + escapeHtml_(p.serial) +
+                 ' &mdash; add it, or correct the serial</span>';
+      } else {
+        action = '<span class="cert-flag">No serial number readable &mdash; cannot match to the equipment list</span>';
+      }
+
+      row.innerHTML =
+        '<div class="cert-head">' + escapeHtml_(p.equipment || p.label) +
+          (p.nextDue ? '<span class="cert-due">Next due ' + escapeHtml_(p.nextDue) + '</span>' : '') + '</div>' +
+        (bits.length ? '<div class="cert-meta">' + bits.join(' &middot; ') + '</div>' : '') +
+        '<div class="cert-action">' + action + '</div>';
+
+      var btn = row.querySelector('button[data-cert]');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          var target = findCalRowBySerial_(p.serial);
+          if (!target) return;
+          target.querySelector('.calDate').value = parsedDue;
+          target.querySelector('.calDate').dispatchEvent(new Event('input', { bubbles: true }));
+          renderCertResults_();
+        });
+      }
+      container.appendChild(row);
+    });
+
+    certResults.filter(function (r) { return r.response.status !== 'success'; }).forEach(function (r) {
+      var d = document.createElement('div');
+      d.className = 'cert-card is-other';
+      d.innerHTML = '<div class="cert-head">' + escapeHtml_(r.label) + '</div>' +
+                    '<div class="cert-action"><span class="cert-flag">' +
+                    escapeHtml_(r.response.message || 'Could not read this page') + '</span></div>';
+      container.appendChild(d);
+    });
+  }
+
+  function fmtDate_(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
   function runSmartScan() {
@@ -3463,7 +3861,14 @@
   ];
 
   function buildReportHTML() {
-    var monthLabel = formatMonth(currentMonth) || '—';
+    // The report is dated by the period its data covers, not the day it was
+    // generated: September's report made on 11 October is September's report.
+    // When it was made is kept as a small secondary note.
+    var monthLabel = formatMonth(dataMonth_() || currentMonth) || '—';
+    var range = dataDayRange_();
+    var coverage = range
+      ? 'Tests ' + fmtDate_(range.from) + (range.to !== range.from ? ' – ' + fmtDate_(range.to) : '')
+      : '';
     var now = new Date();
     var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
       ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -3516,6 +3921,18 @@
         '<td><span class="pill pill-warn">Not supplied</span></td>' +
         '<td class="pr-na">—</td><td class="pr-na">—</td></tr>';
     }
+
+    var certFile = pickedFiles.fileCalCerts[0];
+    if (certFile || certEvidencePages.length) {
+      dvsaRows += '<tr><td>Calibration certificates</td>' +
+        '<td><span class="pill ' + (certEvidencePages.length ? 'pill-yes' : 'pill-warn') + '">' +
+          (certEvidencePages.length ? 'Included' : 'Not read') + '</span></td>' +
+        '<td>' + escapeHtml_(certFile ? certFile.name : '—') + '</td>' +
+        '<td>' + (certEvidencePages.length
+          ? certEvidencePages.length + ' page' + (certEvidencePages.length === 1 ? '' : 's') + ' reproduced at the back'
+          : '<span class="pr-na">—</span>') + '</td></tr>';
+    }
+
     var qc = pickedFiles.fileQcScans.length;
 
     // Checklist detail
@@ -3826,6 +4243,31 @@
     var exportsBlock = logAppendix_('fileLogDate', 'Appendix — test log by date') +
                        logAppendix_('fileLogDuration', 'Appendix — test log by duration');
 
+    // Calibration certificates, reproduced at the back like the QC paperwork.
+    var certBlock = '';
+    if (certEvidencePages.length) {
+      certBlock = '<div class="pr-pagebreak"></div><h2>Appendix &mdash; calibration certificates</h2>' +
+        '<div class="pr-note">' + certEvidencePages.length + ' page' +
+        (certEvidencePages.length === 1 ? '' : 's') + ' of equipment calibration certificates, ' +
+        'reproduced as supporting evidence.</div>' +
+        certEvidencePages.map(function (p, i) {
+          var caption = p.equipment || p.label;
+          var meta = [];
+          if (p.makeModel) meta.push(p.makeModel);
+          if (p.serial) meta.push('Serial ' + p.serial);
+          if (p.certNo) meta.push('Cert ' + p.certNo);
+          if (p.calibratedOn) meta.push('Calibrated ' + p.calibratedOn);
+          if (p.nextDue) meta.push('Next due ' + p.nextDue);
+          if (p.by) meta.push('By ' + p.by);
+          meta.push(p.label);
+          return '<div class="pr-evidence-page">' +
+                   '<div class="pr-evidence-head">Certificate ' + (i + 1) + ' &mdash; ' + escapeHtml_(caption) + '</div>' +
+                   '<div class="pr-evidence-meta">' + escapeHtml_(meta.join(' \u00b7 ')) + '</div>' +
+                   '<img class="pr-evidence-img" src="data:' + p.mimeType + ';base64,' + p.base64 + '" alt="">' +
+                 '</div>';
+        }).join('');
+    }
+
     // QC evidence — the scanned pages themselves, appended at the back.
     var evidenceBlock = '';
     if (qcEvidencePages.length) {
@@ -3853,7 +4295,9 @@
           '<div class="pr-title">Monthly DVSA Compliance Report</div>' +
           '<div class="pr-station">Mortlake Station Garage · VTS 22453 · 29 Sheen Lane, Mortlake, London SW14 8HY</div>' +
         '</div>' +
-        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>Generated ' + escapeHtml_(generated) + '</div>' +
+        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>' +
+          (coverage ? escapeHtml_(coverage) + '<br>' : '') +
+          '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span></div>' +
       '</div>' +
 
       summaryBlock +
@@ -3885,10 +4329,11 @@
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
         dvsaRows + '</tbody></table>' +
 
-      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>' +
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. Generated ' + escapeHtml_(generated) + '.</div>' +
 
       exportsBlock +
-      evidenceBlock;
+      evidenceBlock +
+      certBlock;
   }
 
   /* Generate now shows the finished report on screen first. Going straight to
@@ -3917,7 +4362,98 @@
     });
   }
 
+  /* Everything a complete monthly record needs before it can be generated.
+     A report missing its evidence still looks finished once printed and filed,
+     which is the worst outcome — so the gate is on generating, not on printing
+     something already made.
+
+     Calibration certificates are deliberately NOT required: equipment is only
+     calibrated occasionally, so demanding one every month would block a
+     perfectly valid report most of the year. */
+  function reportBlockers_() {
+    var missing = [];
+
+    // The checklist answers and saved figures belong to the picker's month, so
+    // a report built from another month's DVSA files would mix two months.
+    var dm = dataMonth_();
+    if (dm && dm !== currentMonth) {
+      missing.push({ what: 'The DVSA files are for ' + formatMonth(dm) + ' but the reporting month is set to ' +
+                           formatMonth(currentMonth) + '. Fix switches to ' + formatMonth(dm) + ' and keeps your uploads.',
+                     action: 'dataMonth' });
+    }
+
+    DVSA_REPORT_FILES.forEach(function (d) {
+      if (!pickedFiles[d.input].length) {
+        missing.push({ what: d.label + ' not uploaded', where: 'report' });
+      }
+    });
+
+    if (!pickedFiles.fileQcScans.length) {
+      missing.push({ what: 'No QC paperwork uploaded', where: 'report' });
+    } else if (!qcEvidencePages.length || !qcSortResults.length) {
+      // Uploaded but never sorted: the pages would print with no registration,
+      // no tester and no grouping — evidence nobody can match to a vehicle.
+      missing.push({ what: 'QC paperwork uploaded but not sorted yet', where: 'report' });
+    }
+
+    var total = 0, answered = 0;
+    CHECKLIST.forEach(function (cat, ci) {
+      cat.items.forEach(function (t, ii) {
+        total++;
+        if (checklistState[ci + '-' + ii]) answered++;
+      });
+    });
+    if (answered < total) {
+      missing.push({ what: 'Checklist incomplete — ' + (total - answered) + ' of ' + total + ' unanswered',
+                     where: 'checklist' });
+    }
+
+    return missing;
+  }
+
+  function showReportBlockers_(missing) {
+    var box = document.getElementById('reportBlockers');
+    if (!box) return;
+    box.innerHTML =
+      '<div class="blockers-head">Not ready to generate &mdash; ' + missing.length +
+        ' thing' + (missing.length === 1 ? '' : 's') + ' still needed</div>' +
+      '<ul class="blockers-list">' +
+        missing.map(function (m) {
+          return '<li><span>' + escapeHtml_(m.what) + '</span>' +
+                 '<button type="button" class="blockers-go" data-go="' + (m.where || '') + '"' +
+                   (m.action ? ' data-action="' + m.action + '"' : '') + '>Fix</button></li>';
+        }).join('') +
+      '</ul>';
+    box.style.display = 'block';
+    box.querySelectorAll('.blockers-go').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (b.dataset.action === 'dataMonth') {
+          switchToDataMonth_();
+          var left = reportBlockers_();
+          if (left.length) showReportBlockers_(left); else hideReportBlockers_();
+          return;
+        }
+        switchTab(b.dataset.go);
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function hideReportBlockers_() {
+    var box = document.getElementById('reportBlockers');
+    if (box) box.style.display = 'none';
+  }
+
   function handleGenerate() {
+    var missing = reportBlockers_();
+    if (missing.length) {
+      switchTab('report');
+      showReportBlockers_(missing);
+      return;
+    }
+    hideReportBlockers_();
+
     var btns = document.querySelectorAll('button[onclick="handleGenerate()"]');
     btns.forEach(function (b) { b.disabled = true; });
     var restore = function () { btns.forEach(function (b) { b.disabled = false; }); };
@@ -3926,7 +4462,7 @@
       .then(function () {
         document.getElementById('printReport').innerHTML = buildReportHTML();
         document.getElementById('previewBody').innerHTML = buildReportHTML();
-        setText('previewMonth', formatMonth(currentMonth) || '');
+        setText('previewMonth', formatMonth(dataMonth_() || currentMonth) || '');
         document.getElementById('reportPreview').style.display = 'flex';
         document.body.style.overflow = 'hidden';
         document.getElementById('previewClose').focus();
