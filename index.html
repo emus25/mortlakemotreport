@@ -603,6 +603,7 @@
   .pr-doc .pr-station { font-size: 11px; color: #f0f0ee; margin-top: 3px; }
   .pr-doc .pr-meta { font-size: 11px; text-align: right; line-height: 1.7; color: #fff; }
   .pr-doc .pr-meta strong { font-size: 15px; display: block; }
+  .pr-doc .pr-generated { font-size: 9.5px; opacity: .8; }
 
   .pr-doc h2 {
     font-size: 13px; margin: 22px 0 10px; padding-bottom: 5px;
@@ -1630,6 +1631,43 @@
     currentMonth = document.getElementById('fMonth').value;
     persistMonth();
     clearUploadsOnMonthChange_();
+    showSelectedMonth_();
+  });
+
+  /* The month picker defaults to today's month, but the report is usually
+     put together after the month has ended — September's paperwork is done
+     in October. The DVSA exports say which month they cover, so when they
+     disagree with the picker this moves everything over to the files' month.
+     Unlike changing the picker by hand, the uploads are KEPT: they are the
+     right files, it was the picker that was wrong. */
+  function switchToDataMonth_() {
+    var target = dataMonth_();
+    if (!target || target === currentMonth) return;
+    var from = currentMonth;
+
+    // The test-log figures were filed under the picker's month on upload.
+    if (store.testLog && store.testLog[from] && Object.keys(TEST_LOGS).length) {
+      store.testLog[target] = store.testLog[from];
+      delete store.testLog[from];
+    }
+
+    // Checklist answers given under the wrong month are carried across, but
+    // only into a month that has none of its own, and the original is left
+    // in place, so nothing already recorded can be overwritten or lost.
+    var existing = store.months[target];
+    var hasOwn = existing && existing.state && Object.keys(existing.state).length;
+    if (!hasOwn && Object.keys(checklistState).length) {
+      store.months[target] = { state: Object.assign({}, checklistState),
+                               notes: Object.assign({}, checklistNotes) };
+    }
+
+    currentMonth = target;
+    document.getElementById('fMonth').value = currentMonth;
+    persistMonth();
+    showSelectedMonth_();
+  }
+
+  function showSelectedMonth_() {
     loadChecklistForMonth(currentMonth);
     renderChecklist();
     updateProgress();
@@ -1642,7 +1680,41 @@
     renderStanding_();
     TEST_LOG = (store.testLog || {})[currentMonth] || null;
     renderTestLogCharts_();
-  });
+    refreshStatuses();
+  }
+
+  /* Which month the uploaded DVSA data actually covers, as "YYYY-MM", or
+     null when nothing real is loaded. The Test Quality export states its
+     period outright ("Sep-26"). Failing that, the test logs carry a date on
+     every test, so take the month most of them fall in. */
+  function dataMonth_() {
+    if (TEST_QUALITY && !TEST_QUALITY.isSample && TEST_QUALITY.period) {
+      var m = monthKeyToSort_(TEST_QUALITY.period);
+      if (/^\d{4}-\d{2}$/.test(m)) return m;
+    }
+    var counts = {};
+    Object.keys(TEST_LOGS).forEach(function (id) {
+      var byDay = TEST_LOGS[id].byDay || {};
+      Object.keys(byDay).forEach(function (day) {
+        var key = day.slice(0, 7);
+        counts[key] = (counts[key] || 0) + byDay[day];
+      });
+    });
+    var best = null;
+    Object.keys(counts).forEach(function (k) { if (!best || counts[k] > counts[best]) best = k; });
+    return best;
+  }
+
+  /* First and last test dates in the uploaded logs ("YYYY-MM-DD"), or null. */
+  function dataDayRange_() {
+    var days = [];
+    Object.keys(TEST_LOGS).forEach(function (id) {
+      days = days.concat(Object.keys(TEST_LOGS[id].byDay || {}));
+    });
+    if (!days.length) return null;
+    days.sort();
+    return { from: days[0], to: days[days.length - 1] };
+  }
 
   /* ═══════════════ File uploads ═══════════════ */
   // Single-file DVSA inputs + their status/badge elements, plus the multi QC input.
@@ -3789,7 +3861,14 @@
   ];
 
   function buildReportHTML() {
-    var monthLabel = formatMonth(currentMonth) || '—';
+    // The report is dated by the period its data covers, not the day it was
+    // generated: September's report made on 11 October is September's report.
+    // When it was made is kept as a small secondary note.
+    var monthLabel = formatMonth(dataMonth_() || currentMonth) || '—';
+    var range = dataDayRange_();
+    var coverage = range
+      ? 'Tests ' + fmtDate_(range.from) + (range.to !== range.from ? ' – ' + fmtDate_(range.to) : '')
+      : '';
     var now = new Date();
     var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
       ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -4216,7 +4295,9 @@
           '<div class="pr-title">Monthly DVSA Compliance Report</div>' +
           '<div class="pr-station">Mortlake Station Garage · VTS 22453 · 29 Sheen Lane, Mortlake, London SW14 8HY</div>' +
         '</div>' +
-        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>Generated ' + escapeHtml_(generated) + '</div>' +
+        '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>' +
+          (coverage ? escapeHtml_(coverage) + '<br>' : '') +
+          '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span></div>' +
       '</div>' +
 
       summaryBlock +
@@ -4248,7 +4329,7 @@
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
         dvsaRows + '</tbody></table>' +
 
-      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record. Generated ' + escapeHtml_(generated) + '.</div>' +
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. Generated ' + escapeHtml_(generated) + '.</div>' +
 
       exportsBlock +
       evidenceBlock +
@@ -4292,6 +4373,15 @@
   function reportBlockers_() {
     var missing = [];
 
+    // The checklist answers and saved figures belong to the picker's month, so
+    // a report built from another month's DVSA files would mix two months.
+    var dm = dataMonth_();
+    if (dm && dm !== currentMonth) {
+      missing.push({ what: 'The DVSA files are for ' + formatMonth(dm) + ' but the reporting month is set to ' +
+                           formatMonth(currentMonth) + '. Fix switches to ' + formatMonth(dm) + ' and keeps your uploads.',
+                     action: 'dataMonth' });
+    }
+
     DVSA_REPORT_FILES.forEach(function (d) {
       if (!pickedFiles[d.input].length) {
         missing.push({ what: d.label + ' not uploaded', where: 'report' });
@@ -4330,12 +4420,19 @@
       '<ul class="blockers-list">' +
         missing.map(function (m) {
           return '<li><span>' + escapeHtml_(m.what) + '</span>' +
-                 '<button type="button" class="blockers-go" data-go="' + m.where + '">Fix</button></li>';
+                 '<button type="button" class="blockers-go" data-go="' + (m.where || '') + '"' +
+                   (m.action ? ' data-action="' + m.action + '"' : '') + '>Fix</button></li>';
         }).join('') +
       '</ul>';
     box.style.display = 'block';
     box.querySelectorAll('.blockers-go').forEach(function (b) {
       b.addEventListener('click', function () {
+        if (b.dataset.action === 'dataMonth') {
+          switchToDataMonth_();
+          var left = reportBlockers_();
+          if (left.length) showReportBlockers_(left); else hideReportBlockers_();
+          return;
+        }
         switchTab(b.dataset.go);
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -4365,7 +4462,7 @@
       .then(function () {
         document.getElementById('printReport').innerHTML = buildReportHTML();
         document.getElementById('previewBody').innerHTML = buildReportHTML();
-        setText('previewMonth', formatMonth(currentMonth) || '');
+        setText('previewMonth', formatMonth(dataMonth_() || currentMonth) || '');
         document.getElementById('reportPreview').style.display = 'flex';
         document.body.style.overflow = 'hidden';
         document.getElementById('previewClose').focus();

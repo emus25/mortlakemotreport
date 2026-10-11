@@ -147,14 +147,12 @@ From Ediz, in priority order:
      probably needs Drive or a Sheet behind `Code.gs`.
 2. **Completed reports list on the dashboard**, where each report can be
    opened and added to as new evidence is collected.
-3. **Wrong report date.** The report shows the date it was *generated*
-   (`generated` in `buildReportHTML`) rather than the period the data
-   covers.
-   - The month heading also comes from the month picker (`currentMonth`,
-     which defaults to today's month at boot), not from the DVSA period on
-     the files (e.g. `Jul-26`).
-   - Fix: base the report date on the data period, and keep the generated
-     timestamp only as a secondary note.
+3. ~~**Wrong report date.**~~ Done. The report is now headed with the month
+   the data covers (`dataMonth_()`: the Test Quality period, otherwise the
+   month most test-log dates fall in), plus the test date range. The
+   generated time is a small secondary note. If the DVSA files don't match
+   the month picker, generating is blocked, and the Fix button
+   (`switchToDataMonth_`) switches month without clearing the uploads.
 4. **Drop-in section for calibration certificates, working like the QC
    section.** A first version is in this commit (`fileCalCerts`,
    `runCertScan`, cert cards, plus an appendix in the report). Check that it
