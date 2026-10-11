@@ -1,5 +1,13 @@
 # Mortlake Garage — DVSA Compliance app
 
+## How Ediz likes to work: measure twice, cut once
+
+- **Logic first, then build.** Before writing code for anything non-trivial,
+  agree the logic: what it does, where data lives, what happens when things
+  go wrong. Write it down and get a yes before building.
+- **Plain English.** Explain things as you would to a non-programmer. Say
+  what changes for Paul, not just what changes in the code.
+
 ## What it does
 
 An internal web app for **Mortlake Station Garage** (MOT test station, VTS
