@@ -177,8 +177,12 @@ From Ediz, in priority order:
      file this big has to be sent to Google in pieces. Google's own PDF
      converter wasn't tested, because the report's charts and layout use
      things it handles badly.
+   - **Scan files are kept after sign-off**, even though the pages are also
+     inside the PDF.
+   - **Full specification:** `SPEC.md`. It's the source of truth for this
+     feature, so build to it, and update it first if the logic changes.
    **Process:** (1) decisions ✅ → (2) test how to make the PDF
-   automatically → (3) write `SPEC.md` and get it approved → (4) build in
+   automatically ✅ → (3) `SPEC.md` written, awaiting approval → (4) build in
    stages A/B/C on a test copy → (5) a trial month, then go live.
 2. **Records screen** (year → month → open report). This is stage C of item
    1 and replaces the "completed reports list".
