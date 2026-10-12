@@ -165,6 +165,18 @@ From Ediz, in priority order:
    - **Retention:** keep everything, and never delete automatically. Removed
      items go to Drive's bin, and signed PDFs can't be removed from the app.
    - **No importing of old reports.** Paul's earlier months are on paper.
+   - **Opening an old month shows its one signed PDF**, with everything in
+     it (Ediz's idea, and the core of the design).
+   - **PDF test result (12 Oct 2026):** a realistic month (240 tests, 26
+     scanned pages) was tested two ways. The app can make the PDF itself
+     (html2canvas + jsPDF) and it looks the same as the printed report:
+     about 16s and about 19MB. Most of that size is the scans. Print → "Save as PDF"
+     takes about 1s and about 16MB with searchable text, but Paul would have
+     to save the file and drop it back in. Still to fix in the app-made
+     version: page breaks currently cut through the middle of tables, and a
+     file this big has to be sent to Google in pieces. Google's own PDF
+     converter wasn't tested, because the report's charts and layout use
+     things it handles badly.
    **Process:** (1) decisions ✅ → (2) test how to make the PDF
    automatically → (3) write `SPEC.md` and get it approved → (4) build in
    stages A/B/C on a test copy → (5) a trial month, then go live.
