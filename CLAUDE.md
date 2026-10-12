@@ -145,16 +145,31 @@ browser or run a static server such as `python3 -m http.server`.
 
 From Ediz, in priority order:
 
-1. **Save and reopen reports.** At the moment, nothing about a generated
-   report is kept: scans and exports are discarded, and a report has to be
-   rebuilt from scratch. Wanted: save each report so it can be reopened and
-   added to as more evidence comes in, without starting the process again.
-   - **Decision needed first:** this means storing the scanned paperwork.
-     That goes against the agreed "process and discard" rule, and the files
-     are too big for Script Properties (9KB per value, 500KB in total). It
-     probably needs Drive or a Sheet behind `Code.gs`.
-2. **Completed reports list on the dashboard**, where each report can be
-   opened and added to as new evidence is collected.
+1. **Monthly Records: keep every month's signed report** (replaces "save and
+   reopen reports"). Plan with diagrams:
+   https://claude.ai/artifact/Af71WTpVraWKUu4TQKVRBw
+   **Decisions agreed (Oct 2026):**
+   - **Storage:** everything for a month goes in a folder in **Paul's** Google
+     Drive (the backend already runs under his account):
+     `Mortlake Garage Records/YYYY-MM/`. It holds the DVSA files, the QC page
+     images, the certificate images, a details file (what Claude read, the
+     checklist, a snapshot of that month's calibration dates, and a history of
+     changes) and the signed PDF(s). This reverses the old "process and
+     discard" rule.
+   - **Sign-off freezes the PDF.** A signed PDF is never changed or replaced.
+     Corrections are made with "Amend", which files version 2 next to version
+     1 with a note of what changed.
+   - **Each month moves through stages:** Draft → Ready → Signed off →
+     (Amended). Signed months are locked.
+   - **Logins:** Paul only. No tester logins for now.
+   - **Retention:** keep everything, and never delete automatically. Removed
+     items go to Drive's bin, and signed PDFs can't be removed from the app.
+   - **No importing of old reports.** Paul's earlier months are on paper.
+   **Process:** (1) decisions ✅ → (2) test how to make the PDF
+   automatically → (3) write `SPEC.md` and get it approved → (4) build in
+   stages A/B/C on a test copy → (5) a trial month, then go live.
+2. **Records screen** (year → month → open report). This is stage C of item
+   1 and replaces the "completed reports list".
 3. ~~**Wrong report date.**~~ Done. The report is now headed with the month
    the data covers (`dataMonth_()`: the Test Quality period, otherwise the
    month most test-log dates fall in), plus the test date range. The
