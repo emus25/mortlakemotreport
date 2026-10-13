@@ -62,7 +62,11 @@ one Google Apps Script file.
 
 - **Navigation:** `switchTab('dashboard' | 'report' | 'checklist')`.
 - **Login:** `verifyPassword` posts `checkDashboardPassword` and keeps the
-  password in localStorage so later backend calls can send it.
+  password in localStorage so later backend calls can send it. It returns
+  `ok`, `wrong` or `noreply`. **Only `wrong` may ever say "Incorrect
+  password"**: a network failure, timeout or Google error page is
+  `noreply`. It says "not a password problem", and the saved password is
+  kept. A test enforces this.
 - **Storage (Monthly Records, stage A):** the true copy of everything is in
   Paul's Google Drive, filed by the back office as he works. `store`
   (localStorage, `mortlake_report_v1`) is only a cache.
@@ -190,7 +194,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 19 back-office checks + 7 real-browser checks
+npm test               # 19 back-office checks + 8 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

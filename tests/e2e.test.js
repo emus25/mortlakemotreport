@@ -347,3 +347,43 @@ test('opening the app takes two round trips, shows a counter while waiting, and 
     assert.ok(timings.includes('openSession') && timings.includes('getDvsaFile'));
   } finally { slow.server.close(); }
 });
+
+test('login never blames the password when Google does not answer', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const ctx = await browser.newContext();
+    const p = await ctx.newPage();
+    await p.goto(srv.url + '/index.html');
+
+    // Google fails: the message must say it is not a password problem.
+    srv.failures.checkDashboardPassword = 1;
+    await p.fill('#lockPasswordInput', 'pw');
+    await p.click('#lockSubmitBtn');
+    await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock');
+    const msg = await p.textContent('#lockError');
+    assert.match(msg, /not a password problem/);
+    assert.doesNotMatch(msg, /Incorrect password/);
+
+    // A genuinely wrong password says so.
+    await p.fill('#lockPasswordInput', 'nope');
+    await p.click('#lockSubmitBtn');
+    await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock');
+    assert.equal(await p.textContent('#lockError'), 'Incorrect password.');
+
+    // While checking, the previous message is cleared.
+    srv.failures.checkDashboardPassword = 0;
+    await p.fill('#lockPasswordInput', 'pw');
+    await p.click('#lockSubmitBtn');
+    assert.equal(await p.textContent('#lockError'), '');
+    await waitReady(p);
+
+    // Reopening while Google is down keeps the saved password and doesn't call it wrong.
+    srv.failures.checkDashboardPassword = 1;
+    await p.reload();
+    await p.waitForFunction(() => /not a password problem/.test(document.getElementById('lockError').textContent));
+    assert.equal(await p.evaluate(() => localStorage.getItem('mortlake_report_password')), 'pw');
+    assert.equal(await p.inputValue('#lockPasswordInput'), 'pw', 'Paul just presses Unlock again');
+    await p.click('#lockSubmitBtn');
+    await waitReady(p);
+  } finally { srv.server.close(); }
+});

@@ -1333,19 +1333,45 @@
 
   function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
 
+  /* Checks the password with the back office. There are three possible
+     answers, and they must never be confused:
+       'ok'      — the password is right
+       'wrong'   — Google answered and said the password is wrong
+       'noreply' — Google couldn't be reached or didn't answer properly.
+                   This says NOTHING about the password, so it must never be
+                   shown as "Incorrect password". */
+  var LOGIN_TIMEOUT_MS = 60000;
+  var NO_REPLY_MSG = 'Couldn’t reach Google just now — this is not a password problem. ' +
+                     'Check the internet connection and press Unlock again.';
+
   function verifyPassword(pw, onResult) {
-    if (!SCRIPT_URL) { onResult(false, 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
+    if (!SCRIPT_URL) { onResult('noreply', 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
+    var finished = false;
+    function finish(result, msg) { if (finished) return; finished = true; clearTimeout(timer); onResult(result, msg); }
+    var timer = setTimeout(function () {
+      finish('noreply', 'Google is taking too long to answer — this is not a password problem. Press Unlock again.');
+    }, LOGIN_TIMEOUT_MS);
     fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ action: 'checkDashboardPassword', password: pw })
     })
-      .then(function (r) { return r.json(); })
-      .then(function (data) { onResult(data.status === 'success'); })
-      .catch(function () { onResult(false); });
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        var data = null;
+        try { data = JSON.parse(text); } catch (e) {}
+        if (data && data.status === 'success') return finish('ok');
+        if (data && data.status === 'fail') return finish('wrong', 'Incorrect password.');
+        finish('noreply', data && data.message
+          ? 'Couldn’t check the password: ' + data.message + ' — this is not a password problem.'
+          : NO_REPLY_MSG);
+      })
+      .catch(function () { finish('noreply', NO_REPLY_MSG); });
   }
 
-  function lockApp(msg) {
-    localStorage.removeItem(PW_KEY);
+  /* keepPassword: when Google simply couldn't be reached, the saved password
+     is kept — it hasn't been shown to be wrong. */
+  function lockApp(msg, keepPassword) {
+    if (!keepPassword) localStorage.removeItem(PW_KEY);
     document.getElementById('lockScreen').style.display = 'flex';
     document.getElementById('appRoot').style.display = 'none';
     var err = document.getElementById('lockError');
@@ -1363,17 +1389,21 @@
   function submitLockScreen() {
     var pw = document.getElementById('lockPasswordInput').value;
     var btn = document.getElementById('lockSubmitBtn');
+    var errEl = document.getElementById('lockError');
+    if (btn.disabled) return;
+    // Clear the last message, so an old one can't sit there while checking.
+    errEl.textContent = '';
+    errEl.classList.remove('show');
     btn.disabled = true;
     btn.textContent = 'Checking…';
-    verifyPassword(pw, function (ok, err) {
+    verifyPassword(pw, function (result, msg) {
       btn.disabled = false;
       btn.textContent = 'Unlock';
-      if (ok) {
+      if (result === 'ok') {
         localStorage.setItem(PW_KEY, pw);
         unlockApp();
       } else {
-        var errEl = document.getElementById('lockError');
-        errEl.textContent = err || 'Incorrect password.';
+        errEl.textContent = msg;
         errEl.classList.add('show');
       }
     });
@@ -1388,7 +1418,15 @@
     if (!SCRIPT_URL) { unlockApp(); return; }
     var pw = getPassword();
     if (!pw) return;
-    verifyPassword(pw, function (ok) { if (ok) unlockApp(); else lockApp('Session expired — please re-enter the password.'); });
+    verifyPassword(pw, function (result, msg) {
+      if (result === 'ok') unlockApp();
+      else if (result === 'wrong') lockApp('The password has changed — please enter the new one.');
+      else {
+        // Not a password problem: keep the saved password and let Paul retry.
+        lockApp(msg, true);
+        document.getElementById('lockPasswordInput').value = pw;
+      }
+    });
   })();
 
   function escapeHtml_(s) {
