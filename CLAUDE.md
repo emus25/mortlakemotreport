@@ -194,7 +194,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 19 back-office checks + 8 real-browser checks
+npm test               # 19 back-office checks + 9 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
@@ -275,18 +275,24 @@ From Ediz, in priority order:
      (orange TEST banner). Its back office is "Mortlake Garage Backend TEST"
      in Paul's Google account, and its URL is in `test.html`. Ediz has the
      test password; ask for it, never commit it.
-   - **Open problem:** on the test copy, login works, but opening the app
-     then shows "Could not load your records. Could not reach the records."
-     That means the `openSession` request got no readable answer: a network
-     failure, or Google returned an error page instead of JSON. The cause is
-     not yet known, and it is not certain the test back office has been
-     updated to v14.
+   - **Test copy works against real Google** (checked 13 Oct 2026 with
+     `tests/live-check.js`). The earlier "Could not reach the records" was
+     one failed request, probably while the back office was being updated.
+     Read-only requests are now retried once automatically. Real timings:
+     opening takes 9s on a cold start and about 5s warm; a DVSA file save
+     takes 7–13s (the back office's Drive work); a scan takes 15–20s
+     (mostly Claude); a checklist save takes about 6s. All saves run in the
+     background. Possible speed-up later: cache Drive folder and file ids
+     in Script Properties, which would avoid the name searches on every
+     save.
    - **How to work:** Ediz is not a coder and must not be used as the
-     tester. Before asking him to try anything, call the TEST back office
-     directly (with curl) and run the real flow against it. This needs
-     `script.google.com` and `script.googleusercontent.com` in the
-     environment's allowed domains (requested 13 Oct). If they're still
-     blocked, say so and do not guess.
+     tester. Before asking him to try anything, run
+     `TEST_PASSWORD=… node tests/live-check.js` (ask Ediz for the password;
+     never commit it). It needs `script.google.com` and
+     `script.googleusercontent.com` in the environment's allowed domains,
+     which were added on 13 Oct. With curl, POST with `--data` and `-L` but
+     **without** `-X POST`, or Google's redirect returns a "Page Not Found"
+     page.
    - **Paul's real app** (`index.html` on `main`) is untouched and working.
      It still has the old login bug: any failure to reach Google shows
      "Incorrect password". This is fixed on this branch only, and Ediz has

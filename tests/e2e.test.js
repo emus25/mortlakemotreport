@@ -387,3 +387,15 @@ test('login never blames the password when Google does not answer', async () => 
     await waitReady(p);
   } finally { srv.server.close(); }
 });
+
+test('a single hiccup from Google while opening is retried quietly', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    srv.failures.openSession = 1;
+    const p = await newComputer(srv);       // waits until the app is ready
+    assert.deepEqual(srv.log.filter(a => a === 'openSession').length, 2);
+    srv.failures.loadMonth = 1;
+    await setMonth(p, '2026-09');
+    assert.equal(await p.evaluate(() => document.getElementById('monthOverlay').hidden), true);
+  } finally { srv.server.close(); }
+});

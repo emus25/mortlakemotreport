@@ -1478,14 +1478,31 @@
      browser console), split into the whole round trip and the part the back
      office itself spent, so slowness can be traced to the right place. */
   var recordsTimings = [];
+
+  /* Requests that only fetch something are tried a second time, after a
+     short pause, if Google fails to answer — a single hiccup (often while the
+     back office is being updated) shouldn't stop Paul opening the app.
+     Saves are not repeated here: they have their own Retry. */
+  var READ_ONLY_ACTIONS_ = { openSession: 1, loadMonth: 1, getDvsaFile: 1, getPageImage: 1, listMonths: 1, loadEquipment: 1 };
+  var READ_RETRY_DELAY_MS = 2000;
+
   function api_(action, payload) {
+    return apiOnce_(action, payload).then(function (res) {
+      if (!READ_ONLY_ACTIONS_[action] || !(res.noReply || res.status === 'busy')) return res;
+      return new Promise(function (r) { setTimeout(r, READ_RETRY_DELAY_MS); })
+        .then(function () { return apiOnce_(action, payload); });
+    });
+  }
+
+  function apiOnce_(action, payload) {
     if (!SCRIPT_URL) return Promise.resolve({ status: 'offline', message: 'Not connected to the records.' });
     var body = Object.assign({ action: action, password: getPassword() }, payload || {});
     var t0 = Date.now();
     return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .catch(function () {
-        return { status: 'error', message: 'Could not reach the records. Check the internet connection.' };
+        return { status: 'error', noReply: true,
+                 message: 'Google didn’t answer. Check the internet connection and try again.' };
       })
       .then(function (res) {
         var t = { action: action, totalMs: Date.now() - t0, serverMs: res && typeof res.ms === 'number' ? res.ms : null,
