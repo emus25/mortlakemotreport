@@ -270,6 +270,27 @@ From Ediz, in priority order:
    updated to v13 first without breaking the current page, because the old
    requests are kept. Go-live order: deploy v13 to the live back office,
    then merge.
+   **Status on 13 Oct 2026 (read this first in a new session):**
+   - The test copy is at https://mortlakemotreport.exposureboost.co.uk/test.html
+     (orange TEST banner). Its back office is "Mortlake Garage Backend TEST"
+     in Paul's Google account, and its URL is in `test.html`. Ediz has the
+     test password; ask for it, never commit it.
+   - **Open problem:** on the test copy, login works, but opening the app
+     then shows "Could not load your records. Could not reach the records."
+     That means the `openSession` request got no readable answer: a network
+     failure, or Google returned an error page instead of JSON. The cause is
+     not yet known, and it is not certain the test back office has been
+     updated to v14.
+   - **How to work:** Ediz is not a coder and must not be used as the
+     tester. Before asking him to try anything, call the TEST back office
+     directly (with curl) and run the real flow against it. This needs
+     `script.google.com` and `script.googleusercontent.com` in the
+     environment's allowed domains (requested 13 Oct). If they're still
+     blocked, say so and do not guess.
+   - **Paul's real app** (`index.html` on `main`) is untouched and working.
+     It still has the old login bug: any failure to reach Google shows
+     "Incorrect password". This is fixed on this branch only, and Ediz has
+     been offered a fix for the live app.
 2. **Records screen** (year → month → open report). This is stage C of item
    1 and replaces the "completed reports list".
 3. ~~**Wrong report date.**~~ Done. The report is now headed with the month
