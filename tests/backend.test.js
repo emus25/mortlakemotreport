@@ -25,6 +25,9 @@ test('a bad request comes back as a readable error, not a crash', () => {
   assert.equal(b.doPostRaw('not json').status, 'error');
   assert.equal(b.call('loadMonth', { month: '2026-13' }).status, 'error');
   assert.equal(b.call('loadMonth', { month: 'DASHBOARD_PASSWORD' }).status, 'error');
+  assert.equal(b.call('saveDvsaFile', { month: '2026-09', inputId: 'constructor', base64: 'eA==' }).status, 'error');
+  assert.equal(b.call('getDvsaFile', { month: '2026-09', inputId: '__proto__' }).status, 'error');
+  assert.equal(b.call('saveMonthFields', { month: '2026-09', field: 'constructor', value: {}, baseRevision: 0 }).status, 'error');
 });
 
 test('an empty month loads as Not started and leaves nothing behind in Drive', () => {

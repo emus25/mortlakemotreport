@@ -640,7 +640,7 @@ var EDITABLE_FIELDS = { checklist: true };
 function saveMonthFields_(data) {
   var month = checkMonth_(data.month);
   var field = data.field;
-  if (!EDITABLE_FIELDS[field]) throw appError_('error', 'That cannot be saved this way.');
+  if (!Object.prototype.hasOwnProperty.call(EDITABLE_FIELDS, field)) throw appError_('error', 'That cannot be saved this way.');
   return withLock_(function () {
     var ctx = openMonth_(month, true);
     var d = ctx.details;
@@ -681,8 +681,7 @@ function describeChecklistChange_(before, after) {
    it are saved alongside, so the dashboard does not need to re-read the file. */
 function saveDvsaFile_(data) {
   var month = checkMonth_(data.month);
-  var slot = DVSA_INPUTS[data.inputId];
-  if (!slot) throw appError_('error', 'Unknown DVSA file type.');
+  var slot = dvsaSlot_(data.inputId);
   if (!data.base64) throw appError_('error', 'No file received.');
   return withLock_(function () {
     var ctx = openMonth_(month, true);
@@ -711,8 +710,14 @@ function saveDvsaFile_(data) {
   });
 }
 
+function dvsaSlot_(inputId) {
+  if (!Object.prototype.hasOwnProperty.call(DVSA_INPUTS, inputId)) throw appError_('error', 'Unknown DVSA file type.');
+  return DVSA_INPUTS[inputId];
+}
+
 function getDvsaFile_(data) {
   var month = checkMonth_(data.month);
+  dvsaSlot_(data.inputId);
   var ctx = openMonth_(month, false);
   var entry = ctx && ctx.details.dvsaFiles[data.inputId];
   if (!entry) throw appError_('missing', 'That file is not saved for ' + formatMonthName_(month) + '.');

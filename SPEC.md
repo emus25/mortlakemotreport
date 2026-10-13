@@ -107,8 +107,10 @@ Mortlake Garage Records/
   for any amendment.
 - **History:** a dated line for every change, such as "14 Oct 10:42 – added
   QC page 27 (AB12CDE, VT20)".
-- **A change counter** that goes up by one on every save. Section 11
-  explains why.
+- **Revision numbers** for the parts Paul edits by hand (the checklist; the
+  equipment list has its own). Each goes up by one on every save of that
+  part. Section 11 explains why. Pages need no revision number: adding a
+  page can't undo anyone else's change.
 
 ## 6. The life of a month
 
@@ -176,8 +178,9 @@ new version alongside them. There is no "un-sign".
   uploads.
 - **Each file and page shows where it is:** "Saving…", then "Saved ✓", or "Not
   saved – Retry" if something went wrong.
-- **Wrong month:** if the DVSA files are for a different month, Paul is told
-  (this works today) and offered a move.
+- **Wrong month:** a DVSA file for a different month is never filed in this
+  one. As soon as it's added, Paul is asked "This file is for September 2026,
+  but you're working on October 2026. Switch to September and file it there?".
 - **Signed month:** a banner at the top says "September 2026 is signed off.
   Open report · Amend". All controls are read-only.
 - **Generate report** becomes **Preview report.** It shows the report and
@@ -311,7 +314,7 @@ shows how it was put together, which helps if an examiner asks.
 |---|---|
 | Internet drops while scanning | Pages already saved stay saved. The rest show "Not saved – Retry". Paul can't sign off until everything is saved. |
 | Laptop closed halfway through a month | Nothing is lost except a page that was mid-upload. Reopening the month shows exactly what was saved. |
-| App open on two computers | Each save carries the change counter it started from. If the other computer saved in between, the save is refused with "This month was changed on another computer – reload to see the latest", rather than overwriting. |
+| App open on two computers | A checklist or equipment save carries the revision number it started from. If the other computer saved in between, the save is refused, Paul is told "changed on another computer", and the latest copy is loaded rather than overwritten. |
 | Back office out of date | The version check that exists today stops the app and says the back office needs updating, instead of saving things in the wrong place. |
 | Google is slow or down | Saves wait and retry a few times, then say clearly that they failed. Nothing is reported as saved unless it was. |
 | Laptop lost or replaced | Nothing is lost. Paul logs in on the new computer and everything is there. |

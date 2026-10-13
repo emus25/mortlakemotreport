@@ -238,7 +238,54 @@
   .empty-sub { font-size: 13px; color: var(--text-secondary); max-width: 460px; margin: 0 auto 14px; line-height: 1.5; }
 
   .sync-status { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
-  @media (max-width: 900px) { .sync-status { display: none; } }
+  /* Kept visible on small screens too: "not saved" must never be hidden. */
+  @media (max-width: 900px) { .sync-status { white-space: normal; max-width: 140px; line-height: 1.3; } }
+  .sync-retry {
+    font: inherit; font-weight: 700; color: var(--danger); background: none; border: 1px solid var(--danger);
+    border-radius: var(--radius-sm); padding: 1px 8px; cursor: pointer;
+  }
+  .upload-status:has(.save-note) { flex-wrap: wrap; }
+  .save-note { color: var(--text-secondary); flex-basis: 100%; padding-left: 22px; font-size: 12px; }
+  .save-note:empty { display: none; }
+  .save-note.is-error { color: var(--danger); font-weight: 600; }
+
+  /* Covers the page while a month's filed copy loads, so nothing can be
+     changed before it has arrived. */
+  .month-overlay {
+    position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center;
+    background: rgba(250, 249, 247, .82); backdrop-filter: blur(2px);
+  }
+  .month-overlay[hidden] { display: none; }
+  .mo-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 20px 24px; max-width: 420px; margin: 0 16px; text-align: center; display: grid; gap: 12px;
+    box-shadow: 0 8px 28px rgba(0,0,0,.08); font-size: 14px;
+  }
+  .mo-box .btn[hidden] { display: none; }
+
+  /* Filed pages list under each scan section */
+  .page-list { margin-top: 12px; font-size: 13px; }
+  .page-list summary { cursor: pointer; font-weight: 600; color: var(--text-secondary); }
+  .pl-row {
+    display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 10px; align-items: center;
+    padding: 6px 0; border-top: 1px solid var(--border);
+  }
+  .pl-name { overflow-wrap: anywhere; }
+  .pl-ok { color: var(--success); font-weight: 600; }
+  .pl-wait { color: var(--text-secondary); }
+  .pl-bad { color: var(--danger); overflow-wrap: anywhere; }
+  .pl-actions { display: flex; gap: 6px; }
+  .pl-btn {
+    font: inherit; font-size: 12px; background: var(--surface); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px 10px; cursor: pointer;
+  }
+  .pl-btn:hover { border-color: var(--text-secondary); }
+  @media (max-width: 600px) { .pl-row { grid-template-columns: 1fr; gap: 4px; } }
+
+  .test-banner {
+    background: #d9480f; color: #fff; text-align: center; font-weight: 700; font-size: 13px;
+    padding: 6px 12px; letter-spacing: .02em;
+  }
   .badge.success { background: var(--success-bg); color: var(--success); }
   .badge.warning { background: var(--warning-bg); color: var(--warning); }
   .badge.danger  { background: var(--danger-bg);  color: var(--danger); }
@@ -837,6 +884,13 @@
 <!-- ══════════ App ══════════ -->
 <div id="appRoot" style="display:none">
 
+  <div class="month-overlay" id="monthOverlay" hidden>
+    <div class="mo-box" role="status" aria-live="polite">
+      <div id="monthOverlayText">Loading…</div>
+      <button type="button" class="btn btn-primary" id="monthOverlayRetry" hidden>Try again</button>
+    </div>
+  </div>
+
   <header class="appbar">
     <div class="appbar-brand">
       <img class="appbar-logo" src="assets/mortlake-logo.png" alt="Mortlake Garage">
@@ -1165,6 +1219,7 @@
           </div>
           <div class="qc-sort-status" id="qcSortStatus"></div>
           <div id="qcGroupsContainer"></div>
+          <div id="qcPageList"></div>
         </div>
       </div>
 
@@ -1194,6 +1249,7 @@
           </div>
           <div class="qc-sort-status" id="calCertStatus"></div>
           <div id="calCertResults"></div>
+          <div id="certPageList"></div>
         </div>
       </div>
     </section>
@@ -1260,6 +1316,17 @@
   /* ═══════════════ Auth (unchanged behaviour) ═══════════════ */
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdGsxn9KKbppvezpumA7uaN4QZv5ez0LZDfIwBoHFEVoIMQPia2bLk2RhMAemlc7OoMA/exec';
   var PW_KEY = 'mortlake_report_password';
+  // The test copy (test.html) is made from this file with its own back office
+  // and Drive folder, and says so on every screen so it can't be mistaken for
+  // the real records.
+  var IS_TEST_COPY = false;
+  if (IS_TEST_COPY) {
+    document.title = 'TEST COPY — ' + document.title;
+    var tb = document.createElement('div');
+    tb.className = 'test-banner';
+    tb.textContent = 'TEST COPY — not Paul’s real records';
+    document.body.insertBefore(tb, document.body.firstChild);
+  }
 
   function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
 
@@ -1286,8 +1353,8 @@
   function unlockApp() {
     document.getElementById('lockScreen').style.display = 'none';
     document.getElementById('appRoot').style.display = 'block';
-    // Pull the server copy first so a new laptop starts with the real history.
-    if (typeof syncDown_ === 'function') syncDown_();
+    // Load what is filed in Google Drive before anything can be changed.
+    startRecords_();
   }
 
   function submitLockScreen() {
@@ -1346,175 +1413,331 @@
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  /* ═══════════════ Persistence ═══════════════ */
-  // localStorage is the working copy — instant, offline, survives a refresh.
-  // It is also backed up to the server (see syncUp_ / syncDown_) so that a new
-  // laptop or a cleared browser doesn't lose the checklist history, calibration
-  // dates or monthly DVSA figures.
-  // Scanned paperwork and DVSA exports are NOT backed up — those stay
-  // process-and-discard by design.
+  /* ═══════════════ Persistence ═══════════════
+     Since Monthly Records (SPEC.md), the true copy of everything lives in
+     Paul's Google Drive, filed by the back office as he works. The browser's
+     own storage is only a quick cache: whenever a month is opened, what is
+     filed in Drive replaces it, so a cleared browser or a new laptop loses
+     nothing. */
   var STORE_KEY = 'mortlake_report_v1';
   var currentMonth = '';
 
   function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } }
   function saveStore() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {}
-    scheduleSyncUp_();
   }
   var store = loadStore();
   if (!store.months) store.months = {};
   if (!store.calibration) store.calibration = [];
 
-  /* Server backup. Writes are debounced because saveStore() fires on every
-     keystroke and checklist tick; reads happen once, right after unlocking. */
-  var syncTimer = null;
-  var syncSuppressed = false;   // set while syncDown_ is applying server data
-  var syncDownDone = false;     // no uploading until the server copy has arrived
-
-  /* Nothing may be pushed before syncDown_ has finished. On a fresh browser the
-     local store starts empty and boot seeds the default equipment list, which
-     triggers a save — pushing that would overwrite the real history held on the
-     server. If the server can't be reached this stays false, so the worst case
-     is "not backed up" (and the indicator says so) rather than data loss. */
-  function scheduleSyncUp_() {
-    if (!SCRIPT_URL || syncSuppressed || !syncDownDone || !getPassword()) return;
-    clearTimeout(syncTimer);
-    syncTimer = setTimeout(syncUp_, 1500);
-  }
-
-  function syncUp_() {
-    if (!SCRIPT_URL || !getPassword()) return;
-    setSyncStatus_('saving');
-    fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'saveAppData',
-        password: getPassword(),
-        data: {
-          calibration: store.calibration || [],
-          months: store.months || {},
-          testQuality: store.testQuality || {}
-        }
-      })
-    })
+  /* One way of talking to the back office. A failure always comes back as an
+     answer with a message, never as an exception, so every caller can say
+     plainly what happened. */
+  function api_(action, payload) {
+    if (!SCRIPT_URL) return Promise.resolve({ status: 'offline', message: 'Not connected to the records.' });
+    var body = Object.assign({ action: action, password: getPassword() }, payload || {});
+    return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
-      .then(function (res) { setSyncStatus_(res.status === 'success' ? 'saved' : 'error'); })
-      .catch(function () { setSyncStatus_('error'); });
+      .catch(function () {
+        return { status: 'error', message: 'Could not reach the records. Check the internet connection.' };
+      });
   }
 
-  /* Pulls the server copy on unlock. The server is treated as the source of
-     truth for anything it holds, since it is the copy that survives a change
-     of computer — but a failed or empty response never wipes what is local. */
-  function syncDown_() {
-    if (!SCRIPT_URL || !getPassword()) return Promise.resolve();
-    setSyncStatus_('loading');
-    return fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'loadAppData', password: getPassword() })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (res) {
-        if (res.status !== 'success') {
-          // An older backend that predates saveAppData/loadAppData answers
-          // "Unknown action" — say so rather than implying it is backed up.
-          setSyncStatus_('error');
-          return;
-        }
-        // A definitive answer from the server — safe to start uploading now,
-        // whether or not it had anything stored yet.
-        syncDownDone = true;
-        if (!res.hasData || !res.data) { setSyncStatus_('saved'); return; }
-        syncSuppressed = true;
-        var d = res.data;
-        var calChanged = false;
-        if (d.calibration && d.calibration.length) { store.calibration = d.calibration; calChanged = true; }
-        if (d.months && Object.keys(d.months).length) {
-          store.months = Object.assign({}, store.months || {}, d.months);
-        }
-        var tqChanged = false;
-        if (d.testQuality && Object.keys(d.testQuality).length) {
-          store.testQuality = Object.assign({}, store.testQuality || {}, d.testQuality);
-          tqChanged = true;
-        }
-        try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {}
-        syncSuppressed = false;
+  /* ── "Saving… / All saved / Not saved – Retry" ──
+     Nothing may be reported as saved unless the back office said so. Every
+     save goes through trackSave_, which counts what is in flight and keeps
+     anything that failed so it can be retried with one click. */
+  var savesInFlight_ = 0;
+  var failedSaves_ = [];        // { label, message, retry }
+  var recordsReady_ = false;    // nothing is saved until the filed copy has loaded
 
-        // Re-render anything the pulled data feeds.
-        if (calChanged) {
-          document.getElementById('calRows').innerHTML = '';
-          store.calibration.forEach(function (c) { addCalRow(c); });
-          updateCalEmptyState();
-        }
-        loadChecklistForMonth(currentMonth);
-        renderChecklist();
-        updateProgress();
-        refreshStatuses();
-        if (tqChanged) {
-          TEST_QUALITY = testQualityForMonth_(currentMonth) || null;
-          applyTestQualityToDashboard_();
-          renderTestQuality_();
-          renderStanding_();
-          buildRatingChart();
-        }
-        setSyncStatus_('saved');
-      })
-      .catch(function () { setSyncStatus_('error'); });
+  var RETRYABLE_ = { error: true, busy: true };
+
+  function trackSave_(label, run, retry) {
+    savesInFlight_++;
+    renderSaveIndicator_();
+    // Counted as "saving" from the very start, including any preparation
+    // inside run(), so the indicator can never show "All saved" in between.
+    return Promise.resolve().then(run).catch(function (err) {
+      return { status: 'error', message: (err && err.message) || 'Could not save.' };
+    }).then(function (res) {
+      savesInFlight_--;
+      if (!res || RETRYABLE_[res.status]) {
+        failedSaves_.push({
+          label: label,
+          message: (res && res.message) || 'Could not save.',
+          retry: retry || function () { return trackSave_(label, run); }
+        });
+      }
+      renderSaveIndicator_();
+      return res || { status: 'error', message: 'Could not save.' };
+    });
   }
 
-  function setSyncStatus_(state) {
-    // Mirror a backup failure onto the checklist, where the user is actually
-    // looking — "Saved" there must not imply a backup that didn't happen.
-    var cl = document.getElementById('clSave');
-    if (cl && state === 'error') {
-      clearTimeout(clSaveTimer);
-      cl.className = 'cs-save is-error';
-      cl.textContent = 'Saved on this computer only';
-    }
+  function unsavedCount_() {
+    return failedSaves_.length + unsavedPages_.qc.length + unsavedPages_.cert.length;
+  }
 
+  function hasPendingSaves_() {
+    return savesInFlight_ > 0 || !!clPending_ || clSaving_ || eqDirty_ || eqSaving_ || unsavedCount_() > 0;
+  }
+
+  function renderSaveIndicator_() {
     var el = document.getElementById('syncStatus');
     if (!el) return;
-    var map = {
-      loading: ['Loading saved data…', 'var(--text-tertiary)'],
-      saving:  ['Saving…',             'var(--text-tertiary)'],
-      saved:   ['Saved',               'var(--text-tertiary)'],
-      error:   ['Not saved to server', 'var(--danger)']
-    };
-    var m = map[state] || map.saved;
-    el.textContent = m[0];
-    el.style.color = m[1];
+    var failed = unsavedCount_();
+    el.style.color = 'var(--text-tertiary)';
+    if (!SCRIPT_URL) {
+      el.textContent = 'Not connected — nothing is being saved';
+      el.style.color = 'var(--danger)';
+    } else if (failed) {
+      el.innerHTML = escapeHtml_(failed + (failed === 1 ? ' change' : ' changes') + ' not saved') +
+        ' · <button type="button" class="sync-retry" onclick="retryFailedSaves_()">Retry</button>';
+      el.style.color = 'var(--danger)';
+      el.title = failedSaves_.map(function (f) { return f.label + ': ' + f.message; }).join('\n');
+    } else if (savesInFlight_ || clPending_ || clSaving_ || eqDirty_ || eqSaving_) {
+      el.textContent = 'Saving…';
+    } else if (!recordsReady_) {
+      el.textContent = 'Loading records…';
+    } else {
+      el.textContent = 'All saved ✓';
+      el.title = 'Everything is filed in Google Drive';
+    }
+  }
+
+  function retryFailedSaves_() {
+    var list = failedSaves_;
+    failedSaves_ = [];
+    renderSaveIndicator_();
+    list.forEach(function (f) { f.retry(); });
+    ['qc', 'cert'].forEach(function (kind) { if (unsavedPages_[kind].length) runScan_(kind); });
+  }
+
+  // Closing the tab mid-save would lose the change, so the browser asks first.
+  window.addEventListener('beforeunload', function (e) {
+    if (SCRIPT_URL && hasPendingSaves_()) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* ── Covering the page while a month loads ──
+     Working on a month before its filed copy has arrived could overwrite it,
+     so the page is covered until it has, or says plainly that it couldn't. */
+  function showMonthOverlay_(text, retry) {
+    var el = document.getElementById('monthOverlay');
+    if (!el) return;
+    document.getElementById('monthOverlayText').textContent = text;
+    var btn = document.getElementById('monthOverlayRetry');
+    btn.hidden = !retry;
+    btn.onclick = retry || null;
+    el.hidden = false;
+  }
+  function hideMonthOverlay_() {
+    var el = document.getElementById('monthOverlay');
+    if (el) el.hidden = true;
+  }
+
+  /* ── Starting up, right after the password is accepted ── */
+  var recordsIndex_ = {};
+  var MOVED_KEY = 'mortlake_testlog_moved';
+
+  function startRecords_() {
+    if (!SCRIPT_URL) return;
+    recordsReady_ = false;
+    renderSaveIndicator_();
+    showMonthOverlay_('Loading your records…');
+    checkBackendVersion_();
+
+    api_('recordsStatus')
+      .then(function (st) {
+        if (st.status !== 'success') throw new Error(st.message || 'The records could not be reached.');
+        // The test-log totals were only ever kept in this browser, so they are
+        // sent once from each computer that has them; the back office keeps
+        // whatever it already holds.
+        var browserLogs = store.testLog || {};
+        var sent = false;
+        try { sent = !!localStorage.getItem(MOVED_KEY); } catch (e) {}
+        if (st.migrated && (sent || !Object.keys(browserLogs).length)) return;
+        return api_('migrateLegacy', { browserTestLog: browserLogs }).then(function (m) {
+          if (m.status !== 'success') throw new Error(m.message || 'Could not move the saved data across.');
+          try { localStorage.setItem(MOVED_KEY, new Date().toISOString()); } catch (e) {}
+        });
+      })
+      .then(function () { return Promise.all([api_('listMonths'), api_('loadEquipment')]); })
+      .then(function (res) {
+        if (res[0].status !== 'success') throw new Error(res[0].message || 'Could not list the months.');
+        if (res[1].status !== 'success') throw new Error(res[1].message || 'Could not load the equipment list.');
+        applyRecordsIndex_(res[0].months || {});
+        recordsReady_ = true;
+        return applyEquipment_(res[1]);
+      })
+      .then(function () { return openMonth_(currentMonth); })
+      .catch(function (err) {
+        recordsReady_ = false;
+        renderSaveIndicator_();
+        showMonthOverlay_('Could not load your records. ' + (err && err.message || ''), startRecords_);
+      });
+  }
+
+  /* The dashboard trend needs every month's headline figures. The index has
+     them, so the trend covers every month on any computer without opening
+     each folder. A full breakdown already in the cache is kept. */
+  function applyRecordsIndex_(months) {
+    recordsIndex_ = months;
+    if (!store.testQuality) store.testQuality = {};
+    Object.keys(months).forEach(function (m) {
+      var tq = months[m].testQuality;
+      if (!tq || !tq.period) return;
+      var have = store.testQuality[tq.period];
+      if (have && have.site) return;
+      store.testQuality[tq.period] = { period: tq.period, siteFailed: tq.siteFailed, nationalFailed: tq.nationalFailed };
+    });
+    saveStore();
+    buildRatingChart();
+  }
+
+  /* ── Equipment list ── */
+  var equipmentRev_ = 0;
+  var eqTimer_ = null, eqDirty_ = false, eqSaving_ = false;
+
+  function renderEquipmentRows_(list) {
+    document.getElementById('calRows').innerHTML = '';
+    (list || []).forEach(function (c) { addCalRow(c); });
+    updateCalEmptyState();
+    refreshStatuses();
+  }
+
+  function applyEquipment_(eq) {
+    if (eq.exists) {
+      equipmentRev_ = eq.revision;
+      store.calibration = eq.list;
+      saveStore();
+      renderEquipmentRows_(eq.list);
+      return Promise.resolve();
+    }
+    // Nothing filed yet: file the list this browser already has (the real
+    // equipment list, seeded on first use).
+    equipmentRev_ = 0;
+    eqDirty_ = true;
+    return saveEquipmentNow_();
+  }
+
+  function scheduleEquipmentSave_() {
+    if (!SCRIPT_URL || !recordsReady_) return;
+    eqDirty_ = true;
+    clearTimeout(eqTimer_);
+    eqTimer_ = setTimeout(saveEquipmentNow_, 1500);
+    renderSaveIndicator_();
+  }
+
+  function saveEquipmentNow_() {
+    clearTimeout(eqTimer_);
+    if (eqSaving_ || !eqDirty_) return Promise.resolve();
+    eqDirty_ = false;
+    eqSaving_ = true;
+    var list = (store.calibration || []).slice();
+    return trackSave_('Equipment list', function () {
+      return api_('saveEquipment', { list: list, baseRevision: equipmentRev_ });
+    }, function () { eqDirty_ = true; return saveEquipmentNow_(); }).then(function (res) {
+      eqSaving_ = false;
+      if (res.status === 'success') {
+        equipmentRev_ = res.revision;
+      } else if (res.status === 'conflict') {
+        equipmentRev_ = res.revision;
+        store.calibration = res.list;
+        saveStore();
+        renderEquipmentRows_(res.list);
+        eqDirty_ = false;
+        alert(res.message + '\n\nThe latest equipment list has been loaded; your last change was not saved.');
+      }
+      renderSaveIndicator_();
+      if (eqDirty_) scheduleEquipmentSave_();
+    });
+  }
+
+  /* ── Checklist answers ──
+     Saved 1.5s after the last tick, one save at a time, each tied to the
+     month it belongs to — so switching month mid-save can never file one
+     month's answers under another. */
+  var checklistRev_ = {};       // month -> revision of the filed copy
+  var clPending_ = null;        // { month, value } waiting to be saved
+  var clSaving_ = false;
+  var clTimer_ = null;
+
+  function scheduleChecklistSave_() {
+    if (!SCRIPT_URL || !recordsReady_) return;
+    clPending_ = { month: currentMonth,
+                   value: { state: Object.assign({}, checklistState), notes: Object.assign({}, checklistNotes) } };
+    clearTimeout(clTimer_);
+    clTimer_ = setTimeout(flushChecklist_, 1500);
+    setChecklistSaveNote_('saving');
+    renderSaveIndicator_();
+  }
+
+  function flushChecklist_() {
+    clearTimeout(clTimer_);
+    if (!clPending_ || clSaving_) return Promise.resolve();
+    var job = clPending_;
+    clPending_ = null;
+    clSaving_ = true;
+    return trackSave_('Checklist answers for ' + formatMonth(job.month), function () {
+      return api_('saveMonthFields', { month: job.month, field: 'checklist', value: job.value,
+                                       baseRevision: checklistRev_[job.month] || 0 });
+    }, function () {
+      if (!clPending_) clPending_ = job;
+      return flushChecklist_();
+    }).then(function (res) {
+      clSaving_ = false;
+      if (res.status === 'success') {
+        checklistRev_[job.month] = res.revision;
+        if (!clPending_) setChecklistSaveNote_('saved');
+      } else if (res.status === 'conflict') {
+        checklistRev_[job.month] = res.revision;
+        store.months[job.month] = res.value;
+        saveStore();
+        if (job.month === currentMonth) {
+          loadChecklistForMonth(currentMonth);
+          renderChecklist();
+          updateProgress();
+        }
+        setChecklistSaveNote_('saved');
+        alert('The checklist for ' + formatMonth(job.month) + ' was changed on another computer, so your last ' +
+              'change was not saved.\n\nThe latest answers have been loaded.');
+      } else if (res.status === 'locked') {
+        setChecklistSaveNote_('error');
+        alert(res.message);
+      } else {
+        setChecklistSaveNote_('error');
+      }
+      renderSaveIndicator_();
+      if (clPending_) return flushChecklist_();
+    });
+  }
+
+  var clNoteTimer_ = null;
+  function setChecklistSaveNote_(state) {
+    var el = document.getElementById('clSave');
+    if (!el) return;
+    clearTimeout(clNoteTimer_);
+    if (!SCRIPT_URL) {
+      el.className = 'cs-save is-error';
+      el.textContent = 'Not connected — answers are only on this computer';
+      return;
+    }
+    if (state === 'saving') { el.className = 'cs-save'; el.textContent = 'Saving…'; return; }
+    if (state === 'error') { el.className = 'cs-save is-error'; el.textContent = 'Not saved — see the top of the page'; return; }
+    el.className = 'cs-save is-saved';
+    el.textContent = 'Saved ✓';
+    clNoteTimer_ = setTimeout(function () {
+      el.className = 'cs-save';
+      el.textContent = 'Answers save automatically';
+    }, 2500);
   }
 
   function persistChecklistState() {
     store.months[currentMonth] = { state: checklistState, notes: checklistNotes };
     saveStore();
-    flashChecklistSaved_();
+    if (SCRIPT_URL) scheduleChecklistSave_(); else setChecklistSaveNote_('saved');
   }
 
-  /* Confirms each answer as it's recorded. The tick is instant because it is
-     saved locally first; the wording then follows the server backup so a
-     failed backup can't masquerade as a completed save. */
-  var clSaveTimer = null;
-  function flashChecklistSaved_() {
-    var el = document.getElementById('clSave');
-    if (!el) return;
-    clearTimeout(clSaveTimer);
-
-    // If the server copy never arrived, no upload will follow this save — so
-    // say "on this computer only" now rather than a bare "Saved" that implies
-    // a backup which is not going to happen.
-    if (SCRIPT_URL && getPassword() && !syncDownDone) {
-      el.className = 'cs-save is-error';
-      el.textContent = 'Saved on this computer only';
-      return;
-    }
-
-    el.className = 'cs-save is-saved';
-    el.textContent = 'Saved';
-    clSaveTimer = setTimeout(function () {
-      el.className = 'cs-save';
-      el.textContent = 'Answers save automatically';
-    }, 2500);
-  }
   function persistCalibration() {
     var list = [];
     document.querySelectorAll('.cal-row').forEach(function (row) {
@@ -1527,6 +1750,7 @@
     });
     store.calibration = list;
     saveStore();
+    scheduleEquipmentSave_();
   }
   function persistMonth() { store.selectedMonth = currentMonth; saveStore(); }
 
@@ -1626,45 +1850,114 @@
       document.getElementById(id).textContent = label;
     });
   }
-  // Switching month swaps in that month's saved checklist (calibration is global).
+  // Switching month opens that month's filed copy (calibration is global).
   document.getElementById('fMonth').addEventListener('change', function () {
-    currentMonth = document.getElementById('fMonth').value;
-    persistMonth();
-    clearUploadsOnMonthChange_();
-    showSelectedMonth_();
+    var target = document.getElementById('fMonth').value;
+    if (!/^\d{4}-\d{2}$/.test(target)) { document.getElementById('fMonth').value = currentMonth; return; }
+    changeMonth_(target);
   });
 
-  /* The month picker defaults to today's month, but the report is usually
-     put together after the month has ended — September's paperwork is done
-     in October. The DVSA exports say which month they cover, so when they
-     disagree with the picker this moves everything over to the files' month.
-     Unlike changing the picker by hand, the uploads are KEPT: they are the
-     right files, it was the picker that was wrong. */
-  function switchToDataMonth_() {
-    var target = dataMonth_();
-    if (!target || target === currentMonth) return;
-    var from = currentMonth;
-
-    // The test-log figures were filed under the picker's month on upload.
-    if (store.testLog && store.testLog[from] && Object.keys(TEST_LOGS).length) {
-      store.testLog[target] = store.testLog[from];
-      delete store.testLog[from];
+  /* Moves to another month. Anything already filed belongs to its own month
+     and is safe; the only thing that can be lost is scans added but not yet
+     read and filed, so Paul is asked first. Checklist answers waiting to be
+     saved are sent before the switch, still tagged with their own month. */
+  function changeMonth_(target) {
+    if (target === currentMonth) return Promise.resolve(true);
+    var waiting = pickedFiles.fileQcScans.length + pickedFiles.fileCalCerts.length +
+                  unsavedPages_.qc.length + unsavedPages_.cert.length;
+    if (waiting && !confirm('Some scanned pages for ' + formatMonth(currentMonth) + ' have not been read and filed yet.\n\n' +
+                            'Switch to ' + formatMonth(target) + ' anyway? Those pages will be dropped and will need adding again.')) {
+      document.getElementById('fMonth').value = currentMonth;
+      return Promise.resolve(false);
     }
-
-    // Checklist answers given under the wrong month are carried across, but
-    // only into a month that has none of its own, and the original is left
-    // in place, so nothing already recorded can be overwritten or lost.
-    var existing = store.months[target];
-    var hasOwn = existing && existing.state && Object.keys(existing.state).length;
-    if (!hasOwn && Object.keys(checklistState).length) {
-      store.months[target] = { state: Object.assign({}, checklistState),
-                               notes: Object.assign({}, checklistNotes) };
-    }
-
+    flushChecklist_();
     currentMonth = target;
     document.getElementById('fMonth').value = currentMonth;
     persistMonth();
-    showSelectedMonth_();
+    return openMonth_(target).then(function () { return true; });
+  }
+
+  /* Opens a month: loads its filed copy from Google Drive and puts everything
+     back on screen — checklist, figures, every filed page, and the DVSA files
+     themselves (re-read here, so the full test lists come back). Page images
+     are only fetched when the report needs them, which keeps this quick. */
+  var openToken_ = 0;
+  var monthDoc_ = null;
+
+  function openMonth_(month) {
+    var token = ++openToken_;
+    resetMonthWorkspace_();
+    if (!SCRIPT_URL) {
+      monthDoc_ = null;
+      showSelectedMonth_();
+      return Promise.resolve();
+    }
+    showMonthOverlay_('Opening ' + formatMonth(month) + '…');
+    return api_('loadMonth', { month: month }).then(function (res) {
+      if (token !== openToken_) return;
+      if (res.status !== 'success') {
+        showMonthOverlay_('Could not open ' + formatMonth(month) + '. ' + (res.message || ''),
+                          function () { openMonth_(month); });
+        return;
+      }
+      var d = res.details;
+      monthDoc_ = d;
+      checklistRev_[month] = (d.revisions && d.revisions.checklist) || 0;
+      store.months[month] = { state: d.checklist.state || {}, notes: d.checklist.notes || {} };
+      if (!store.testLog) store.testLog = {};
+      if (d.testLog) store.testLog[month] = d.testLog; else delete store.testLog[month];
+      if (d.testQuality && d.testQuality.period) {
+        if (!store.testQuality) store.testQuality = {};
+        store.testQuality[d.testQuality.period] = d.testQuality;
+      }
+      saveStore();
+      savedPages_.qc = (d.qcPages || []).slice();
+      savedPages_.cert = (d.certPages || []).slice();
+      showSelectedMonth_();
+      renderPageResults_('qc');
+      renderPageResults_('cert');
+
+      var ids = Object.keys(d.dvsaFiles || {});
+      return Promise.all(ids.map(function (inputId) {
+        var slot = DVSA_INPUTS.filter(function (x) { return x.input === inputId; })[0];
+        if (!slot) return null;
+        var el = document.getElementById(slot.status);
+        el.className = 'upload-status reading';
+        el.innerHTML = ICON_SPIN + '<span>Loading ' + escapeHtml_(d.dvsaFiles[inputId].fileName) + '…</span>';
+        return api_('getDvsaFile', { month: month, inputId: inputId }).then(function (f) {
+          if (token !== openToken_) return;
+          if (f.status !== 'success') {
+            el.className = 'upload-status warn';
+            el.innerHTML = ICON_WARN + '<span class="us-file">Filed, but could not be loaded: ' +
+              escapeHtml_(f.message || d.dvsaFiles[inputId].fileName) + '</span>';
+            return;
+          }
+          var file = base64ToFile_(f.base64, f.fileName, f.mimeType);
+          return processDvsaFile_(inputId, file, { fromSaved: true, token: token });
+        });
+      })).then(function () {
+        if (token !== openToken_) return;
+        refreshStatuses();
+        hideMonthOverlay_();
+        renderSaveIndicator_();
+      });
+    });
+  }
+
+  function base64ToFile_(b64, name, type) {
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], name, { type: type || '' });
+  }
+
+  function fileToBase64_(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result).split(',')[1] || ''); };
+      r.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+      r.readAsDataURL(file);
+    });
   }
 
   function showSelectedMonth_() {
@@ -1741,16 +2034,9 @@
   // that needs the separate "smart scan" feature, not this one.
   var parsedFileData = {}; // inputId -> { kind, rows, sheetNames, pageCount, hasText, error }
 
-  /* Uploaded files belong to the month they were uploaded for. They are held in
-     memory, not per month, so leaving them in place when the reporting month
-     changes would attach one month's MOT paperwork to another month's report —
-     the appendix would print July's scans under an August heading. Clear
-     everything and say so, rather than silently carrying it over. */
-  function clearUploadsOnMonthChange_() {
-    var hadFiles = singleFileInputs.some(function (id) { return pickedFiles[id].length; }) ||
-                   pickedFiles.fileQcScans.length > 0 || pickedFiles.fileCalCerts.length > 0;
-    if (!hadFiles) return;
-
+  /* Empties everything on screen that belongs to one month, ready for the
+     next one to be opened. Nothing filed is touched: it is all in Drive. */
+  function resetMonthWorkspace_() {
     singleFileInputs.forEach(function (id) { pickedFiles[id] = []; });
     pickedFiles.fileQcScans = [];
     pickedFiles.fileCalCerts = [];
@@ -1760,23 +2046,15 @@
     certEvidencePages = [];
     certResults = [];
     TEST_LOGS = {};
+    savedPages_ = { qc: [], cert: [] };
+    unsavedPages_ = { qc: [], cert: [] };
 
     DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
     renderFileList('fileQcScans', 'listQcScans', null);
     renderFileList('fileCalCerts', 'listCalCerts', null);
-    var certResultsEl = document.getElementById('calCertResults');
-    if (certResultsEl) certResultsEl.innerHTML = '';
-    var certStatusEl = document.getElementById('calCertStatus');
-    if (certStatusEl) certStatusEl.innerHTML = '';
-    var groups = document.getElementById('qcGroupsContainer');
-    if (groups) groups.innerHTML = '';
-    var sortBtn = document.getElementById('sortScansBtn');
-    if (sortBtn) sortBtn.disabled = true;
-    var sortStatus = document.getElementById('qcSortStatus');
-    if (sortStatus) {
-      sortStatus.innerHTML = '<span style="color:var(--text-secondary)">Uploads cleared &mdash; ' +
-        'they belonged to the previous month. Upload this month&rsquo;s files.</span>';
-    }
+    ['calCertResults', 'calCertStatus', 'qcGroupsContainer', 'qcSortStatus', 'qcPageList', 'certPageList']
+      .forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
+    hideReportBlockers_();
     refreshStatuses();
   }
 
@@ -2237,44 +2515,135 @@
       Math.abs(diff).toFixed(0) + ' ' + unit + ' ' + (above ? 'above' : 'below') + '</span>';
   }
 
-  function wireFileInput(inputId, listId, singleFile, statusId) {
+  /* Every way a file arrives (picker or drag-and-drop) ends up here, so the
+     two can never behave differently. A DVSA export is read and filed
+     straight away; scans wait in a list until "Sort" or "Read" is pressed,
+     because that is when Claude reads and files each page. */
+  function addFiles_(inputId, files) {
+    files = Array.prototype.slice.call(files).filter(function (f) { return f && f.size >= 0; });
+    if (!files.length) return;
+    if (singleFileInputs.indexOf(inputId) > -1) {
+      processDvsaFile_(inputId, files[0]);
+      return;
+    }
+    files.forEach(function (f) { pickedFiles[inputId].push(f); });
+    var listId = inputId === 'fileQcScans' ? 'listQcScans' : 'listCalCerts';
+    renderFileList(inputId, listId, null);
+    refreshStatuses();
+  }
+
+  function wireFileInput(inputId) {
     var input = document.getElementById(inputId);
     input.addEventListener('change', function () {
-      if (singleFile) pickedFiles[inputId] = [];
-      var newFiles = Array.prototype.slice.call(input.files);
-      newFiles.forEach(function (f) { pickedFiles[inputId].push(f); });
+      var files = Array.prototype.slice.call(input.files);
       input.value = '';
-      // The scan set has changed, so any pages already converted are stale.
-      if (inputId === 'fileQcScans') qcEvidencePages = [];
-      if (inputId === 'fileCalCerts') { certEvidencePages = []; certResults = []; }
-      renderFileList(inputId, listId, statusId);
-      refreshStatuses();
-
-      // Actually read the file's contents in the background, then show
-      // what was found (or honestly say it couldn't be read).
-      newFiles.forEach(function (f) {
-        if (statusId) {
-          var el = document.getElementById(statusId);
-          el.className = 'upload-status reading';
-          el.innerHTML = ICON_SPIN + '<span>Reading ' + escapeHtml_(f.name) + '…</span>';
-        }
-        readUploadedFile_(f).then(function (result) {
-          parsedFileData[inputId] = result;
-          if (!statusId) return;
-          var el = document.getElementById(statusId);
-          var summary = applyTestQualityFile_(inputId, result) ||
-                        applyTestLogFile_(inputId, result) ||
-                        describeParsedResult_(result);
-          if (summary.ok) {
-            el.className = 'upload-status uploaded';
-            el.innerHTML = ICON_UPLOADED + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
-          } else {
-            el.className = 'upload-status warn';
-            el.innerHTML = ICON_WARN + '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
-          }
-        });
-      });
+      addFiles_(inputId, files);
     });
+  }
+
+  /* Reads one DVSA export, shows what was found, and files it in Google
+     Drive. Before filing, it checks which month the file is for: filing
+     September's export under October would put the wrong figures in the
+     wrong record, so Paul is offered the right month instead. */
+  function processDvsaFile_(inputId, file, opts) {
+    opts = opts || {};
+    var slot = DVSA_INPUTS.filter(function (x) { return x.input === inputId; })[0];
+    pickedFiles[inputId] = [file];
+    renderFileList(inputId, slot.list, slot.status);
+    refreshStatuses();
+    var el = document.getElementById(slot.status);
+    el.className = 'upload-status reading';
+    el.innerHTML = ICON_SPIN + '<span>Reading ' + escapeHtml_(file.name) + '…</span>';
+
+    return readUploadedFile_(file).then(function (result) {
+      if (opts.token && opts.token !== openToken_) return;     // a different month was opened meanwhile
+      if (pickedFiles[inputId][0] !== file) return;            // replaced by a newer file meanwhile
+
+      if (!opts.fromSaved && SCRIPT_URL) {
+        var fm = fileMonth_(inputId, result);
+        if (fm && fm !== currentMonth) {
+          pickedFiles[inputId] = [];
+          renderFileList(inputId, slot.list, slot.status);
+          refreshStatuses();
+          if (confirm(file.name + ' is for ' + formatMonth(fm) + ', but you are working on ' +
+                      formatMonth(currentMonth) + '.\n\nSwitch to ' + formatMonth(fm) + ' and file it there?')) {
+            return changeMonth_(fm).then(function (ok) { if (ok) return processDvsaFile_(inputId, file); });
+          }
+          el.className = 'upload-status warn';
+          el.innerHTML = ICON_WARN + '<span class="us-file">Not filed — ' + escapeHtml_(file.name) +
+            ' is for ' + escapeHtml_(formatMonth(fm)) + '</span>';
+          return;
+        }
+      }
+
+      parsedFileData[inputId] = result;
+      var summary = applyTestQualityFile_(inputId, result) ||
+                    applyTestLogFile_(inputId, result) ||
+                    describeParsedResult_(result);
+      el.className = 'upload-status ' + (summary.ok ? 'uploaded' : 'warn');
+      el.innerHTML = (summary.ok ? ICON_UPLOADED : ICON_WARN) +
+        '<span class="us-file">' + escapeHtml_(file.name) + ' — ' + escapeHtml_(summary.text) + '</span>' +
+        '<span class="save-note"></span>';
+      if (opts.fromSaved) setDvsaSaveNote_(slot.status, 'filed');
+      else if (summary.ok && SCRIPT_URL) return saveDvsaFile_(inputId, file);
+    });
+  }
+
+  /* Which month a DVSA export covers, as "YYYY-MM", or null if it can't tell. */
+  function fileMonth_(inputId, result) {
+    if (!result || result.kind !== 'spreadsheet' || result.error || !result.rows) return null;
+    if (inputId === 'fileRating') {
+      var tq = parseTestQuality_(result.rows);
+      var m = tq && tq.period ? monthKeyToSort_(tq.period) : '';
+      return /^\d{4}-\d{2}$/.test(m) ? m : null;
+    }
+    var log = parseTestLog_(result.rows);
+    if (!log || log.error) return null;
+    var counts = {}, best = null;
+    Object.keys(log.byDay || {}).forEach(function (day) {
+      var k = day.slice(0, 7);
+      counts[k] = (counts[k] || 0) + log.byDay[day];
+    });
+    Object.keys(counts).forEach(function (k) { if (!best || counts[k] > counts[best]) best = k; });
+    return best;
+  }
+
+  function saveDvsaFile_(inputId, file) {
+    var slot = DVSA_INPUTS.filter(function (x) { return x.input === inputId; })[0];
+    var month = currentMonth;
+    var figures = inputId === 'fileRating'
+      ? { testQuality: (TEST_QUALITY && !TEST_QUALITY.isSample) ? TEST_QUALITY : null }
+      : { testLog: (store.testLog || {})[month] || null };
+    setDvsaSaveNote_(slot.status, 'saving');
+    return trackSave_(file.name, function () {
+      return fileToBase64_(file).then(function (b64) {
+        return api_('saveDvsaFile', { month: month, inputId: inputId, fileName: file.name,
+                                      mimeType: file.type, base64: b64, figures: figures });
+      });
+    }, function () { return saveDvsaFile_(inputId, file); }).then(function (res) {
+      if (month !== currentMonth || pickedFiles[inputId][0] !== file) return;
+      if (res.status === 'success') {
+        if (monthDoc_) monthDoc_.dvsaFiles[inputId] = res.file;
+        setDvsaSaveNote_(slot.status, 'saved');
+      } else {
+        setDvsaSaveNote_(slot.status, 'failed', res.message);
+        if (res.status === 'locked') alert(res.message);
+      }
+      refreshStatuses();
+    });
+  }
+
+  function setDvsaSaveNote_(statusId, state, message) {
+    var note = document.querySelector('#' + statusId + ' .save-note');
+    if (!note) return;
+    var text = {
+      saving: 'Saving…',
+      saved: 'Filed in Google Drive ✓',
+      filed: 'Filed in Google Drive ✓',
+      failed: 'Not saved' + (message ? ': ' + message : '')
+    }[state] || '';
+    note.textContent = text;
+    note.className = 'save-note' + (state === 'failed' ? ' is-error' : '');
   }
 
   function renderFileList(inputId, listId, statusId) {
@@ -2283,14 +2652,18 @@
     pickedFiles[inputId].forEach(function (f, i) {
       var row = document.createElement('div');
       row.className = 'file-chip';
-      row.innerHTML = '<span>' + escapeHtml_(f.name) + '</span><button type="button" aria-label="Remove file">&times;</button>';
-      row.querySelector('button').addEventListener('click', function () {
-        pickedFiles[inputId].splice(i, 1);
-        if (inputId === 'fileQcScans') qcEvidencePages = [];
-        if (inputId === 'fileCalCerts') { certEvidencePages = []; certResults = []; }
-        renderFileList(inputId, listId, statusId);
-        refreshStatuses();
-      });
+      row.innerHTML = '<span>' + escapeHtml_(f.name) + '</span>' +
+        (statusId ? '' : '<button type="button" aria-label="Remove file">&times;</button>');
+      var btn = row.querySelector('button');
+      if (btn) {
+        // Only scans still waiting to be read can be taken off this list;
+        // filed pages are removed from the "Filed pages" list instead.
+        btn.addEventListener('click', function () {
+          pickedFiles[inputId].splice(i, 1);
+          renderFileList(inputId, listId, statusId);
+          refreshStatuses();
+        });
+      }
       list.appendChild(row);
     });
     // DVSA single-file status label
@@ -2306,9 +2679,9 @@
     }
   }
 
-  DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input, d.list, true, d.status); });
-  wireFileInput('fileQcScans', 'listQcScans', false, null);
-  wireFileInput('fileCalCerts', 'listCalCerts', false, null);
+  DVSA_INPUTS.forEach(function (d) { wireFileInput(d.input); });
+  wireFileInput('fileQcScans');
+  wireFileInput('fileCalCerts');
   // Paint the initial "Required — not uploaded" state on each DVSA card.
   DVSA_INPUTS.forEach(function (d) { renderFileList(d.input, d.list, d.status); });
 
@@ -2319,37 +2692,7 @@
 
      The browser's default is to navigate away and open a dropped file, which
      would lose everything on the page — so that's suppressed everywhere. */
-  function acceptDroppedFiles_(inputId, listId, singleFile, statusId, fileList) {
-    var files = Array.prototype.slice.call(fileList).filter(function (f) { return f && f.size >= 0; });
-    if (!files.length) return;
-    if (singleFile) {
-      pickedFiles[inputId] = [files[0]];   // these slots hold one file only
-    } else {
-      files.forEach(function (f) { pickedFiles[inputId].push(f); });
-    }
-    renderFileList(inputId, listId, statusId);
-    refreshStatuses();
-
-    // Mirror the file-picker behaviour: actually read what was dropped.
-    (singleFile ? [files[0]] : files).forEach(function (f) {
-      if (statusId) {
-        var el = document.getElementById(statusId);
-        el.className = 'upload-status reading';
-        el.innerHTML = ICON_SPIN + '<span>Reading ' + escapeHtml_(f.name) + '…</span>';
-      }
-      readUploadedFile_(f).then(function (result) {
-        parsedFileData[inputId] = result;
-        if (!statusId) return;
-        var el = document.getElementById(statusId);
-        var summary = applyTestQualityFile_(inputId, result) || describeParsedResult_(result);
-        el.className = 'upload-status ' + (summary.ok ? 'uploaded' : 'warn');
-        el.innerHTML = (summary.ok ? ICON_UPLOADED : ICON_WARN) +
-          '<span class="us-file">' + escapeHtml_(f.name) + ' — ' + escapeHtml_(summary.text) + '</span>';
-      });
-    });
-  }
-
-  function makeDroppable_(el, inputId, listId, singleFile, statusId) {
+  function makeDroppable_(el, inputId) {
     if (!el) return;
     el.classList.add('drop-target');
     var depth = 0;   // dragenter/leave fire for child elements too, so count them
@@ -2372,19 +2715,19 @@
       depth = 0; el.classList.remove('drag-over');
       document.body.classList.remove('dragging-files');
       if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
-        acceptDroppedFiles_(inputId, listId, singleFile, statusId, e.dataTransfer.files);
+        addFiles_(inputId, e.dataTransfer.files);
       }
     });
   }
 
   // The two big drop areas…
-  makeDroppable_(document.querySelector('label[for="fileQcScans"]'), 'fileQcScans', 'listQcScans', false, null);
-  makeDroppable_(document.querySelector('label[for="fileCalCerts"]'), 'fileCalCerts', 'listCalCerts', false, null);
+  makeDroppable_(document.querySelector('label[for="fileQcScans"]'), 'fileQcScans');
+  makeDroppable_(document.querySelector('label[for="fileCalCerts"]'), 'fileCalCerts');
   // …and each DVSA card, so a file can be dropped straight onto the right one.
   DVSA_INPUTS.forEach(function (d) {
     var label = document.querySelector('label[for="' + d.input + '"]');
     var card = label && label.closest('.upload-card');
-    makeDroppable_(card || label, d.input, d.list, true, d.status);
+    makeDroppable_(card || label, d.input);
   });
 
   // Dropping anywhere else must not make the browser navigate away and bin
@@ -2520,9 +2863,9 @@
     if (dvsaMissing === 0) { dvsaSub.textContent = 'All uploaded'; dvsaSub.className = 'sc-sub'; }
     else { dvsaSub.textContent = dvsaMissing + ' file' + (dvsaMissing === 1 ? '' : 's') + ' missing'; dvsaSub.className = 'sc-sub attention'; }
 
-    var qc = pickedFiles.fileQcScans.length;
+    var qc = savedPages_.qc.length;
     document.getElementById('tileQcScans').textContent = qc;
-    document.getElementById('tileQcSub').textContent = qc === 1 ? 'page added' : 'pages added';
+    document.getElementById('tileQcSub').textContent = qc === 1 ? 'page filed' : 'pages filed';
 
     var rows = document.querySelectorAll('.cal-row');
     var tracked = 0, dueSoon = 0;
@@ -2540,10 +2883,28 @@
     dueSub.className = dueSoon > 0 ? 'sc-sub attention' : 'sc-sub';
   }
 
+  /* Counts for the scan sections: pages filed in Drive, and files added but
+     not yet read (plus any pages that could not be filed and need retrying). */
+  function scanCounts_(kind) {
+    var inputId = kind === 'qc' ? 'fileQcScans' : 'fileCalCerts';
+    return {
+      filed: savedPages_[kind].length,
+      unread: savedPages_[kind].filter(function (p) { return p.status !== 'read'; }).length,
+      waiting: pickedFiles[inputId].length + unsavedPages_[kind].length
+    };
+  }
+
+  function scanCountText_(c) {
+    var parts = [c.filed + (c.filed === 1 ? ' page filed' : ' pages filed')];
+    if (c.waiting) parts.push(c.waiting + ' waiting to be read');
+    return parts.join(' · ');
+  }
+
   function updateReportReadiness() {
     var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
-    var qc = pickedFiles.fileQcScans.length;
+    var qcc = scanCounts_('qc');
+    var qc = qcc.filed;
 
     var dvsaLine = document.getElementById('readyDvsaLine');
     var ok = dvsaCount === dvsaTotal;
@@ -2552,17 +2913,17 @@
       (ok ? '' : ' — ' + (dvsaTotal - dvsaCount) + ' still needed') + '</span>';
 
     var qcLine = document.getElementById('readyQcLine');
-    qcLine.innerHTML = (qc > 0 ? ICON_UPLOADED : ICON_REQUIRED) + '<span>' + qc + ' QC page' + (qc === 1 ? '' : 's') + ' added</span>';
+    qcLine.innerHTML = (qc > 0 && !qcc.waiting ? ICON_UPLOADED : ICON_REQUIRED) + '<span>' + escapeHtml_(scanCountText_(qcc)) + '</span>';
 
-    document.getElementById('qcCount').textContent = qc + (qc === 1 ? ' page uploaded' : ' pages uploaded');
+    document.getElementById('qcCount').textContent = scanCountText_(qcc);
 
     var sortBtn = document.getElementById('sortScansBtn');
-    if (sortBtn) sortBtn.disabled = qc === 0;
+    if (sortBtn && sortBtn.textContent !== 'Reading…') sortBtn.disabled = qcc.waiting === 0;
 
-    var certs = pickedFiles.fileCalCerts.length;
-    setText('calCertCount', certs + (certs === 1 ? ' page uploaded' : ' pages uploaded'));
+    var cc = scanCounts_('cert');
+    setText('calCertCount', scanCountText_(cc));
     var certBtn = document.getElementById('readCertsBtn');
-    if (certBtn) certBtn.disabled = certs === 0;
+    if (certBtn && certBtn.textContent !== 'Reading…') certBtn.disabled = cc.waiting === 0;
   }
 
   function refreshStatuses() {
@@ -2768,16 +3129,6 @@
     });
   }
 
-  function analyzePageOnServer_(pageImg) {
-    if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
-    return fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'analyzeQcPage', password: getPassword(), imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
-    }).then(function (r) { return r.json(); }).catch(function () {
-      return { status: 'error', message: 'Network error contacting the backend.' };
-    });
-  }
-
   function normalizeReg_(reg) { return (reg || '').toUpperCase().replace(/\s+/g, ''); }
 
   /* Guards against non-registrations being treated as vehicles — the VTS
@@ -2795,7 +3146,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 12;
+  var EXPECTED_BACKEND_VERSION = 13;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -2831,95 +3182,6 @@
      number, so Paul can accept a new due date rather than retyping it. */
   var certResults = [];
   var certEvidencePages = [];
-
-  function runCertScan() {
-    var files = pickedFiles.fileCalCerts;
-    if (!files.length) return;
-
-    var statusEl = document.getElementById('calCertStatus');
-    var btn = document.getElementById('readCertsBtn');
-
-    if (!SCRIPT_URL) {
-      statusEl.innerHTML = '<span style="color:var(--warning)">Reading certificates needs the Apps Script backend deployed with an Anthropic API key — not connected yet.</span>';
-      return;
-    }
-    checkBackendVersion_();
-    if (typeof pdfjsLib === 'undefined') {
-      statusEl.innerHTML = '<span style="color:var(--danger)">PDF reader failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
-      return;
-    }
-
-    btn.disabled = true;
-    btn.textContent = 'Reading…';
-    statusEl.textContent = '';
-    document.getElementById('calCertResults').innerHTML = '';
-    certResults = [];
-    certEvidencePages = [];
-
-    var progress = makeProgress('cal');
-    progress.start('Opening files…');
-
-    Promise.all(files.map(fileToPageImages_))
-      .then(function (nested) {
-        var allPages = [].concat.apply([], nested);
-        progress.set(0, allPages.length);
-        return runWithConcurrency_(allPages, function (pageImg) {
-          return analyzeCertOnServer_(pageImg).then(function (res) {
-            certResults.push({ label: pageImg.label, response: res });
-            var a = (res.status === 'success' && res.result) ? res.result : {};
-            certEvidencePages.push({
-              label: pageImg.label,
-              base64: pageImg.base64,
-              mimeType: pageImg.mimeType,
-              equipment: a.equipment_name || '',
-              makeModel: a.make_model || '',
-              serial: a.serial_number || '',
-              certNo: a.certificate_number || '',
-              calibratedOn: a.calibrated_on || '',
-              nextDue: a.next_due || '',
-              by: a.calibrated_by || '',
-              isCert: a.is_calibration_certificate !== false,
-              confidence: a.confidence || ''
-            });
-            var entry = certEvidencePages[certEvidencePages.length - 1];
-            var rot = [90, 180, 270].indexOf(a.rotation) > -1 ? a.rotation : 0;
-            if (rot) {
-              return rotateImageBase64_(entry.base64, entry.mimeType, rot)
-                .then(function (fixed) { if (fixed) entry.base64 = fixed; })
-                .catch(function () {});
-            }
-          });
-        }, function (done, total) { progress.set(done, total); });
-      })
-      .then(function () {
-        progress.finish();
-        certEvidencePages.sort(function (a, b) {
-          var ea = (a.equipment || 'zzz').toLowerCase(), eb = (b.equipment || 'zzz').toLowerCase();
-          return ea === eb ? (a.label < b.label ? -1 : 1) : (ea < eb ? -1 : 1);
-        });
-        renderCertResults_();
-        btn.disabled = false;
-        btn.textContent = 'Read certificates';
-      })
-      .catch(function (err) {
-        progress.fail();
-        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those certificates: ' +
-          escapeHtml_(err.message || 'unknown error') + '</span>';
-        btn.disabled = false;
-        btn.textContent = 'Read certificates';
-      });
-  }
-
-  function analyzeCertOnServer_(pageImg) {
-    if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
-    return fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'analyzeCalibrationCert', password: getPassword(),
-                             imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
-    }).then(function (r) { return r.json(); }).catch(function () {
-      return { status: 'error', message: 'Network error contacting the backend.' };
-    });
-  }
 
   /* Serial numbers are the only reliable way to tie a certificate to a row in
      the equipment list — names vary between the certificate and what Paul
@@ -2981,6 +3243,7 @@
       (failed ? ' · ' + failed + ' could not be read' : '');
 
     certEvidencePages.forEach(function (p, idx) {
+      if (p.failed) return;   // listed with the unreadable pages below
       var row = document.createElement('div');
       row.className = 'cert-card' + (p.isCert ? '' : ' is-other');
       var matchRow = p.serial ? findCalRowBySerial_(p.serial) : null;
@@ -3047,94 +3310,315 @@
     return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
-  function runSmartScan() {
-    var files = pickedFiles.fileQcScans;
-    if (!files.length) return;
+  /* ═══════════════ Reading and filing scanned pages ═══════════════
+     QC paperwork and calibration certificates work the same way. Each page
+     is turned into an image and sent to the back office, which files it in
+     the month's folder in Google Drive and asks Claude to read it. What is
+     on screen is then rebuilt from the filed pages, so it always matches
+     what is actually saved. Pages are identified by a fingerprint of the
+     original file plus the page number, so adding the same scan twice
+     doesn't file it twice. */
+  var savedPages_ = { qc: [], cert: [] };     // pages filed in Drive, as the back office describes them
+  var unsavedPages_ = { qc: [], cert: [] };   // page images that could not be filed, kept for a retry
+  var pageImageCache_ = {};                   // 'YYYY-MM:qc-3' -> image as filed, to avoid re-downloading
 
-    var statusEl = document.getElementById('qcSortStatus');
-    var btn = document.getElementById('sortScansBtn');
+  var SCAN_UI = {
+    qc:   { input: 'fileQcScans',  list: 'listQcScans',  btn: 'sortScansBtn', idle: 'Sort scanned pages',
+            status: 'qcSortStatus', progress: 'qc',  action: 'analyzeQcPage' },
+    cert: { input: 'fileCalCerts', list: 'listCalCerts', btn: 'readCertsBtn', idle: 'Read certificates',
+            status: 'calCertStatus', progress: 'cal', action: 'analyzeCalibrationCert' }
+  };
+
+  function runSmartScan() { return runScan_('qc'); }
+  function runCertScan() { return runScan_('cert'); }
+
+  function runScan_(kind) {
+    var ui = SCAN_UI[kind];
+    var files = pickedFiles[ui.input].slice();
+    var retryPages = unsavedPages_[kind].slice();
+    if (!files.length && !retryPages.length) return Promise.resolve();
+
+    var statusEl = document.getElementById(ui.status);
+    var btn = document.getElementById(ui.btn);
 
     if (!SCRIPT_URL) {
-      statusEl.innerHTML = '<span style="color:var(--warning)">Smart scan needs the Apps Script backend deployed with an Anthropic API key — not connected yet.</span>';
-      return;
+      statusEl.innerHTML = '<span style="color:var(--warning)">Reading pages needs the Apps Script backend deployed with an Anthropic API key — not connected yet.</span>';
+      return Promise.resolve();
     }
-
+    if (!recordsReady_) {
+      statusEl.innerHTML = '<span style="color:var(--warning)">Still loading your records — try again in a moment.</span>';
+      return Promise.resolve();
+    }
     // Flag a stale backend deployment before spending API calls on a sort that
     // would be mis-sorted for reasons that look like an AI problem but aren't.
     checkBackendVersion_();
-
     // Without the PDF reader nothing can be opened at all, so say so up front
     // rather than churning through files and finding zero pages.
     if (typeof pdfjsLib === 'undefined') {
       statusEl.innerHTML = '<span style="color:var(--danger)">PDF reader failed to load — the assets/lib folder is missing from this site. Upload it and reload.</span>';
-      return;
+      return Promise.resolve();
     }
 
+    var month = currentMonth, token = openToken_;
     btn.disabled = true;
-    btn.textContent = 'Sorting…';
+    btn.textContent = 'Reading…';
     statusEl.textContent = '';
-    document.getElementById('qcGroupsContainer').innerHTML = '';
-    qcSortResults = [];
-    qcEvidencePages = [];
-
-    var progress = makeProgress('qc');
+    var progress = makeProgress(ui.progress);
     progress.start('Opening files…');
 
-    Promise.all(files.map(fileToPageImages_))
+    return Promise.all(files.map(filePagesWithFingerprints_))
       .then(function (nested) {
-        var allPages = [].concat.apply([], nested);
-        progress.set(0, allPages.length);
-        return runWithConcurrency_(allPages, function (pageImg) {
-          return analyzePageOnServer_(pageImg).then(function (res) {
-            qcSortResults.push({ label: pageImg.label, response: res });
-
-            // Keep the page image plus whatever was read off it, so the
-            // printed report can reproduce it as labelled evidence.
-            var a = (res.status === 'success' && res.result) ? res.result : {};
-            qcEvidencePages.push({
-              label: pageImg.label,
-              base64: pageImg.base64,
-              mimeType: pageImg.mimeType,
-              reg: looksLikeRealPlate_(a.registration) ? normalizeReg_(a.registration) : '',
-              docType: a.document_type && a.document_type !== 'other' ? a.document_type : '',
-              tester: a.tester_name || '',
-              testDate: a.test_date || '',
-              qcFlag: !!a.qc_flag
+        var pages = retryPages.concat([].concat.apply([], nested));
+        // From here every page is either filed or held in unsavedPages_, so
+        // the files themselves are no longer needed.
+        unsavedPages_[kind] = [];
+        pickedFiles[ui.input] = pickedFiles[ui.input].filter(function (f) { return files.indexOf(f) === -1; });
+        renderFileList(ui.input, ui.list, null);
+        progress.set(0, pages.length);
+        // Every page counts as "saving" until it is filed or set aside, even
+        // while it waits its turn, so the indicator stays honest throughout.
+        savesInFlight_ += pages.length;
+        renderSaveIndicator_();
+        return runWithConcurrency_(pages, function (pg) {
+          return api_(ui.action, { month: month, imageBase64: pg.base64, mimeType: pg.mimeType,
+                                   fingerprint: pg.fingerprint, sourceName: pg.label })
+            .then(function (res) {
+              savesInFlight_--;
+              if (token !== openToken_) return;   // another month was opened; this page is filed in its own
+              if (res.page) {
+                upsertSavedPage_(kind, res.page);
+                pageImageCache_[month + ':' + res.page.id] = pg.base64;
+              } else {
+                pg.message = res.message || 'Could not be filed';
+                unsavedPages_[kind].push(pg);
+              }
+              renderSaveIndicator_();
             });
-            var entry = qcEvidencePages[qcEvidencePages.length - 1];
-
-            // Landscape paperwork fed through a portrait scanner arrives
-            // sideways. Turn it upright now, in the image data, so the printed
-            // evidence can be read without rotating the paper.
-            var rot = [90, 180, 270].indexOf(a.rotation) > -1 ? a.rotation : 0;
-            if (rot) {
-              return rotateImageBase64_(entry.base64, entry.mimeType, rot)
-                .then(function (fixed) { if (fixed) entry.base64 = fixed; })
-                .catch(function () { /* keep the original if rotation fails */ });
-            }
-          });
         }, function (done, total) { progress.set(done, total); });
       })
       .then(function () {
         progress.finish();
-        // Group the evidence by vehicle so each car's pages print together,
-        // with anything unidentified at the end.
-        qcEvidencePages.sort(function (a, b) {
-          if (a.reg === b.reg) return a.label < b.label ? -1 : 1;
-          if (!a.reg) return 1;
-          if (!b.reg) return -1;
-          return a.reg < b.reg ? -1 : 1;
-        });
-        renderQcGroups_();
-        btn.disabled = false;
-        btn.textContent = 'Sort scanned pages';
+        btn.textContent = ui.idle;
+        renderPageResults_(kind);
       })
       .catch(function (err) {
         progress.fail();
-        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those pages: ' + escapeHtml_(err.message || 'unknown error') + '</span>';
-        btn.disabled = false;
-        btn.textContent = 'Sort scanned pages';
+        btn.textContent = ui.idle;
+        refreshStatuses();
+        statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those pages: ' +
+          escapeHtml_(err.message || 'unknown error') + '</span>';
       });
+  }
+
+  /* Turns a file into page images, each with a fingerprint made from the
+     original file's contents and the page number. */
+  function filePagesWithFingerprints_(file) {
+    return sha256Hex_(file).then(function (hash) {
+      return fileToPageImages_(file).then(function (pages) {
+        pages.forEach(function (p, i) { p.fingerprint = hash ? hash + '#' + (i + 1) : null; });
+        return pages;
+      });
+    });
+  }
+
+  function sha256Hex_(file) {
+    if (!window.crypto || !crypto.subtle || !file.arrayBuffer) return Promise.resolve(null);
+    return file.arrayBuffer()
+      .then(function (buf) { return crypto.subtle.digest('SHA-256', buf); })
+      .then(function (d) {
+        return Array.prototype.map.call(new Uint8Array(d), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+      })
+      .catch(function () { return null; });
+  }
+
+  function upsertSavedPage_(kind, page) {
+    var list = savedPages_[kind];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === page.id) { list[i] = page; return; }
+    }
+    list.push(page);
+  }
+
+  function validRotation_(r) { return [90, 180, 270].indexOf(r) > -1 ? r : 0; }
+
+  function pageResponse_(p) {
+    if (p.status === 'read') return { status: 'success', result: p.reading };
+    return { status: 'error', message: p.status === 'reading'
+      ? 'Still being read — try again in a minute'
+      : (p.error || 'Could not read this page') };
+  }
+
+  /* Rebuilds the on-screen results and the report's evidence lists from the
+     filed pages. The images themselves are fetched only when the report is
+     made (ensureEvidence_). */
+  function rebuildFromPages_(kind) {
+    if (kind === 'qc') {
+      qcSortResults = savedPages_.qc.map(function (p) { return { id: p.id, label: p.sourceName, response: pageResponse_(p) }; });
+      qcEvidencePages = savedPages_.qc.map(function (p) {
+        var a = p.reading || {};
+        return {
+          id: p.id, kind: 'qc', label: p.sourceName, base64: null, mimeType: 'image/jpeg',
+          rotation: validRotation_(a.rotation),
+          reg: looksLikeRealPlate_(a.registration) ? normalizeReg_(a.registration) : '',
+          docType: a.document_type && a.document_type !== 'other' ? a.document_type : '',
+          tester: a.tester_name || '',
+          testDate: a.test_date || '',
+          qcFlag: !!a.qc_flag
+        };
+      });
+      // Group the evidence by vehicle so each car's pages print together,
+      // with anything unidentified at the end.
+      qcEvidencePages.sort(function (a, b) {
+        if (a.reg === b.reg) return a.label < b.label ? -1 : 1;
+        if (!a.reg) return 1;
+        if (!b.reg) return -1;
+        return a.reg < b.reg ? -1 : 1;
+      });
+    } else {
+      certResults = savedPages_.cert.map(function (p) { return { id: p.id, label: p.sourceName, response: pageResponse_(p) }; });
+      certEvidencePages = savedPages_.cert.map(function (p) {
+        var a = p.reading || {};
+        return {
+          id: p.id, kind: 'cert', label: p.sourceName, base64: null, mimeType: 'image/jpeg',
+          rotation: validRotation_(a.rotation),
+          failed: p.status !== 'read',
+          equipment: a.equipment_name || '',
+          makeModel: a.make_model || '',
+          serial: a.serial_number || '',
+          certNo: a.certificate_number || '',
+          calibratedOn: a.calibrated_on || '',
+          nextDue: a.next_due || '',
+          by: a.calibrated_by || '',
+          isCert: a.is_calibration_certificate !== false,
+          confidence: a.confidence || ''
+        };
+      });
+      certEvidencePages.sort(function (a, b) {
+        var ea = (a.equipment || 'zzz').toLowerCase(), eb = (b.equipment || 'zzz').toLowerCase();
+        return ea === eb ? (a.label < b.label ? -1 : 1) : (ea < eb ? -1 : 1);
+      });
+    }
+  }
+
+  function renderPageResults_(kind) {
+    rebuildFromPages_(kind);
+    var statusEl = document.getElementById(SCAN_UI[kind].status);
+    if (!savedPages_[kind].length) {
+      statusEl.innerHTML = '';
+      document.getElementById(kind === 'qc' ? 'qcGroupsContainer' : 'calCertResults').innerHTML = '';
+    } else if (kind === 'qc') {
+      renderQcGroups_();
+    } else {
+      renderCertResults_();
+    }
+    if (unsavedPages_[kind].length) {
+      statusEl.innerHTML += '<div style="color:var(--danger);margin-top:4px">' + unsavedPages_[kind].length +
+        ' page' + (unsavedPages_[kind].length === 1 ? ' was' : 's were') +
+        ' not filed — see the list below and press Retry.</div>';
+    }
+    renderPageList_(kind);
+    refreshStatuses();
+  }
+
+  /* Every filed page, with what happened to it, plus Retry and Remove. */
+  function renderPageList_(kind) {
+    var host = document.getElementById(kind === 'qc' ? 'qcPageList' : 'certPageList');
+    if (!host) return;
+    var saved = savedPages_[kind], unsaved = unsavedPages_[kind];
+    if (!saved.length && !unsaved.length) { host.innerHTML = ''; return; }
+    var open = host.querySelector('details') ? host.querySelector('details').open : !!unsaved.length;
+    var rows = saved.map(function (p) {
+      var state = p.status === 'read' ? '<span class="pl-ok">Read ✓</span>'
+        : p.status === 'reading' ? '<span class="pl-wait">Being read…</span>'
+        : '<span class="pl-bad">Could not read: ' + escapeHtml_(p.error || 'unknown') + '</span>';
+      return '<div class="pl-row">' +
+        '<span class="pl-name">' + escapeHtml_(p.sourceName) + '</span>' + state +
+        '<span class="pl-actions">' +
+          (p.status === 'read' ? '' : '<button type="button" class="pl-btn" data-retry="' + p.id + '">Retry</button>') +
+          '<button type="button" class="pl-btn" data-remove="' + p.id + '">Remove</button>' +
+        '</span></div>';
+    }).concat(unsaved.map(function (pg, i) {
+      return '<div class="pl-row">' +
+        '<span class="pl-name">' + escapeHtml_(pg.label) + '</span>' +
+        '<span class="pl-bad">Not saved: ' + escapeHtml_(pg.message || '') + '</span>' +
+        '<span class="pl-actions"><button type="button" class="pl-btn" data-resend="1">Retry</button>' +
+        '<button type="button" class="pl-btn" data-discard="' + i + '">Discard</button></span></div>';
+    }));
+    host.innerHTML = '<details class="page-list"' + (open ? ' open' : '') + '><summary>Filed pages (' + saved.length + ')' +
+      (unsaved.length ? ' · ' + unsaved.length + ' not saved' : '') + '</summary>' + rows.join('') + '</details>';
+
+    host.querySelectorAll('[data-remove]').forEach(function (b) {
+      b.addEventListener('click', function () { removeFiledPage_(kind, b.dataset.remove); });
+    });
+    host.querySelectorAll('[data-retry]').forEach(function (b) {
+      b.addEventListener('click', function () { retryFiledPage_(kind, b.dataset.retry, b); });
+    });
+    host.querySelectorAll('[data-resend]').forEach(function (b) {
+      b.addEventListener('click', function () { runScan_(kind); });
+    });
+    host.querySelectorAll('[data-discard]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        unsavedPages_[kind].splice(parseInt(b.dataset.discard, 10), 1);
+        renderPageResults_(kind);
+        renderSaveIndicator_();
+      });
+    });
+  }
+
+  function removeFiledPage_(kind, id) {
+    var p = savedPages_[kind].filter(function (x) { return x.id === id; })[0];
+    if (!p) return;
+    if (!confirm('Remove ' + p.sourceName + ' from ' + formatMonth(currentMonth) + '?\n\n' +
+                 'It will be moved to the Removed folder in Google Drive, not deleted.')) return;
+    var month = currentMonth;
+    trackSave_('Removing ' + p.sourceName, function () {
+      return api_('removePage', { month: month, kind: kind, id: id });
+    }).then(function (res) {
+      if (month !== currentMonth) return;
+      if (res.status === 'success') {
+        savedPages_[kind] = savedPages_[kind].filter(function (x) { return x.id !== id; });
+        renderPageResults_(kind);
+      } else if (res.status !== 'error' && res.status !== 'busy') {
+        alert(res.message || 'Could not remove that page.');
+      }
+    });
+  }
+
+  function retryFiledPage_(kind, id, btn) {
+    var month = currentMonth;
+    if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+    trackSave_('Reading a page again', function () {
+      return api_('retryPage', { month: month, kind: kind, id: id });
+    }).then(function (res) {
+      if (month !== currentMonth) return;
+      if (res.page) upsertSavedPage_(kind, res.page);
+      else if (res.status === 'locked' || res.status === 'missing') alert(res.message);
+      renderPageResults_(kind);
+    });
+  }
+
+  /* Fetches the filed page images the report needs, turned upright using the
+     rotation Claude reported. Images just scanned in this session are reused
+     rather than downloaded again. */
+  function ensureEvidence_() {
+    var month = currentMonth;
+    var need = qcEvidencePages.concat(certEvidencePages).filter(function (p) { return !p.base64; });
+    if (!need.length) return Promise.resolve();
+    if (!SCRIPT_URL) return Promise.reject(new Error('Not connected to the records.'));
+    return runWithConcurrency_(need, function (p) {
+      var key = month + ':' + p.id;
+      var get = pageImageCache_[key]
+        ? Promise.resolve({ status: 'success', base64: pageImageCache_[key], mimeType: 'image/jpeg' })
+        : api_('getPageImage', { month: month, kind: p.kind, id: p.id });
+      return get.then(function (img) {
+        if (img.status !== 'success') throw new Error((img.message || 'Could not fetch a page') + ' (' + p.label + ')');
+        pageImageCache_[key] = img.base64;
+        if (!p.rotation) { p.base64 = img.base64; p.mimeType = img.mimeType || 'image/jpeg'; return; }
+        return rotateImageBase64_(img.base64, img.mimeType || 'image/jpeg', p.rotation)
+          .then(function (b) { p.base64 = b; p.mimeType = 'image/jpeg'; },
+                function () { p.base64 = img.base64; });
+      });
+    });
   }
 
   function renderQcGroups_() {
@@ -3537,6 +4021,7 @@
     updateProgress();
     refreshStatuses();
     updateMonthLabels();
+    renderSaveIndicator_();
   })();
 
   /* ═══════════════ Test Quality Information ═══════════════
@@ -3907,12 +4392,11 @@
 
     // The scanned QC paperwork belongs in this table too — it is the bulk of
     // the evidence and was never listed.
-    var qcFile = pickedFiles.fileQcScans[0];
-    if (qcFile || qcEvidencePages.length) {
+    if (qcEvidencePages.length) {
       dvsaRows += '<tr><td>QC paperwork scans</td>' +
         '<td><span class="pill ' + (qcEvidencePages.length ? 'pill-yes' : 'pill-warn') + '">' +
           (qcEvidencePages.length ? 'Included' : 'Not read') + '</span></td>' +
-        '<td>' + escapeHtml_(qcFile ? qcFile.name : '—') + '</td>' +
+        '<td>Filed in Google Drive</td>' +
         '<td>' + (qcEvidencePages.length
           ? qcEvidencePages.length + ' page' + (qcEvidencePages.length === 1 ? '' : 's') + ' reproduced at the back'
           : '<span class="pr-na">—</span>') + '</td></tr>';
@@ -3922,18 +4406,17 @@
         '<td class="pr-na">—</td><td class="pr-na">—</td></tr>';
     }
 
-    var certFile = pickedFiles.fileCalCerts[0];
-    if (certFile || certEvidencePages.length) {
+    if (certEvidencePages.length) {
       dvsaRows += '<tr><td>Calibration certificates</td>' +
         '<td><span class="pill ' + (certEvidencePages.length ? 'pill-yes' : 'pill-warn') + '">' +
           (certEvidencePages.length ? 'Included' : 'Not read') + '</span></td>' +
-        '<td>' + escapeHtml_(certFile ? certFile.name : '—') + '</td>' +
+        '<td>Filed in Google Drive</td>' +
         '<td>' + (certEvidencePages.length
           ? certEvidencePages.length + ' page' + (certEvidencePages.length === 1 ? '' : 's') + ' reproduced at the back'
           : '<span class="pr-na">—</span>') + '</td></tr>';
     }
 
-    var qc = pickedFiles.fileQcScans.length;
+    var qc = savedPages_.qc.length;
 
     // Checklist detail
     /* Laid out in two columns rather than one long table. 22 sections and 61
@@ -4343,25 +4826,6 @@
      uploading the paperwork and going straight to Generate produced a report
      with nothing attached. The pages are now converted on demand here too, so
      what was uploaded always reaches the back of the report — sorted or not. */
-  function ensureQcEvidence_() {
-    var files = pickedFiles.fileQcScans;
-    if (!files.length || qcEvidencePages.length) return Promise.resolve();
-
-    if (typeof pdfjsLib === 'undefined') {
-      return Promise.reject(new Error('PDF reader failed to load — the assets/lib folder is missing from this site.'));
-    }
-
-    return Promise.all(files.map(fileToPageImages_)).then(function (nested) {
-      var allPages = [].concat.apply([], nested);
-      qcEvidencePages = allPages.map(function (p) {
-        return {
-          label: p.label, base64: p.base64, mimeType: p.mimeType,
-          reg: '', docType: '', tester: '', testDate: '', qcFlag: false
-        };
-      });
-    });
-  }
-
   /* Everything a complete monthly record needs before it can be generated.
      A report missing its evidence still looks finished once printed and filed,
      which is the worst outcome — so the gate is on generating, not on printing
@@ -4375,11 +4839,20 @@
 
     // The checklist answers and saved figures belong to the picker's month, so
     // a report built from another month's DVSA files would mix two months.
+    // When connected, a file for another month is never filed in this one
+    // (Paul is offered the right month as he adds it), so this only catches
+    // working offline.
     var dm = dataMonth_();
     if (dm && dm !== currentMonth) {
       missing.push({ what: 'The DVSA files are for ' + formatMonth(dm) + ' but the reporting month is set to ' +
-                           formatMonth(currentMonth) + '. Fix switches to ' + formatMonth(dm) + ' and keeps your uploads.',
-                     action: 'dataMonth' });
+                           formatMonth(currentMonth) + '. Change the reporting month at the top of the page.',
+                     where: 'report' });
+    }
+
+    // Nothing unsaved may go into a report: it would describe a record that
+    // isn't actually in Google Drive.
+    if (SCRIPT_URL && hasPendingSaves_()) {
+      missing.push({ what: 'Some changes are still saving or were not saved — see the top of the page', where: 'report' });
     }
 
     DVSA_REPORT_FILES.forEach(function (d) {
@@ -4388,12 +4861,21 @@
       }
     });
 
-    if (!pickedFiles.fileQcScans.length) {
+    var qcc = scanCounts_('qc');
+    if (!qcc.filed && !qcc.waiting) {
       missing.push({ what: 'No QC paperwork uploaded', where: 'report' });
-    } else if (!qcEvidencePages.length || !qcSortResults.length) {
-      // Uploaded but never sorted: the pages would print with no registration,
+    } else if (qcc.waiting) {
+      // Added but never read: the pages would print with no registration,
       // no tester and no grouping — evidence nobody can match to a vehicle.
-      missing.push({ what: 'QC paperwork uploaded but not sorted yet', where: 'report' });
+      missing.push({ what: 'QC paperwork added but not sorted yet — press "Sort scanned pages"', where: 'report' });
+    }
+    if (qcc.unread) {
+      missing.push({ what: qcc.unread + ' QC page' + (qcc.unread === 1 ? '' : 's') +
+                           ' could not be read — retry or remove ' + (qcc.unread === 1 ? 'it' : 'them'), where: 'report' });
+    }
+    var cc = scanCounts_('cert');
+    if (cc.waiting) {
+      missing.push({ what: 'Calibration certificates added but not read yet — press "Read certificates"', where: 'report' });
     }
 
     var total = 0, answered = 0;
@@ -4420,19 +4902,12 @@
       '<ul class="blockers-list">' +
         missing.map(function (m) {
           return '<li><span>' + escapeHtml_(m.what) + '</span>' +
-                 '<button type="button" class="blockers-go" data-go="' + (m.where || '') + '"' +
-                   (m.action ? ' data-action="' + m.action + '"' : '') + '>Fix</button></li>';
+                 '<button type="button" class="blockers-go" data-go="' + (m.where || 'report') + '">Fix</button></li>';
         }).join('') +
       '</ul>';
     box.style.display = 'block';
     box.querySelectorAll('.blockers-go').forEach(function (b) {
       b.addEventListener('click', function () {
-        if (b.dataset.action === 'dataMonth') {
-          switchToDataMonth_();
-          var left = reportBlockers_();
-          if (left.length) showReportBlockers_(left); else hideReportBlockers_();
-          return;
-        }
         switchTab(b.dataset.go);
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
@@ -4458,7 +4933,7 @@
     btns.forEach(function (b) { b.disabled = true; });
     var restore = function () { btns.forEach(function (b) { b.disabled = false; }); };
 
-    ensureQcEvidence_()
+    ensureEvidence_()
       .then(function () {
         document.getElementById('printReport').innerHTML = buildReportHTML();
         document.getElementById('previewBody').innerHTML = buildReportHTML();

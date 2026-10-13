@@ -49,6 +49,10 @@ one Google Apps Script file.
 | `index.html` | The entire front end: CSS, markup and all JS (ES5-style, global functions) in one file of about 4,400 lines. |
 | `Code.gs` | The Apps Script backend. It is **not** served from this repo; it is pasted into script.google.com (see Deploy). |
 | `DEPLOY.md` | Step-by-step, non-technical guide to setting up the backend. |
+| `DEPLOY-TEST.md` | The same, for the TEST copy (its own back office and Drive folder). |
+| `SPEC.md` | The agreed specification for Monthly Records. Build to it. |
+| `tests/` | `fake-google.js` runs the real `Code.gs` on a pretend Google; `backend.test.js` and `e2e.test.js` (real browser) check it against `SPEC.md`; `serve.js` runs the app locally on the pretend Google; `fixtures.js` makes realistic DVSA files and scans. |
+| `tools/make-test-copy.js` | Makes `test.html` (the TEST copy) from `index.html`. |
 | `assets/lib/` | Vendored `xlsx.full.min.js` (SheetJS, reads the DVSA Excel exports) and `pdf.min.js` / `pdf.worker.min.js` (PDF.js, turns PDF pages into images). |
 | `assets/mortlake-logo.png` | Logo used in the app and the printed report. |
 | `CNAME` | GitHub Pages custom domain: `mortlakemotreport.exposureboost.co.uk`. |
@@ -59,28 +63,49 @@ one Google Apps Script file.
 - **Navigation:** `switchTab('dashboard' | 'report' | 'checklist')`.
 - **Login:** `verifyPassword` posts `checkDashboardPassword` and keeps the
   password in localStorage so later backend calls can send it.
-- **Storage:** `store` is held in localStorage under `mortlake_report_v1` and
-  is the working copy. `syncDown_` pulls the server copy once after unlock.
-  `scheduleSyncUp_` / `syncUp_` push changes, debounced by 1.5s. Nothing is
-  pushed until `syncDown_` has succeeded, so a fresh browser can't overwrite
-  the server history with its seeded defaults.
-  - What's saved: calibration rows, per-month checklist answers and figures
-    (`store.months['YYYY-MM']`), and Test Quality data by DVSA period
-    (`store.testQuality['Jul-26']`).
-  - **What's never saved:** scanned paperwork and DVSA exports. They are
-    processed and discarded by design, and only kept in memory
-    (`pickedFiles`, `qcEvidencePages`, `qcSortResults`).
-- **Smart scan** (`runSmartScan`, `runCertScan`): `fileToPageImages_` turns
-  files into JPEGs no larger than 1560px on the long edge. Pages are sent 3
-  at a time (`SCAN_CONCURRENCY`) to the backend, then rotated upright for
-  the printed appendix (`rotateImageBase64_`).
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (currently 12) must
+- **Storage (Monthly Records, stage A):** the true copy of everything is in
+  Paul's Google Drive, filed by the back office as he works. `store`
+  (localStorage, `mortlake_report_v1`) is only a cache.
+  - **Starting up:** `startRecords_()` runs after unlock. It moves
+    across old data once (`migrateLegacy`), then loads the records index and
+    the equipment list, then calls `openMonth_(currentMonth)`.
+  - **Opening a month:** `openMonth_` loads `details.json` and re-reads the
+    filed DVSA files, so the full test lists come back. A cover
+    (`#monthOverlay`) stops any edits until the month has loaded.
+  - **Changing month:** `changeMonth_` switches months. It asks first only if
+    scans are waiting to be read.
+  - **Saving:** every save goes through `trackSave_`, which drives the top
+    indicator ("Saving… / All saved ✓ / N changes not saved · Retry") and keeps
+    failed saves for Retry. `hasPendingSaves_()` blocks generating the report
+    and warns on closing the tab while anything is unsaved.
+  - **Checklist** (`scheduleChecklistSave_` / `flushChecklist_`) and
+    **equipment** (`scheduleEquipmentSave_`) save 1.5s after the last change,
+    one save at a time. They carry a revision number, so a change made on
+    another computer is never overwritten (the save is refused and the latest
+    copy is loaded).
+  - **DVSA files** (`processDvsaFile_`): picker and drag-and-drop both come
+    here. The file's own month is checked first (`fileMonth_`); a file for
+    another month offers to switch rather than filing it in the wrong one.
+    It is then filed with its parsed figures (`saveDvsaFile_`).
+  - **Scans** (`runScan_('qc' | 'cert')`): each page is sent with the month
+    and a fingerprint (SHA-256 of the file + page number). The back office
+    files it and has Claude read it. `savedPages_` holds what is filed;
+    `unsavedPages_` holds pages that couldn't be filed, for Retry. The screen
+    and the report's evidence lists are rebuilt from `savedPages_`
+    (`rebuildFromPages_`). Images are fetched only when the report needs
+    them (`ensureEvidence_`), and are turned upright using the rotation
+    Claude reported.
+- **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
+  1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`).
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (13 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
   preview overlay, and printed with `window.print()`.
 - **Backend URL:** `SCRIPT_URL` near the top of the main `<script>`. If it's
-  empty, the app runs locally with no login, sync or scanning.
+  empty, the app runs locally with no login, saving or scanning, and the
+  top of the page says "Not connected — nothing is being saved".
+  `IS_TEST_COPY` shows the TEST banner (set by `tools/make-test-copy.js`).
 - **Built-in data:** `DEFAULT_EQUIPMENT` (the garage's real equipment list,
   seeded once) and `CHECKLIST` (the self-assessment questions).
 
@@ -95,10 +120,25 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `checkDashboardPassword` | n/a | Login check. |
 | `analyzeQcPage` | yes | Claude reads one QC page and returns category, document type, registration, make/model, whether it's an EV, tester, date, period, QC flag, rotation and confidence. |
 | `analyzeCalibrationCert` | yes | Claude reads one calibration certificate and returns equipment, serial number, calibration and next-due dates, rotation and confidence. |
-| `loadAppData` / `saveAppData` | yes | App data stored in Script Properties under `DATA_calibration`, `DATA_month_YYYY-MM` and `DATA_tq_Mon-YY`. Keys are checked with regexes so a save can't overwrite the secrets. |
+| `loadAppData` / `saveAppData` | yes | **Old storage, kept only so the current live page keeps working after v13 is deployed.** Script Properties under `DATA_calibration`, `DATA_month_YYYY-MM` and `DATA_tq_Mon-YY`. |
+| `analyzeQcPage` / `analyzeCalibrationCert` **with `month`** | yes | Files the page in the month's Drive folder, then has Claude read it, outside the lock. A known fingerprint isn't filed or read again. A failed read is still filed, as `error`, and can be retried. |
+| `recordsStatus`, `migrateLegacy` | yes | Whether the old data has been moved across; moving it across once. It copies and never deletes, and also takes test-log totals that only lived in a browser. |
+| `listMonths`, `loadMonth` | yes | The records index; one month's `details.json` (no Drive ids or images). |
+| `saveMonthFields` | yes | Checklist only. Refused with `conflict` if `baseRevision` is stale. |
+| `saveDvsaFile`, `getDvsaFile` | yes | File and fetch the original DVSA export. A replaced one goes to `Removed/`. |
+| `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again. |
+| `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
 
 - **Secrets:** `DASHBOARD_PASSWORD` and `ANTHROPIC_API_KEY` are kept in
-  Script Properties and must never be in `index.html`.
+  Script Properties and must never be in `index.html`. Other properties are
+  `RECORDS_FOLDER_ID` (set automatically), `RECORDS_FOLDER_NAME` (TEST copy
+  only) and `RECORDS_MIGRATED`.
+- **Records rules enforced on the server:**
+  - Every change to a month runs inside `withLock_`.
+  - A month with status `signed` refuses all changes (`assertEditable_`).
+  - Nothing is deleted: removed files go to the month's `Removed/` folder.
+  - Errors come back as `{ status, message }` (`appError_`): `locked`,
+    `conflict`, `missing`, `busy` or `error`.
 - **Claude calls:** they go straight to the Messages API using
   `CLAUDE_MODEL = 'claude-opus-5'` with `max_tokens: 8000` and
   `effort: 'low'`. 429, 500 and 529 errors are retried with backoff.
@@ -135,11 +175,27 @@ the old code keeps running, and the app's version warning will show it.
 
 ## Testing
 
-There are no automated tests. To check a change, open `index.html` in a
-browser or run a static server such as `python3 -m http.server`.
+**Automated checks.** Run these before pushing any change to `index.html`
+or `Code.gs`:
 
-- Leave `SCRIPT_URL` blank to work offline.
-- With the real URL set, scanning and sync need the password.
+```
+npm install            # once; installs Playwright (or use a global install)
+npm test               # 18 back-office checks + 6 real-browser checks
+```
+
+- **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
+  a pretend Google (`tests/fake-google.js`).
+- **Browser checks:** `tests/e2e.test.js` drives the real page in Chromium
+  against it, including "another computer", failed saves with Retry,
+  conflicts, moving old data across and the signed-month lock.
+- **When something changes:** add a check whenever a rule in `SPEC.md` is
+  added or changed.
+
+**Trying the app by hand:** `npm run serve`, then open
+http://localhost:8790 (password `pw`). It runs on the pretend Google, and
+Claude's readings are made up.
+
+**Previewing with no back office:** open `index.html` with `SCRIPT_URL` blank.
 
 ## Current work / to-do (as of Oct 2026)
 
@@ -188,8 +244,16 @@ From Ediz, in priority order:
    - **Full specification:** `SPEC.md`. It's the source of truth for this
      feature, so build to it, and update it first if the logic changes.
    **Process:** (1) decisions ✅ → (2) test how to make the PDF
-   automatically ✅ → (3) `SPEC.md` written, awaiting approval → (4) build in
-   stages A/B/C on a test copy → (5) a trial month, then go live.
+   automatically ✅ → (3) `SPEC.md` approved ✅ (13 Oct 2026) → (4) build in
+   stages on a test copy: **A built and tested ✅** (13 Oct 2026; waiting
+   for the TEST back office from `DEPLOY-TEST.md`), B (sign-off, PDF,
+   amend) next, then C (the Records screen) → (5) a trial month, then go
+   live.
+   **Do not merge this branch into `main` before go-live.** The new
+   `index.html` needs the v13 back office. The live back office can be
+   updated to v13 first without breaking the current page, because the old
+   requests are kept. Go-live order: deploy v13 to the live back office,
+   then merge.
 2. **Records screen** (year → month → open report). This is stage C of item
    1 and replaces the "completed reports list".
 3. ~~**Wrong report date.**~~ Done. The report is now headed with the month

@@ -1,0 +1,13 @@
+{
+  "name": "mortlake-dvsa-compliance",
+  "private": true,
+  "description": "Tests for the Mortlake Garage DVSA compliance app. The app itself has no build step.",
+  "scripts": {
+    "test": "node --test tests/backend.test.js tests/e2e.test.js",
+    "test:backend": "node --test tests/backend.test.js",
+    "serve": "node tests/serve.js"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}
