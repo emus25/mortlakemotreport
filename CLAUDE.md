@@ -157,13 +157,18 @@ From Ediz, in priority order:
      changes) and the signed PDF(s). This reverses the old "process and
      discard" rule.
    - **Sign-off freezes the PDF.** A signed PDF is never changed or replaced.
-     Corrections are made with "Amend", which files version 2 next to version
-     1 with a note of what changed.
+   - **Amend regenerates the whole report** (decided 13 Oct 2026). Paul ticks
+     "I am amending <month>" and must give a reason. The month then unlocks
+     and he can change anything, including DVSA files. Signing off builds a
+     full new report with the updated figures and an amendment box on
+     page 1, filed as v2 next to v1, which is kept. A cancelled amendment
+     restores the month exactly as it was signed.
    - **Each month moves through stages:** Draft → Ready → Signed off →
      (Amended). Signed months are locked.
    - **Logins:** Paul only. No tester logins for now.
-   - **Retention:** keep everything, and never delete automatically. Removed
-     items go to Drive's bin, and signed PDFs can't be removed from the app.
+   - **Retention:** keep everything, and never delete. Removed items go to
+     the month's `Removed` folder, not Drive's bin, which Google empties
+     after 30 days. Signed PDFs can't be removed from the app.
    - **No importing of old reports.** Paul's earlier months are on paper.
    - **Opening an old month shows its one signed PDF**, with everything in
      it (Ediz's idea, and the core of the design).
@@ -176,7 +181,8 @@ From Ediz, in priority order:
      version: page breaks currently cut through the middle of tables, and a
      file this big has to be sent to Google in pieces. Google's own PDF
      converter wasn't tested, because the report's charts and layout use
-     things it handles badly.
+     things it handles badly. **Decided: the app makes the PDF itself**,
+     so Paul never has to drop anything back in.
    - **Scan files are kept after sign-off**, even though the pages are also
      inside the PDF.
    - **Full specification:** `SPEC.md`. It's the source of truth for this

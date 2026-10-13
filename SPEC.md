@@ -1,6 +1,8 @@
 # Monthly Records: specification
 
 **Status:** draft for review by Ediz and Paul. Nothing in here is built yet.
+**Last changed:** 13 Oct 2026. Amend now regenerates the whole report;
+removed items are kept in a `Removed` folder.
 **Diagrams:** https://claude.ai/artifact/Af71WTpVraWKUu4TQKVRBw
 
 ---
@@ -21,7 +23,8 @@ changed or deleted by accident.
 - **Picking up where he left off.** Reopening a month, on any computer,
   brings back everything he'd added.
 - **Sign-off.** It makes the one PDF, files it and locks the month.
-- **Amend.** He can add to a signed month without changing the original.
+- **Amend.** He can reopen a signed month, change anything, and produce a
+  new report with the updated figures. The original signed version is kept.
 - **A Records screen** to find and open any month's report.
 - **Moving across what's saved today,** so nothing already saved is lost.
 
@@ -58,6 +61,10 @@ wins.
 | Records index | `Mortlake Garage Records/records-index.json` | One line per month: status, version, headline figures. It powers the Records screen and the dashboard trend without opening every folder. |
 | Browser storage | Paul's browser | A temporary copy only. Losing it loses nothing. |
 
+**Nothing is ever deleted by the app.** Removed items go to the month's
+`Removed` folder. Drive's bin isn't used, because Google empties it after 30
+days.
+
 **Who can see the files:** only Paul's Google account. The folder is not
 shared. The app reaches it through the back office, which checks the
 password on every request.
@@ -79,13 +86,16 @@ Mortlake Garage Records/
     │   └── …
     ├── Calibration certificates/
     │   └── cert-001.jpg
+    ├── Removed/                       (anything Paul removed; never deleted)
+    ├── details-v1.json                (snapshot taken when an amendment starts)
     └── Signed reports/
         ├── Mortlake DVSA report – September 2026 – v1 – signed 2026-10-04.pdf
         └── Mortlake DVSA report – September 2026 – v2 – amended 2026-10-14.pdf
 ```
 
 `details.json` holds:
-- **Status:** `draft`, `signed` or `amended`, plus the latest version number.
+- **Status:** `draft`, `signed` or `amending`, plus the latest signed
+  version number and, during an amendment, its reason.
 - **Pages:** for each QC page and certificate, its file name, what Claude
   read (registration, document type, tester, date, rotation, confidence), a
   fingerprint used to spot duplicates, and whether it has been read yet.
@@ -108,7 +118,11 @@ Not started ──first thing added──▶ Draft ──all checks pass──�
                                      └──something removed───────┘
                                                                 │ Sign off
                                                                 ▼
-                                   Amended (v2, v3…) ◀─Amend── Signed off (v1)
+              ┌──────────────────────────────────────▶ Signed off (v1)
+              │                                                 │ Amend (tick + reason)
+              │ Sign off amendment → v2 filed                   ▼
+              └──────────────────────────────────────── Amending (unlocked)
+                                      Cancel amendment → back to v1, unchanged
 ```
 
 | Status | How it gets there | What Paul can do |
@@ -117,7 +131,8 @@ Not started ──first thing added──▶ Draft ──all checks pass──�
 | **Draft** | Something has been added | Add, remove or re-read pages; answer the checklist; replace DVSA files |
 | **Ready** | Worked out automatically, never stored: all the checks below pass | Everything in Draft, plus **Sign off** |
 | **Signed off** | Paul signs off; the PDF is made and filed | Open the report; **Amend** |
-| **Amended** | Paul amends a signed month | Open any version (the latest is shown first); amend again |
+| **Amending** | Paul clicks Amend, ticks "I am amending September 2026" and gives a reason | Everything in Draft, plus **Sign off amendment** or **Cancel amendment** |
+| **Amended** | An amendment is signed off. It's shown as "Signed off · v2". | Open any version (the latest is shown first); amend again |
 
 **Checks that make a month "Ready"** (the same rules that block Generate
 today):
@@ -128,11 +143,12 @@ today):
 Calibration certificates stay optional.
 
 **Locked means locked.** Once a month is signed off, the back office itself
-refuses any change to its pieces. The app greys out the controls, but the
-real protection is on the back office, so a bug in the page can't get round
-it.
+refuses any change to its pieces unless an amendment has been opened, with
+a reason, first. The app greys out the controls, but the real protection is
+on the back office, so a bug in the page can't get round it.
 
-There is no "un-sign". Corrections are always made with Amend.
+**Signed PDFs are never changed or deleted.** An amendment always files a
+new version alongside them. There is no "un-sign".
 
 ## 7. Screens
 
@@ -189,21 +205,48 @@ fully saved and checked is thrown away, and Paul just clicks Sign off again.
 
 ### 7.4 Amend
 
-1. **Paul opens a signed month and clicks Amend.** He must type a reason, such as "Missing
-   inspection sheet for AB12CDE".
-2. **He adds new QC pages or certificates** (they're read by Claude as usual), and/or a
-   written correction, such as "Checklist item 14 should be NO: fire
-   extinguisher service was overdue, booked 20 Oct."
-3. **He clicks Sign off amendment.** The app builds the new version:
-   - **all pages of the latest signed PDF, unchanged,**
-   - then an **Amendment page** with the date, version number, reason, written
-     correction, and a list of what was added,
-   - then the added pages.
-4. **It's filed as v2** the same way as in 7.3. v1 is never touched.
+An amendment produces a **whole new report with the updated figures**. It is
+not a patch on the end of the old one.
 
-Pages can't be removed from a signed report. If something was filed by
-mistake, the amendment's written correction says so. That keeps the record
-honest.
+1. **Paul opens a signed month and clicks Amend.** A screen asks for:
+   - a tick box: **"I am amending September 2026 (signed off 04 Oct 2026,
+     v1)"**
+   - **Reason** (required, at least a few words), for example "Missing
+     inspection sheet for AB12CDE; corrected test log export".
+
+   Amend can't be confirmed without both. Before unlocking, the app takes a
+   snapshot of the month as signed (`details-v1.json`), so the amendment
+   can be cancelled.
+2. **The month unlocks.** A banner stays on every screen until he's done:
+   "You are amending September 2026. Reason: … · Sign off amendment ·
+   Cancel amendment". He can change anything, exactly as in Draft:
+   - add or remove pages
+   - replace a DVSA file
+   - change checklist answers
+
+   Every change goes into the history as usual.
+3. **He clicks Sign off amendment.** The same Ready checks apply. The app
+   builds a full new report from the month as it now stands, so every
+   figure, chart and page is up to date. Page 1 carries a clear box:
+   > **Amended report, version 2.** This replaces version 1, signed
+   > 04 Oct 2026. Amended 14 Oct 2026. Reason: *Missing inspection sheet
+   > for AB12CDE…* Changes since version 1: added QC pages 27–28 (AB12CDE);
+   > replaced test log (by date); checklist item 14 changed YES → NO.
+
+   The list of changes is taken from the history automatically, so Paul
+   doesn't have to write it.
+4. **It's filed as v2** the same way as in 7.3, with the same "nothing
+   half-signed" rule. **v1 stays in the folder, untouched**, so an examiner
+   can still see what was originally signed. Records shows v2 first, with
+   "Older versions" listing v1.
+
+**Cancel amendment** puts the month back exactly as it was at v1, using the
+snapshot. Any pages removed during the amendment are restored, and new ones
+move to the `Removed` folder. The history records "Amendment cancelled".
+
+**If Paul leaves an amendment half-finished,** the month shows "Signed off ·
+amendment in progress" on Records. v1 remains the official report, and Open
+report shows v1 until the amendment is signed off.
 
 ### 7.5 Open report
 
@@ -226,7 +269,7 @@ This mostly stays the same. The month-by-month trend reads from
 | Adds QC scans and clicks Sort | Each page image is saved by the back office during the same request that asks Claude to read it, so it isn't sent twice; the reading goes into `details.json` | Page by page |
 | A page can't be read | The image is still saved, marked "not read" with the reason, and can be retried later | Straight away |
 | Adds the same scan twice | Detected by the page fingerprint: "Page already filed (page 7)". It isn't stored again. | Straight away |
-| Removes a page (Draft only) | It's moved to Drive's bin, and the history records it | Straight away |
+| Removes a page (Draft or Amending only) | It's moved to the month's `Removed` folder, not deleted, and the history records it | Straight away |
 | Answers a checklist question | `details.json` | About 1.5s after the last change, as today |
 | Adds a calibration certificate | The image, plus the reading in `details.json`; the matched equipment date is updated in `equipment.json` | Straight away |
 
@@ -274,6 +317,7 @@ shows how it was put together, which helps if an examiner asks.
 | Laptop lost or replaced | Nothing is lost. Paul logs in on the new computer and everything is there. |
 | The app stops working altogether | Everything is plain files in Paul's Drive: PDFs, JPEGs and the original Excel files. He can open them without the app. |
 | Something deleted from Drive by hand | The month shows "File missing: page-007.jpg". Signed PDFs are what matters, and Drive keeps deleted files in its bin for 30 days. |
+| Paul starts an amendment and forgets about it | Records shows "Signed off · amendment in progress", and the dashboard reminds him. The last signed version stays the official report until he signs off or cancels. |
 
 ## 12. Moving across what's saved today
 
@@ -297,7 +341,10 @@ New requests the app can make, all password-checked:
 - **Months:** list the months, load a month, save `details.json` (refused if
   the change counter is stale or the month is signed).
 - **Files:** save a DVSA file; save a page or certificate image; fetch a
-  page image; move a page to the bin (Draft only).
+  page image; move a page to `Removed` (Draft or Amending only).
+- **Amendments:** start an amendment (needs the reason; takes the
+  snapshot and unlocks the month); cancel an amendment (restores the
+  snapshot).
 - **Reading pages:** the existing reading requests also take the month and
   save the page image and Claude's reading.
 - **The report PDF:** receive it in pieces; finish a sign-off or amendment
@@ -310,7 +357,8 @@ New requests the app can make, all password-checked:
   made at a time. The app reads 3 pages at once, and without the lock two
   could overwrite each other's line in `details.json`.
 - **Locked months:** every request that changes a month checks first that
-  it isn't signed.
+  it's in Draft or Amending. Signed PDFs can never be overwritten or
+  deleted by any request.
 
 **Deploying it:** the first deploy asks Paul's Google account for
 permission to use Drive.
@@ -320,7 +368,7 @@ permission to use Drive.
 | Stage | What it adds | Accepted when |
 |---|---|---|
 | **A** | Saving as you go; reopening a month; moving across today's data | Ediz adds pieces to a test month, closes the browser, opens it on another computer, and everything is there |
-| **B** | Sign off, the report PDF, Amend, Open report | A test month is signed, amended and both versions open; v1 is unchanged byte for byte |
+| **B** | Sign off, the report PDF, Amend (full regenerate), Cancel amendment, Open report | A test month is signed, then amended with a replaced DVSA file and an added page. v2 shows the new figures and the amendment box. v1 is unchanged byte for byte. A cancelled amendment leaves the month exactly as it was. |
 | **C** | The Records screen, and the dashboard reading the index | The "show me July" test takes under 10 seconds |
 
 - **Test copy:** all three stages are built on a test copy, with a separate
@@ -337,9 +385,5 @@ permission to use Drive.
 
 1. **Sign-off wording.** Is the confirmation sentence in 7.3 right? Should Paul
    also type his name?
-2. **Amend.** Is it enough to add pages and a written correction, or does
-   Paul ever need to change a DVSA file after sign-off? Changing one would
-   mean the figures in the report changing, which the add-to-the-end
-   approach doesn't allow.
-3. **History in the PDF.** Is printing the history on the last page useful,
+2. **History in the PDF.** Is printing the history on the last page useful,
    or is it clutter?
