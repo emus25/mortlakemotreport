@@ -66,12 +66,21 @@ one Google Apps Script file.
 - **Storage (Monthly Records, stage A):** the true copy of everything is in
   Paul's Google Drive, filed by the back office as he works. `store`
   (localStorage, `mortlake_report_v1`) is only a cache.
-  - **Starting up:** `startRecords_()` runs after unlock. It moves
-    across old data once (`migrateLegacy`), then loads the records index and
-    the equipment list, then calls `openMonth_(currentMonth)`.
-  - **Opening a month:** `openMonth_` loads `details.json` and re-reads the
-    filed DVSA files, so the full test lists come back. A cover
-    (`#monthOverlay`) stops any edits until the month has loaded.
+  - **Starting up:** `startRecords_()` runs after unlock and makes **one**
+    request, `openSession`. That request moves old data across if needed,
+    seeds the equipment list if none is filed, and returns the index, the
+    equipment list and the current month. Each Apps Script request costs a
+    second or more (far more on a cold start), so the start-up must stay at
+    two round trips: the password check, then `openSession`. A test enforces
+    this.
+  - **Opening a month:** `openMonth_` loads `details.json`. A cover
+    (`#monthOverlay`, with a seconds counter) blocks edits until the details
+    have arrived. The filed DVSA files are then re-read behind the page
+    (`dvsaLoading_`), so the full test lists come back; the report waits for
+    them.
+  - **Timings:** `api_` records every request's total time and the back
+    office's own time (`ms` in every answer) in `recordsTimings`, and logs
+    them to the browser console as `[records] …`.
   - **Changing month:** `changeMonth_` switches months. It asks first only if
     scans are waiting to be read.
   - **Saving:** every save goes through `trackSave_`, which drives the top
@@ -97,7 +106,7 @@ one Google Apps Script file.
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
   1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`).
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (13 on this branch; the live site is still 12) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (14 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -122,6 +131,7 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `analyzeCalibrationCert` | yes | Claude reads one calibration certificate and returns equipment, serial number, calibration and next-due dates, rotation and confidence. |
 | `loadAppData` / `saveAppData` | yes | **Old storage, kept only so the current live page keeps working after v13 is deployed.** Script Properties under `DATA_calibration`, `DATA_month_YYYY-MM` and `DATA_tq_Mon-YY`. |
 | `analyzeQcPage` / `analyzeCalibrationCert` **with `month`** | yes | Files the page in the month's Drive folder, then has Claude read it, outside the lock. A known fingerprint isn't filed or read again. A failed read is still filed, as `error`, and can be retried. |
+| `openSession` | yes | Everything needed to start, in one request (see above). |
 | `recordsStatus`, `migrateLegacy` | yes | Whether the old data has been moved across; moving it across once. It copies and never deletes, and also takes test-log totals that only lived in a browser. |
 | `listMonths`, `loadMonth` | yes | The records index; one month's `details.json` (no Drive ids or images). |
 | `saveMonthFields` | yes | Checklist only. Refused with `conflict` if `baseRevision` is stale. |
@@ -180,7 +190,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 18 back-office checks + 6 real-browser checks
+npm test               # 19 back-office checks + 7 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

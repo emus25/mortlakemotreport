@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 13);
+  assert.equal(b.call('getVersion', { password: '' }).version, 14);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -253,4 +253,29 @@ test('the test copy can use its own folder name', () => {
   const b = loadBackend({ properties: { RECORDS_FOLDER_NAME: 'Mortlake Garage Records (TEST)' } });
   b.call('saveEquipment', { list: [], baseRevision: 0 });
   assert.deepEqual(b.drive.list(), ['Mortlake Garage Records (TEST)/equipment.json']);
+});
+
+test('opening the app is one request: moves old data, seeds equipment, returns the month', () => {
+  const b = loadBackend({ properties: {
+    'DATA_month_2026-08': JSON.stringify({ state: { '0-0': 'yes' }, notes: {} })
+  } });
+  const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
+                                    seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
+  assert.equal(r.status, 'success');
+  assert.equal(r.version, 14);
+  assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
+  assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
+  assert.equal(r.month.exists, true);
+  assert.equal(r.month.details.checklist.state['0-0'], 'yes');
+  assert.equal(r.month.details.testLog.total, 50);
+  assert.equal(r.equipment.list[0].serial, '2245');
+  assert.equal(r.equipment.revision, 1);
+  assert.ok(r.months['2026-08']);
+
+  // Next time: nothing to move, and the filed equipment list wins over the browser's.
+  const again = b.call('openSession', { month: '2026-09', seedEquipment: [{ name: 'Something else' }] });
+  assert.equal(again.migration, null);
+  assert.equal(again.equipment.list[0].name, 'Headlamp Tester');
+  assert.equal(again.month.exists, false);
+  assert.deepEqual(b.drive.list().filter(f => f.includes('2026-09')), [], 'opening an empty month leaves nothing behind');
 });

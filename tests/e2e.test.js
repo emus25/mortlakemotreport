@@ -301,3 +301,49 @@ test('a signed month cannot be changed from the page', async () => {
     assert.equal(details(srv, '2026-09').checklist.state['0-1'], undefined);
   } finally { srv.server.close(); }
 });
+
+test('opening the app takes two round trips, shows a counter while waiting, and loads files behind the page', async () => {
+  // Fill a month first, at normal speed.
+  const fast = await start(0, fakeClaude());
+  const a = await newComputer(fast);
+  await setMonth(a, '2026-09');
+  await a.setInputFiles('#fileLogDate', LOG_SEP);
+  await a.setInputFiles('#fileRating', TQ_SEP);
+  await a.waitForFunction(() => /Filed in Google Drive/.test(document.getElementById('statusRating').textContent) &&
+                                /Filed in Google Drive/.test(document.getElementById('statusLogDate').textContent));
+  await waitSaved(a);
+
+  // Now make every request take 1.5s, roughly like real Apps Script, and
+  // open the app on another computer that last worked on September.
+  const SLOW = 1500;
+  const slow = await start(0, { latencyMs: SLOW });
+  slow.backend.drive.items.clear();
+  for (const [k, v] of fast.backend.drive.items) slow.backend.drive.items.set(k, v);
+  for (const [k, v] of fast.backend.props) slow.backend.props.set(k, v);
+  fast.server.close();
+  try {
+    const ctx = await browser.newContext();
+    await ctx.addInitScript(() => {
+      if (!localStorage.getItem('mortlake_report_v1')) localStorage.setItem('mortlake_report_v1', JSON.stringify({ selectedMonth: '2026-09' }));
+    });
+    const b = await ctx.newPage();
+    b.on('dialog', (d) => d.accept());
+    await b.goto(slow.url + '/index.html');
+    await b.fill('#lockPasswordInput', 'pw');
+    const t0 = Date.now();
+    await b.click('#lockSubmitBtn');
+    await b.waitForFunction(() => !document.getElementById('monthOverlay').hidden);
+    await b.waitForFunction(() => /\ds/.test(document.getElementById('monthOverlayNote').textContent), null, { timeout: 5000 });
+    await b.waitForFunction(() => recordsReady_ && document.getElementById('monthOverlay').hidden, null, { timeout: 15000 });
+    const ready = Date.now() - t0;
+    assert.deepEqual(slow.log.slice(0, 2), ['checkDashboardPassword', 'openSession']);
+    assert.ok(ready < 3 * SLOW + 1500, 'ready after about two round trips, took ' + ready + 'ms');
+    // The files are still arriving behind the page, and the report waits for them.
+    assert.match(await b.evaluate(() => reportBlockers_().map(m => m.what).join('|')), /still loading/);
+    await b.waitForFunction(() => Object.keys(TEST_LOGS).length === 1 && TEST_QUALITY && TEST_QUALITY.site.tests === 210,
+                            null, { timeout: 15000 });
+    assert.doesNotMatch(await b.evaluate(() => reportBlockers_().map(m => m.what).join('|')), /still loading/);
+    const timings = await b.evaluate(() => recordsTimings.map(t => t.action));
+    assert.ok(timings.includes('openSession') && timings.includes('getDvsaFile'));
+  } finally { slow.server.close(); }
+});

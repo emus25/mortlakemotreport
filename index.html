@@ -262,6 +262,8 @@
     box-shadow: 0 8px 28px rgba(0,0,0,.08); font-size: 14px;
   }
   .mo-box .btn[hidden] { display: none; }
+  .mo-note { font-size: 12px; color: var(--text-secondary); min-height: 1em; }
+  .mo-note:empty { display: none; }
 
   /* Filed pages list under each scan section */
   .page-list { margin-top: 12px; font-size: 13px; }
@@ -887,6 +889,7 @@
   <div class="month-overlay" id="monthOverlay" hidden>
     <div class="mo-box" role="status" aria-live="polite">
       <div id="monthOverlayText">Loading…</div>
+      <div id="monthOverlayNote" class="mo-note"></div>
       <button type="button" class="btn btn-primary" id="monthOverlayRetry" hidden>Try again</button>
     </div>
   </div>
@@ -1433,13 +1436,26 @@
   /* One way of talking to the back office. A failure always comes back as an
      answer with a message, never as an exception, so every caller can say
      plainly what happened. */
+  /* Every request's time is kept in recordsTimings (and shown in the
+     browser console), split into the whole round trip and the part the back
+     office itself spent, so slowness can be traced to the right place. */
+  var recordsTimings = [];
   function api_(action, payload) {
     if (!SCRIPT_URL) return Promise.resolve({ status: 'offline', message: 'Not connected to the records.' });
     var body = Object.assign({ action: action, password: getPassword() }, payload || {});
+    var t0 = Date.now();
     return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
       .catch(function () {
         return { status: 'error', message: 'Could not reach the records. Check the internet connection.' };
+      })
+      .then(function (res) {
+        var t = { action: action, totalMs: Date.now() - t0, serverMs: res && typeof res.ms === 'number' ? res.ms : null,
+                  status: res && res.status };
+        recordsTimings.push(t);
+        if (recordsTimings.length > 200) recordsTimings.shift();
+        try { console.info('[records] ' + action + ': ' + t.totalMs + 'ms (back office ' + t.serverMs + 'ms) ' + t.status); } catch (e) {}
+        return res;
       });
   }
 
@@ -1521,16 +1537,32 @@
   /* ── Covering the page while a month loads ──
      Working on a month before its filed copy has arrived could overwrite it,
      so the page is covered until it has, or says plainly that it couldn't. */
+  /* While waiting, a seconds counter shows it hasn't frozen, and past 10
+     seconds it says why: Google can take a while to wake the back office up
+     when it hasn't been used for a bit. */
+  var overlayTimer_ = null;
   function showMonthOverlay_(text, retry) {
     var el = document.getElementById('monthOverlay');
     if (!el) return;
-    document.getElementById('monthOverlayText').textContent = text;
+    var textEl = document.getElementById('monthOverlayText');
+    var noteEl = document.getElementById('monthOverlayNote');
     var btn = document.getElementById('monthOverlayRetry');
+    clearInterval(overlayTimer_);
+    textEl.textContent = text;
+    noteEl.textContent = '';
     btn.hidden = !retry;
     btn.onclick = retry || null;
     el.hidden = false;
+    if (retry) return;
+    var started = Date.now();
+    overlayTimer_ = setInterval(function () {
+      var secs = Math.round((Date.now() - started) / 1000);
+      noteEl.textContent = secs + 's' + (secs >= 10
+        ? ' — Google can take up to half a minute to wake up if the app hasn’t been used for a while.' : '');
+    }, 1000);
   }
   function hideMonthOverlay_() {
+    clearInterval(overlayTimer_);
     var el = document.getElementById('monthOverlay');
     if (el) el.hidden = true;
   }
@@ -1544,32 +1576,34 @@
     recordsReady_ = false;
     renderSaveIndicator_();
     showMonthOverlay_('Loading your records…');
-    checkBackendVersion_();
 
-    api_('recordsStatus')
-      .then(function (st) {
-        if (st.status !== 'success') throw new Error(st.message || 'The records could not be reached.');
-        // The test-log totals were only ever kept in this browser, so they are
-        // sent once from each computer that has them; the back office keeps
-        // whatever it already holds.
-        var browserLogs = store.testLog || {};
-        var sent = false;
-        try { sent = !!localStorage.getItem(MOVED_KEY); } catch (e) {}
-        if (st.migrated && (sent || !Object.keys(browserLogs).length)) return;
-        return api_('migrateLegacy', { browserTestLog: browserLogs }).then(function (m) {
-          if (m.status !== 'success') throw new Error(m.message || 'Could not move the saved data across.');
-          try { localStorage.setItem(MOVED_KEY, new Date().toISOString()); } catch (e) {}
+    // The test-log totals were only ever kept in this browser, so each
+    // computer that has them sends them once; the back office keeps whatever
+    // it already holds.
+    var sent = false;
+    try { sent = !!localStorage.getItem(MOVED_KEY); } catch (e) {}
+    var browserLogs = sent ? {} : (store.testLog || {});
+    var month = currentMonth;
+
+    // One request does everything needed to start (see openSession_ in Code.gs).
+    api_('openSession', { month: month, browserTestLog: browserLogs, seedEquipment: store.calibration || [] })
+      .then(function (res) {
+        if (res.status === 'error' && /Unknown action/.test(res.message || '')) {
+          throw new Error('The back office is running an older version. Re-deploy Code.gs with "New version".');
+        }
+        if (res.status !== 'success') throw new Error(res.message || 'The records could not be reached.');
+        if (res.version < EXPECTED_BACKEND_VERSION) {
+          showBackendWarning_('The Apps Script backend is running old code (v' + res.version + ', expected v' +
+            EXPECTED_BACKEND_VERSION + '). Re-deploy Code.gs with "New version".');
+        }
+        if (!sent) { try { localStorage.setItem(MOVED_KEY, new Date().toISOString()); } catch (e) {} }
+        applyRecordsIndex_(res.months || {});
+        recordsReady_ = true;
+        return applyEquipment_(res.equipment).then(function () {
+          if (month !== currentMonth) return openMonth_(currentMonth);
+          return openMonth_(month, res.month);
         });
       })
-      .then(function () { return Promise.all([api_('listMonths'), api_('loadEquipment')]); })
-      .then(function (res) {
-        if (res[0].status !== 'success') throw new Error(res[0].message || 'Could not list the months.');
-        if (res[1].status !== 'success') throw new Error(res[1].message || 'Could not load the equipment list.');
-        applyRecordsIndex_(res[0].months || {});
-        recordsReady_ = true;
-        return applyEquipment_(res[1]);
-      })
-      .then(function () { return openMonth_(currentMonth); })
       .catch(function (err) {
         recordsReady_ = false;
         renderSaveIndicator_();
@@ -1883,17 +1917,29 @@
      are only fetched when the report needs them, which keeps this quick. */
   var openToken_ = 0;
   var monthDoc_ = null;
+  var dvsaLoading_ = 0;     // filed DVSA files still being fetched behind the page
 
-  function openMonth_(month) {
+  /* `preloaded` is the month as returned by openSession, which saves a trip
+     on start-up. The page is shown as soon as the month's details are in; the
+     DVSA files then load behind it, each showing "Loading…" in its own box,
+     and the report can't be made until they have. */
+  function openMonth_(month, preloaded) {
     var token = ++openToken_;
     resetMonthWorkspace_();
+    dvsaLoading_ = 0;
     if (!SCRIPT_URL) {
       monthDoc_ = null;
       showSelectedMonth_();
       return Promise.resolve();
     }
-    showMonthOverlay_('Opening ' + formatMonth(month) + '…');
-    return api_('loadMonth', { month: month }).then(function (res) {
+    var get;
+    if (preloaded) {
+      get = Promise.resolve({ status: 'success', exists: preloaded.exists, details: preloaded.details });
+    } else {
+      showMonthOverlay_('Opening ' + formatMonth(month) + '…');
+      get = api_('loadMonth', { month: month });
+    }
+    return get.then(function (res) {
       if (token !== openToken_) return;
       if (res.status !== 'success') {
         showMonthOverlay_('Could not open ' + formatMonth(month) + '. ' + (res.message || ''),
@@ -1916,16 +1962,25 @@
       showSelectedMonth_();
       renderPageResults_('qc');
       renderPageResults_('cert');
+      hideMonthOverlay_();
+      renderSaveIndicator_();
 
-      var ids = Object.keys(d.dvsaFiles || {});
+      var ids = Object.keys(d.dvsaFiles || {}).filter(function (inputId) {
+        return DVSA_INPUTS.some(function (x) { return x.input === inputId; });
+      });
+      dvsaLoading_ = ids.length;
+      refreshStatuses();
       return Promise.all(ids.map(function (inputId) {
         var slot = DVSA_INPUTS.filter(function (x) { return x.input === inputId; })[0];
-        if (!slot) return null;
         var el = document.getElementById(slot.status);
         el.className = 'upload-status reading';
         el.innerHTML = ICON_SPIN + '<span>Loading ' + escapeHtml_(d.dvsaFiles[inputId].fileName) + '…</span>';
         return api_('getDvsaFile', { month: month, inputId: inputId }).then(function (f) {
           if (token !== openToken_) return;
+          dvsaLoading_--;
+          // Paul dropped a newer file into this box while it was loading:
+          // that one is already filed, so the older one must not replace it.
+          if (pickedFiles[inputId].length) { refreshStatuses(); return; }
           if (f.status !== 'success') {
             el.className = 'upload-status warn';
             el.innerHTML = ICON_WARN + '<span class="us-file">Filed, but could not be loaded: ' +
@@ -1938,8 +1993,6 @@
       })).then(function () {
         if (token !== openToken_) return;
         refreshStatuses();
-        hideMonthOverlay_();
-        renderSaveIndicator_();
       });
     });
   }
@@ -3146,7 +3199,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 13;
+  var EXPECTED_BACKEND_VERSION = 14;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -4853,6 +4906,9 @@
     // isn't actually in Google Drive.
     if (SCRIPT_URL && hasPendingSaves_()) {
       missing.push({ what: 'Some changes are still saving or were not saved — see the top of the page', where: 'report' });
+    }
+    if (dvsaLoading_ > 0) {
+      missing.push({ what: 'This month’s DVSA files are still loading — try again in a moment', where: 'report' });
     }
 
     DVSA_REPORT_FILES.forEach(function (d) {

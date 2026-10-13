@@ -14,9 +14,14 @@ const ROOT = path.join(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.css': 'text/css' };
 
 function start(port, backendOptions) {
+  backendOptions = backendOptions || {};
   const backend = loadBackend(backendOptions);
   // Tests can make the next requests for an action fail, to check what Paul sees.
   const failures = {};
+  // Every request the page makes, in order, so tests can count round trips.
+  const log = [];
+  // Real Apps Script takes a second or more per request; tests can add that.
+  const latencyMs = backendOptions.latencyMs || 0;
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/exec') {
       let body = '';
@@ -24,6 +29,10 @@ function start(port, backendOptions) {
       req.on('end', () => {
         let action = '';
         try { action = JSON.parse(body).action; } catch (e) {}
+        log.push(action);
+        setTimeout(() => answer(action), latencyMs);
+      });
+      const answer = (action) => {
         if (failures[action] > 0) {
           failures[action]--;
           res.writeHead(502, { 'Content-Type': 'text/html' });   // what a Google outage looks like to the page
@@ -33,7 +42,7 @@ function start(port, backendOptions) {
         const out = backend.sandbox.doPost({ postData: { contents: body } });
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(out.getContent());
-      });
+      };
       return;
     }
     const url = decodeURIComponent(req.url.split('?')[0]);
@@ -49,7 +58,7 @@ function start(port, backendOptions) {
     res.end(data);
   });
   return new Promise((resolve) => {
-    server.listen(port, () => resolve({ server, backend, failures, url: 'http://localhost:' + server.address().port }));
+    server.listen(port, () => resolve({ server, backend, failures, log, url: 'http://localhost:' + server.address().port }));
   });
 }
 

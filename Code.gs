@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 13;
+var BACKEND_VERSION = 14;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -40,13 +40,20 @@ function doPost(e) {
   catch (err) { return jsonResponse_({ status: 'error', message: 'The request could not be understood.' }); }
 
   // Anything that goes wrong comes back as a clean answer the app can show,
-  // never as a Google error page the app cannot read.
+  // never as a Google error page the app cannot read. Every answer says how
+  // long the work took here, so slowness can be traced to Google's own
+  // start-up and network time versus the work done in this script.
+  var started = Date.now();
+  var out;
   try {
-    return jsonResponse_(route_(data));
+    out = route_(data);
   } catch (err) {
-    if (err && err.isAppError) return jsonResponse_({ status: err.code, message: err.message });
-    return jsonResponse_({ status: 'error', message: 'Something went wrong on the server: ' + (err && err.message || err) });
+    out = (err && err.isAppError)
+      ? { status: err.code, message: err.message }
+      : { status: 'error', message: 'Something went wrong on the server: ' + (err && err.message || err) };
   }
+  out.ms = Date.now() - started;
+  return jsonResponse_(out);
 }
 
 function route_(data) {
@@ -74,6 +81,7 @@ function route_(data) {
     case 'saveAppData': return saveAppData_(data.data);
 
     // Monthly Records (see SPEC.md).
+    case 'openSession':      return openSession_(data);
     case 'recordsStatus':    return recordsStatus_();
     case 'migrateLegacy':    return migrateLegacy_(data);
     case 'listMonths':       return listMonths_();
@@ -609,6 +617,47 @@ function updateIndex_(root, d) {
 }
 
 /* ── Requests ── */
+
+/* Everything the app needs to start, in one trip. Each request to Apps Script
+   costs a second or more before any work is done (and much more when Google
+   has to wake the script up), so asking five questions one after another made
+   opening the app painfully slow. This answers them all at once:
+     - moves the old data across, if that hasn't happened yet;
+     - files the equipment list from this browser, if none is filed yet;
+     - returns the equipment list, the records index and the chosen month. */
+function openSession_(data) {
+  var month = checkMonth_(data.month);
+  var props = PropertiesService.getScriptProperties();
+  var root = recordsRoot_();
+
+  var migration = null;
+  var browserLogs = data.browserTestLog || {};
+  if (!props.getProperty('RECORDS_MIGRATED') || Object.keys(browserLogs).length) {
+    migration = migrateLegacy_(data);
+  }
+
+  var eq = readJson_(root, EQUIPMENT_FILE);
+  if (!eq && data.seedEquipment && data.seedEquipment.length) {
+    eq = withLock_(function () {
+      var again = readJson_(root, EQUIPMENT_FILE);   // another computer may have just done it
+      if (again) return again;
+      var fresh = { revision: 1, list: data.seedEquipment, updatedAt: nowIso_() };
+      writeJson_(root, EQUIPMENT_FILE, fresh);
+      return fresh;
+    });
+  }
+
+  var m = loadMonth_(month);
+  return {
+    status: 'success',
+    version: BACKEND_VERSION,
+    folderUrl: root.getUrl(),
+    migration: migration,
+    equipment: { exists: !!eq, list: eq ? eq.list : [], revision: eq ? eq.revision : 0 },
+    months: readIndex_(root).months,
+    month: { exists: m.exists, details: m.details }
+  };
+}
 
 function recordsStatus_() {
   var root = recordsRoot_();
