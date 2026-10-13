@@ -245,9 +245,11 @@ From Ediz, in priority order:
      feature, so build to it, and update it first if the logic changes.
    **Process:** (1) decisions ✅ → (2) test how to make the PDF
    automatically ✅ → (3) `SPEC.md` approved ✅ (13 Oct 2026) → (4) build in
-   stages on a test copy: **A built and tested ✅** (13 Oct 2026; waiting
-   for the TEST back office from `DEPLOY-TEST.md`), B (sign-off, PDF,
-   amend) next, then C (the Records screen) → (5) a trial month, then go
+   stages on a test copy: **A built and tested ✅** (13 Oct 2026). The TEST
+   back office is deployed (its URL is in `test.html`, regenerate with
+   `node tools/make-test-copy.js <url>` after every `index.html` change);
+   `test.html` needs to be on `main` to be reachable online. B (sign-off,
+   PDF, amend) next, then C (the Records screen) → (5) a trial month, then go
    live.
    **Do not merge this branch into `main` before go-live.** The new
    `index.html` needs the v13 back office. The live back office can be
