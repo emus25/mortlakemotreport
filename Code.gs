@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 14;
+var BACKEND_VERSION = 15;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -91,7 +91,10 @@ function route_(data) {
     case 'getDvsaFile':      return getDvsaFile_(data);
     case 'getPageImage':     return getPageImage_(data);
     case 'removePage':       return removePage_(data);
-    case 'retryPage':        return retryPage_(data);
+    case 'filePage':         return filePage_(data);
+    case 'readPage':         return readPage_(data, false);
+    case 'retryPage':        return readPage_(data, true);
+    case 'getPage':          return getPage_(data);
     case 'loadEquipment':    return loadEquipment_();
     case 'saveEquipment':    return saveEquipment_(data);
   }
@@ -788,8 +791,31 @@ function getDvsaFile_(data) {
 function fileAndReadPage_(kind, data) {
   var month = checkMonth_(data.month);
   if (!data.imageBase64) throw appError_('error', 'No image received.');
+  var step1 = fileStep_(kind, month, data, true);
+  if (step1.duplicate) {
+    return { status: 'success', duplicate: true, saved: true, result: step1.page.reading || null,
+             page: publicPage_(step1.page) };
+  }
+  return readAndRecord_(kind, month, step1.page.id, data.imageBase64, data.mimeType);
+}
 
-  var step1 = withLock_(function () {
+/* Filing on its own: a few seconds, and safe to send twice (the fingerprint
+   recognises a page already filed). The app files every page this way first,
+   then asks for each to be read in a separate request (readPage_), so no
+   single request has to wait for Claude and Drive together. A slow network or
+   a lost reply can then never make a filed page look unfiled. */
+function filePage_(data) {
+  var kind = checkKind_(data.kind);
+  var month = checkMonth_(data.month);
+  if (!data.imageBase64) throw appError_('error', 'No image received.');
+  var step1 = fileStep_(kind, month, data, false);
+  return { status: 'success', duplicate: !!step1.duplicate, page: publicPage_(step1.page) };
+}
+
+/* markReading: the combined request reads straight away, so the page is
+   marked "reading" while still locked; filing alone leaves it "unread". */
+function fileStep_(kind, month, data, markReading) {
+  return withLock_(function () {
     var ctx = openMonth_(month, true);
     var d = ctx.details;
     assertEditable_(d);
@@ -798,10 +824,8 @@ function fileAndReadPage_(kind, data) {
       pagesOf_(d, kind).forEach(function (p) { if (p.fingerprint === data.fingerprint) existing = p; });
     }
     if (existing && existing.status === 'read') return { duplicate: true, page: existing };
-    if (existing && existing.status === 'reading' &&
-        Date.now() - new Date(existing.readingStartedAt).getTime() < READING_STALE_MS) {
-      return { duplicate: true, page: existing };
-    }
+    if (existing && isFreshlyReading_(existing)) return { duplicate: true, page: existing };
+    if (existing && !markReading) return { duplicate: true, page: existing };
     var page = existing;
     if (!page) {
       var no = d.nextPageNo++;
@@ -812,22 +836,23 @@ function fileAndReadPage_(kind, data) {
       page = {
         id: kind + '-' + no, kind: kind, fileId: file.getId(), fileName: name,
         mimeType: data.mimeType || 'image/jpeg', sourceName: String(data.sourceName || name),
-        fingerprint: data.fingerprint || null, addedAt: nowIso_(), status: 'reading'
+        fingerprint: data.fingerprint || null, addedAt: nowIso_(), status: 'unread'
       };
       pagesOf_(d, kind).push(page);
       addHistory_(d, 'Added ' + (kind === 'qc' ? 'QC page ' : 'certificate ') + name + ' (' + page.sourceName + ')');
     }
-    page.status = 'reading';
-    page.readingStartedAt = nowIso_();
+    if (markReading) {
+      page.status = 'reading';
+      page.readingStartedAt = nowIso_();
+    }
     saveMonth_(ctx);
     return { page: page };
   });
+}
 
-  if (step1.duplicate) {
-    return { status: 'success', duplicate: true, saved: true, result: step1.page.reading || null,
-             page: publicPage_(step1.page) };
-  }
-  return readAndRecord_(kind, month, step1.page.id, data.imageBase64, data.mimeType);
+function isFreshlyReading_(p) {
+  return p.status === 'reading' && p.readingStartedAt &&
+         Date.now() - new Date(p.readingStartedAt).getTime() < READING_STALE_MS;
 }
 
 function readAndRecord_(kind, month, pageId, imageBase64, mimeType) {
@@ -868,7 +893,10 @@ function describeReading_(kind, r) {
   return bits.length ? ' (' + bits.join(', ') + ')' : '';
 }
 
-function retryPage_(data) {
+/* Has Claude read a filed page. A page already read is returned as it is
+   (unless `again` — Paul pressed Retry), and a page another request is
+   reading right now is not read twice: the app checks back with getPage. */
+function readPage_(data, again) {
   var month = checkMonth_(data.month);
   var kind = checkKind_(data.kind);
   var step1 = withLock_(function () {
@@ -876,13 +904,26 @@ function retryPage_(data) {
     var p = ctx && findPage_(ctx.details, kind, data.id);
     if (!p) throw appError_('missing', 'That page is no longer filed.');
     assertEditable_(ctx.details);
+    if (isFreshlyReading_(p) || (p.status === 'read' && !again)) return { already: true, page: p };
     p.status = 'reading';
     p.readingStartedAt = nowIso_();
     saveMonth_(ctx);
-    return p;
+    return { page: p };
   });
-  var bytes = DriveApp.getFileById(step1.fileId).getBlob().getBytes();
-  return readAndRecord_(kind, month, step1.id, Utilities.base64Encode(bytes), step1.mimeType);
+  if (step1.already) {
+    return { status: 'success', saved: true, result: step1.page.reading || null, page: publicPage_(step1.page) };
+  }
+  var bytes = DriveApp.getFileById(step1.page.fileId).getBlob().getBytes();
+  return readAndRecord_(kind, month, step1.page.id, Utilities.base64Encode(bytes), step1.page.mimeType);
+}
+
+function getPage_(data) {
+  var month = checkMonth_(data.month);
+  var kind = checkKind_(data.kind);
+  var ctx = openMonth_(month, false);
+  var p = ctx && findPage_(ctx.details, kind, data.id);
+  if (!p) throw appError_('missing', 'That page is not filed.');
+  return { status: 'success', page: publicPage_(p) };
 }
 
 function getPageImage_(data) {

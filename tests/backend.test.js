@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 14);
+  assert.equal(b.call('getVersion', { password: '' }).version, 15);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -262,7 +262,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 14);
+  assert.equal(r.version, 15);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -278,4 +278,42 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   assert.equal(again.equipment.list[0].name, 'Headlamp Tester');
   assert.equal(again.month.exists, false);
   assert.deepEqual(b.drive.list().filter(f => f.includes('2026-09')), [], 'opening an empty month leaves nothing behind');
+});
+
+test('filing and reading are separate short steps, each safe to repeat', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const args = { month: '2026-09', kind: 'qc', imageBase64: IMG, mimeType: 'image/jpeg', fingerprint: 'fp1', sourceName: 'a.pdf (page 1)' };
+  const f = b.call('filePage', args);
+  assert.equal(f.status, 'success');
+  assert.equal(f.page.status, 'unread');
+  assert.equal(b.calls.claude, 0, 'filing alone does not call Claude');
+  // Filing the same page again (e.g. a lost reply) gives the same page back.
+  const again = b.call('filePage', args);
+  assert.equal(again.duplicate, true);
+  assert.equal(again.page.id, f.page.id);
+  assert.equal(b.call('loadMonth', { month: '2026-09' }).details.qcPages.length, 1);
+
+  const r = b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  assert.equal(r.page.status, 'read');
+  assert.equal(r.page.reading.registration, 'AB12CDE');
+  // Asking to read it again doesn't call Claude again…
+  b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  assert.equal(b.calls.claude, 1);
+  // …unless Paul presses Retry.
+  b.call('retryPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  assert.equal(b.calls.claude, 2);
+  assert.equal(b.call('getPage', { month: '2026-09', kind: 'qc', id: f.page.id }).page.status, 'read');
+  assert.equal(b.call('filePage', args).page.status, 'read', 'a filed and read page is recognised');
+});
+
+test('a page being read by another request is not read twice', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const f = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'fp1' });
+  const file = [...b.drive.items.values()].find(x => x._name === 'details.json');
+  const d = JSON.parse(file._bytes.toString());
+  d.qcPages[0].status = 'reading'; d.qcPages[0].readingStartedAt = new Date().toISOString();
+  file.setContent(JSON.stringify(d));
+  const r = b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  assert.equal(r.page.status, 'reading');
+  assert.equal(b.calls.claude, 0);
 });

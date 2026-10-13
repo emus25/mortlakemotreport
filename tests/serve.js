@@ -16,8 +16,11 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/p
 function start(port, backendOptions) {
   backendOptions = backendOptions || {};
   const backend = loadBackend(backendOptions);
-  // Tests can make the next requests for an action fail, to check what Paul sees.
+  // Tests can make the next requests for an action fail, to check what Paul sees:
+  // failures: Google never gets the request; lostReplies: Google does the
+  // work but the reply never reaches the page.
   const failures = {};
+  const lostReplies = {};
   // Every request the page makes, in order, so tests can count round trips.
   const log = [];
   // Real Apps Script takes a second or more per request; tests can add that.
@@ -40,6 +43,12 @@ function start(port, backendOptions) {
           return;
         }
         const out = backend.sandbox.doPost({ postData: { contents: body } });
+        if (lostReplies[action] > 0) {
+          lostReplies[action]--;
+          res.writeHead(502, { 'Content-Type': 'text/html' });
+          res.end('<html>Bad gateway</html>');
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(out.getContent());
       };
@@ -58,7 +67,7 @@ function start(port, backendOptions) {
     res.end(data);
   });
   return new Promise((resolve) => {
-    server.listen(port, () => resolve({ server, backend, failures, log, url: 'http://localhost:' + server.address().port }));
+    server.listen(port, () => resolve({ server, backend, failures, lostReplies, log, url: 'http://localhost:' + server.address().port }));
   });
 }
 

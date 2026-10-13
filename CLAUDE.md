@@ -194,7 +194,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 19 back-office checks + 9 real-browser checks
+npm test               # 21 back-office checks + 10 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

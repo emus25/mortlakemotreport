@@ -399,3 +399,38 @@ test('a single hiccup from Google while opening is retried quietly', async () =>
     assert.equal(await p.evaluate(() => document.getElementById('monthOverlay').hidden), true);
   } finally { srv.server.close(); }
 });
+
+test('a lost reply while a page is being read never makes a filed page look unfiled', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.evaluate(() => { READ_POLL_MS = 200; });
+    // Page A: Google files and reads it, but the reading reply is lost.
+    // Page B: the reading request never reaches Google at all.
+    srv.lostReplies.readPage = 1;
+    await p.setInputFiles('#fileQcScans', [SCAN_A]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
+    assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read', 'found out it had been read');
+    assert.equal(await p.evaluate(() => unsavedPages_.qc.length), 0);
+
+    srv.failures.readPage = 1;
+    await p.setInputFiles('#fileQcScans', [SCAN_B]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
+    const b = await p.evaluate(() => savedPages_.qc[1].status);
+    assert.equal(b, 'unread', 'filed, not read');
+    assert.equal(await p.evaluate(() => unsavedPages_.qc.length), 0, 'it is filed, so nothing is "not saved"');
+    assert.match(await p.textContent('#qcPageList'), /waiting to be read/);
+    await p.click('#qcPageList summary');
+    await p.click('#qcPageList [data-retry]');
+    await p.waitForFunction(() => savedPages_.qc.every(x => x.status === 'read'));
+    // A lost filing reply is simply tried again and recognised.
+    srv.lostReplies.filePage = 1;
+    await p.setInputFiles('#fileQcScans', [SCAN_C]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 3 && !savesInFlight_ && savedPages_.qc.every(x => x.status === 'read'));
+    assert.equal(srv.backend.drive.list().filter(f => f.includes('2026-09/QC paperwork/')).length, 3, 'no duplicate files');
+  } finally { srv.server.close(); }
+});
