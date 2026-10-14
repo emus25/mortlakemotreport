@@ -3100,7 +3100,7 @@
   // Firing every page at once is what trips API rate limits on a big scan.
   // Work through them a few at a time instead — slower per burst, but it
   // actually finishes rather than half the pages failing.
-  var SCAN_CONCURRENCY = 3;
+  var SCAN_CONCURRENCY = 2;
 
   /* Runs `worker` over `items`, at most SCAN_CONCURRENCY at a time.
      onProgress fires as each one finishes. Results keep their input order. */
@@ -3255,7 +3255,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 16;
+  var EXPECTED_BACKEND_VERSION = 17;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;

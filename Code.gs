@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 16;
+var BACKEND_VERSION = 17;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -51,6 +51,7 @@ function doPost(e) {
     out = (err && err.isAppError)
       ? { status: err.code, message: err.message }
       : { status: 'error', message: 'Something went wrong on the server: ' + (err && err.message || err) };
+    if (!err || !err.isAppError || err.code === 'busy') logError_(data.action, out.message);
   }
   out.ms = Date.now() - started;
   return jsonResponse_(out);
@@ -96,6 +97,7 @@ function route_(data) {
     case 'readPage':         return readPage_(data, false);
     case 'retryPage':        return readPage_(data, true);
     case 'getPage':          return getPage_(data);
+    case 'getErrors':        return { status: 'success', errors: readErrors_() };
     case 'loadEquipment':    return loadEquipment_();
     case 'saveEquipment':    return saveEquipment_(data);
   }
@@ -423,7 +425,7 @@ var DVSA_INPUTS = {
 };
 // A page that has said "reading" for longer than this was abandoned (the
 // browser was closed mid-read), so it may be read again.
-var READING_STALE_MS = 5 * 60 * 1000;
+var READING_STALE_MS = 3 * 60 * 1000;
 
 /* ── Errors the app can show as they are ── */
 function appError_(code, message) {
@@ -431,6 +433,21 @@ function appError_(code, message) {
   e.isAppError = true;
   e.code = code;
   return e;
+}
+
+/* A short log of the last things that went wrong on the server, kept in
+   Script Properties, so problems can be seen directly instead of guessed
+   at (getErrors). */
+function logError_(action, message) {
+  try {
+    var list = readErrors_();
+    list.push({ at: nowIso_(), action: String(action || ''), message: String(message || '').slice(0, 300) });
+    PropertiesService.getScriptProperties().setProperty('ERRLOG', JSON.stringify(list.slice(-30)));
+  } catch (e) { /* logging must never cause a failure of its own */ }
+}
+
+function readErrors_() {
+  try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('ERRLOG') || '[]'); } catch (e) { return []; }
 }
 
 function checkMonth_(month) {
@@ -444,10 +461,16 @@ function checkKind_(kind) {
 }
 
 /* ── Locking ── */
-function withLock_(fn) {
+/* Changes to the records happen one at a time. Most wait up to 30 seconds
+   for their turn; recording what Claude has just read waits longer
+   (RECORD_WAIT_MS), because giving up there would waste a finished reading
+   and leave the page stuck on "being read". */
+var RECORD_WAIT_MS = 120000;
+
+function withLock_(fn, waitMs) {
   var lock = LockService.getScriptLock();
   try {
-    lock.waitLock(30000);
+    lock.waitLock(waitMs || 30000);
   } catch (e) {
     throw appError_('busy', 'The records are busy saving something else. Try again in a moment.');
   }
@@ -895,24 +918,62 @@ function filePage_(data) {
 /* markReading: the combined request reads straight away, so the page is
    marked "reading" while still locked; filing alone leaves it "unread". */
 function fileStep_(kind, month, data, markReading) {
-  return withLock_(function () {
-    var ctx = openMonth_(month, true);
-    var d = ctx.details;
-    assertEditable_(d);
+  function duplicateOf_(d) {
     var existing = null;
     if (data.fingerprint) {
       pagesOf_(d, kind).forEach(function (p) { if (p.fingerprint === data.fingerprint) existing = p; });
     }
-    if (existing && existing.status === 'read') return { duplicate: true, page: existing };
-    if (existing && isFreshlyReading_(existing)) return { duplicate: true, page: existing };
-    if (existing && !markReading) return { duplicate: true, page: existing };
-    var page = existing;
-    if (!page) {
+    if (!existing) return null;
+    if (existing.status === 'read' || isFreshlyReading_(existing) || !markReading) return { duplicate: true, page: existing };
+    return { again: existing };   // filed before but not read: read it now
+  }
+
+  // 1. A page already filed needs no upload at all (a quick look, no lock).
+  var peek = openMonth_(month, false);
+  if (peek) {
+    assertEditable_(peek.details);
+    var known = duplicateOf_(peek.details);
+    if (known && known.duplicate) return known;
+  }
+
+  // 2. Make sure the month's folders exist. Only the first page of a month
+  //    needs the lock for this, so two pages can't create two folders.
+  if (!prop_('ID_s_' + month + '_' + kind)) {
+    withLock_(function () {
+      var c = openMonth_(month, true);
+      subFolder_(c, kind);
+      if (!readJsonAt_('d_' + month, c.folder, DETAILS_FILE)) saveMonth_(c);
+    });
+    memo_ = {};
+  }
+
+  // 3. Upload the image OUTSIDE the lock. This is the slowest part (a second
+  //    or more), and doing it while holding the lock made every other save
+  //    queue behind it. It gets its proper name once it is filed below.
+  var folder = folderAt_('s_' + month + '_' + kind, function () { return monthFolder_(month, true); }, SUBFOLDERS[kind], true);
+  var blob = Utilities.newBlob(Utilities.base64Decode(data.imageBase64), data.mimeType || 'image/jpeg',
+                               'incoming ' + nowIso_().replace(/[:.]/g, '-') + ' ' + Math.random().toString(36).slice(2, 8) + '.jpg');
+  var file = folder.createFile(blob);
+
+  // 4. File it: a few quick Drive calls inside the lock.
+  return withLock_(function () {
+    var ctx = openMonth_(month, true);
+    var d = ctx.details;
+    assertEditable_(d);
+    var dup = duplicateOf_(d);
+    if (dup && dup.duplicate) {
+      // Another request filed this same page while it was uploading. This
+      // copy was never part of the records, so it is simply binned.
+      file.setTrashed(true);
+      return dup;
+    }
+    var page = dup && dup.again;
+    if (page) {
+      file.setTrashed(true);   // the earlier copy is already filed
+    } else {
       var no = d.nextPageNo++;
       var name = (kind === 'qc' ? 'page-' : 'cert-') + ('00' + no).slice(-3) + '.jpg';
-      var folder = subFolder_(ctx, kind);
-      var blob = Utilities.newBlob(Utilities.base64Decode(data.imageBase64), data.mimeType || 'image/jpeg', name);
-      var file = folder.createFile(blob);
+      file.setName(name);
       page = {
         id: kind + '-' + no, kind: kind, fileId: file.getId(), fileName: name,
         mimeType: data.mimeType || 'image/jpeg', sourceName: String(data.sourceName || name),
@@ -954,7 +1015,7 @@ function readAndRecord_(kind, month, pageId, imageBase64, mimeType) {
     delete p.readingStartedAt;
     saveMonth_(ctx);
     return p;
-  });
+  }, RECORD_WAIT_MS);
   return {
     status: res.status === 'success' ? 'success' : 'error',
     message: res.message,

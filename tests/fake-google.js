@@ -10,13 +10,13 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-function makeDrive() {
+function makeDrive(isLocked) {
   let nextId = 1;
   const items = new Map();   // id -> folder | file
   // Every call that would be a round trip to Drive in real Apps Script, so
   // tests can keep the number per save down (each one costs real time).
-  const calls = { n: 0 };
-  const count = (fn) => function () { calls.n++; return fn.apply(this, arguments); };
+  const calls = { n: 0, locked: 0 };
+  const count = (fn) => function () { calls.n++; if (isLocked && isLocked()) calls.locked++; return fn.apply(this, arguments); };
 
   function iterator(list) {
     let i = 0;
@@ -125,7 +125,8 @@ function toBuffer(bytes) {
    what Claude "reads"; throwing or returning an HTTP code simulates errors. */
 function loadBackend(options) {
   options = options || {};
-  const drive = makeDrive();
+  let locked = false;
+  const drive = makeDrive(() => locked);
   const props = new Map(Object.entries(Object.assign({
     DASHBOARD_PASSWORD: 'pw', ANTHROPIC_API_KEY: 'sk-test'
   }, options.properties || {})));
@@ -141,7 +142,6 @@ function loadBackend(options) {
 
   // One real lock: requests in these tests run one after another, so the
   // lock is checked for being taken twice (a bug), not for waiting.
-  let locked = false;
   const LockService = {
     getScriptLock: () => ({
       waitLock: () => { if (locked) throw new Error('Lock already held — nested withLock_'); locked = true; },

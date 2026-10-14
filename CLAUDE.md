@@ -109,8 +109,8 @@ one Google Apps Script file.
     them (`ensureEvidence_`), and are turned upright using the rotation
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
-  1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`).
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (16 on this branch; the live site is still 12) must
+  1560px on the long edge. Pages are sent 2 at a time (`SCAN_CONCURRENCY`); more just lengthens the back office's queue.
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (17 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -153,6 +153,13 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
   remembered by id in Script Properties (`ID_…`), and the records index lives
   in Script Properties (`IDX_YYYY-MM`) rather than a Drive file. The fake
   Google counts Drive calls, and a test caps them per action.
+- **The queue (v17):** only one change at a time (`withLock_`). The lock
+  waits 30s, except recording a finished Claude reading, which waits
+  `RECORD_WAIT_MS` (2 minutes) so a paid-for reading is never lost. A page
+  image is uploaded **outside** the lock, then named and filed inside it. A
+  page left "reading" for 3 minutes (`READING_STALE_MS`) may be read again.
+  Server errors are logged in the `ERRLOG` property; read them with
+  `getErrors`.
 - **Records rules enforced on the server:**
   - Every change to a month runs inside `withLock_`.
   - A month with status `signed` refuses all changes (`assertEditable_`).
@@ -200,7 +207,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 23 back-office checks + 11 real-browser checks
+npm test               # 24 back-office checks + 11 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

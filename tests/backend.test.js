@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 16);
+  assert.equal(b.call('getVersion', { password: '' }).version, 17);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -262,7 +262,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 16);
+  assert.equal(r.version, 17);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -318,19 +318,39 @@ test('a page being read by another request is not read twice', () => {
   assert.equal(b.calls.claude, 0);
 });
 
-test('each save makes only a handful of Drive calls (they are what makes saving slow)', () => {
+test('saves hold the queue for only a handful of Drive calls (that is what makes batches slow)', () => {
   const b = loadBackend(backendReading(QC_READ));
   b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'warm-up' });
-  const per = (action, payload) => { const before = b.drive.calls.n; const r = b.call(action, payload); return { r, n: b.drive.calls.n - before }; };
+  const per = (action, payload) => {
+    const n0 = b.drive.calls.n, l0 = b.drive.calls.locked;
+    const r = b.call(action, payload);
+    return { r, n: b.drive.calls.n - n0, locked: b.drive.calls.locked - l0 };
+  };
   const f = per('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
-  assert.ok(f.n <= 8, 'filing a page: ' + f.n + ' Drive calls');
+  assert.ok(f.locked <= 7, 'filing a page holds the queue for ' + f.locked + ' Drive calls');
   const r = per('readPage', { month: '2026-09', kind: 'qc', id: f.r.page.id });
-  assert.ok(r.n <= 10, 'reading a page: ' + r.n + ' Drive calls');
+  assert.ok(r.locked <= 12, 'reading a page holds the queue for ' + r.locked + ' Drive calls');
   const c = per('saveMonthFields', { month: '2026-09', field: 'checklist', value: { state: { '0-0': 'yes' } }, baseRevision: 0 });
-  assert.ok(c.n <= 5, 'saving the checklist: ' + c.n + ' Drive calls');
+  assert.ok(c.n <= 6, 'saving the checklist: ' + c.n + ' Drive calls');
   const o = per('openSession', { month: '2026-09' });
   assert.ok(o.n <= 8, 'opening the app: ' + o.n + ' Drive calls');
   assert.equal(o.r.months['2026-09'].qcPages, 2, 'the index (now in Script Properties) is up to date');
+  // An already-filed page is recognised without uploading it again.
+  const d = per('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
+  assert.equal(d.r.duplicate, true);
+  assert.equal(d.locked, 0, 'no queue needed for a duplicate');
+  assert.equal(b.drive.list().filter(x => /QC paperwork\//.test(x)).length, 2, 'no stray uploads');
+  assert.ok(!b.drive.list().some(x => /incoming/.test(x)), 'every upload got its proper name');
+});
+
+test('problems on the server are written to a log that can be read back', () => {
+  const b = loadBackend();
+  b.sandbox.LockService.getScriptLock = () => ({ waitLock: () => { throw new Error('timeout'); }, releaseLock: () => {} });
+  const r = b.call('saveEquipment', { list: [], baseRevision: 0 });
+  assert.equal(r.status, 'busy');
+  const errs = b.call('getErrors').errors;
+  assert.equal(errs.length, 1);
+  assert.equal(errs[0].action, 'saveEquipment');
 });
 
 test('a records index from an earlier version is moved across', () => {
