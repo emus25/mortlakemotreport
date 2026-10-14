@@ -110,7 +110,7 @@ one Google Apps Script file.
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
   1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`).
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (14 on this branch; the live site is still 12) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (16 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -140,13 +140,19 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `listMonths`, `loadMonth` | yes | The records index; one month's `details.json` (no Drive ids or images). |
 | `saveMonthFields` | yes | Checklist only. Refused with `conflict` if `baseRevision` is stale. |
 | `saveDvsaFile`, `getDvsaFile` | yes | File and fetch the original DVSA export. A replaced one goes to `Removed/`. |
-| `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again. |
+| `filePage`, `readPage`, `getPage` | yes | **How the page sends scans (v15+):** file a page (a few seconds, safe to repeat), then have it read in a separate request, then check on it if the reading reply was lost. No single request has to wait for Drive and Claude together, because long requests were being cut off at 30s. |
+| `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again (Retry). |
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
 
 - **Secrets:** `DASHBOARD_PASSWORD` and `ANTHROPIC_API_KEY` are kept in
   Script Properties and must never be in `index.html`. Other properties are
   `RECORDS_FOLDER_ID` (set automatically), `RECORDS_FOLDER_NAME` (TEST copy
   only) and `RECORDS_MIGRATED`.
+- **Speed (v16):** saves run one at a time inside the lock, so the number of
+  Drive calls per save sets the pace. Found folders and files are
+  remembered by id in Script Properties (`ID_…`), and the records index lives
+  in Script Properties (`IDX_YYYY-MM`) rather than a Drive file. The fake
+  Google counts Drive calls, and a test caps them per action.
 - **Records rules enforced on the server:**
   - Every change to a month runs inside `withLock_`.
   - A month with status `signed` refuses all changes (`assertEditable_`).
@@ -194,7 +200,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 21 back-office checks + 10 real-browser checks
+npm test               # 23 back-office checks + 11 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

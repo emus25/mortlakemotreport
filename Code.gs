@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 15;
+var BACKEND_VERSION = 16;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -57,6 +57,7 @@ function doPost(e) {
 }
 
 function route_(data) {
+  memo_ = {};   // Drive objects found during this request only
   // Deliberately needs no password — it exposes nothing sensitive and is
   // purely so the app can check the right code is live.
   if (data.action === 'getVersion') return { status: 'success', version: BACKEND_VERSION };
@@ -453,19 +454,37 @@ function withLock_(fn) {
   try { return fn(); } finally { lock.releaseLock(); }
 }
 
-/* ── Folders and files ── */
+/* ── Folders and files ──
+   Every Drive call costs a fraction of a second, and saves happen one at a
+   time (inside the lock), so the number of Drive calls per save decides how
+   fast a batch of scans goes through. Searching a folder by name is the
+   expensive part, so once a folder or file has been found its id is
+   remembered in Script Properties (ID_…) and it is opened directly from then
+   on. If a remembered id no longer works (deleted by hand), it is searched
+   for again. */
+var memo_ = {};
+
+function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
+function setProp_(k, v) { PropertiesService.getScriptProperties().setProperty(k, v); }
+
 function recordsRoot_() {
-  var props = PropertiesService.getScriptProperties();
-  var id = props.getProperty('RECORDS_FOLDER_ID');
+  if (memo_.root) return memo_.root;
+  var id = prop_('RECORDS_FOLDER_ID');
   if (id) {
     try {
       var existing = DriveApp.getFolderById(id);
-      if (!existing.isTrashed()) return existing;
+      if (!existing.isTrashed()) return (memo_.root = existing);
     } catch (e) { /* the folder was deleted by hand: make a new one below */ }
   }
-  var name = props.getProperty('RECORDS_FOLDER_NAME') || DEFAULT_RECORDS_FOLDER_NAME;
+  var name = prop_('RECORDS_FOLDER_NAME') || DEFAULT_RECORDS_FOLDER_NAME;
   var folder = DriveApp.createFolder(name);
-  props.setProperty('RECORDS_FOLDER_ID', folder.getId());
+  setProp_('RECORDS_FOLDER_ID', folder.getId());
+  // Everything remembered pointed into the old folder: forget it all.
+  var props = PropertiesService.getScriptProperties();
+  Object.keys(props.getProperties()).forEach(function (k) {
+    if (k.indexOf('ID_') === 0 || k.indexOf(INDEX_PREFIX) === 0) props.deleteProperty(k);
+  });
+  memo_ = { root: folder };
   return folder;
 }
 
@@ -480,25 +499,64 @@ function childFile_(folder, name) {
   return it.hasNext() ? it.next() : null;
 }
 
-function readJson_(folder, name) {
-  var f = childFile_(folder, name);
+/* A folder found by remembered id, or by name inside getParent() (called only
+   when it has to be searched for). */
+function folderAt_(key, getParent, name, create) {
+  if (memo_[key]) return memo_[key];
+  var id = prop_('ID_' + key);
+  if (id) {
+    try { return (memo_[key] = DriveApp.getFolderById(id)); } catch (e) { /* search below */ }
+  }
+  var parent = getParent();
+  var f = parent && childFolder_(parent, name, create);
   if (!f) return null;
-  return JSON.parse(f.getBlob().getDataAsString());
+  setProp_('ID_' + key, f.getId());
+  return (memo_[key] = f);
 }
 
-function writeJson_(folder, name, obj) {
-  var text = JSON.stringify(obj, null, 1);
+function fileAt_(key, folder, name) {
+  if (memo_[key]) return memo_[key];
+  var id = prop_('ID_' + key);
+  if (id) {
+    try { return (memo_[key] = DriveApp.getFileById(id)); } catch (e) { /* search below */ }
+  }
   var f = childFile_(folder, name);
-  if (f) f.setContent(text);
-  else folder.createFile(name, text, 'application/json');
+  if (!f) return null;
+  setProp_('ID_' + key, f.getId());
+  return (memo_[key] = f);
 }
+
+function readJsonAt_(key, folder, name) {
+  var f = fileAt_(key, folder, name);
+  return f ? JSON.parse(f.getBlob().getDataAsString()) : null;
+}
+
+function writeJsonAt_(key, folder, name, obj) {
+  var text = JSON.stringify(obj, null, 1);
+  var f = fileAt_(key, folder, name);
+  if (f) { f.setContent(text); return; }
+  f = folder.createFile(name, text, 'application/json');
+  setProp_('ID_' + key, f.getId());
+  memo_[key] = f;
+}
+
+function monthFolder_(month, create) {
+  return folderAt_('m_' + month, recordsRoot_, month, create);
+}
+
+function subFolder_(ctx, sub) {
+  return folderAt_('s_' + ctx.details.month + '_' + sub, function () { return ctx.folder; }, SUBFOLDERS[sub], true);
+}
+
+function readEquipment_() { return readJsonAt_('equipment', recordsRoot_(), EQUIPMENT_FILE); }
+function writeEquipment_(eq) { writeJsonAt_('equipment', recordsRoot_(), EQUIPMENT_FILE, eq); }
 
 function nowIso_() { return new Date().toISOString(); }
 
 /* Moves a file into the month's Removed folder with the time in its name, so
    two removals of "page-007.jpg" never collide and nothing is ever lost. */
-function moveToRemoved_(monthFolder, file) {
-  var removed = childFolder_(monthFolder, SUBFOLDERS.removed, true);
+function moveToRemoved_(ctx, file) {
+  var removed = subFolder_(ctx, 'removed');
   file.setName('removed ' + nowIso_().replace(/[:.]/g, '-') + ' ' + file.getName());
   file.moveTo(removed);
 }
@@ -530,21 +588,21 @@ function emptyDetails_(month) {
 /* Returns { folder, details } for a month. With create=false and nothing
    saved yet, returns null rather than leaving empty folders behind. */
 function openMonth_(month, create) {
-  var root = recordsRoot_();
-  var folder = childFolder_(root, month, create);
+  recordsRoot_();   // checks the records folder still exists (and starts afresh if not)
+  var folder = monthFolder_(month, create);
   if (!folder) return null;
-  var details = readJson_(folder, DETAILS_FILE);
+  var details = readJsonAt_('d_' + month, folder, DETAILS_FILE);
   if (!details) {
     if (!create) return null;
     details = emptyDetails_(month);
   }
-  return { root: root, folder: folder, details: details };
+  return { folder: folder, details: details };
 }
 
 function saveMonth_(ctx) {
   ctx.details.updatedAt = nowIso_();
-  writeJson_(ctx.folder, DETAILS_FILE, ctx.details);
-  updateIndex_(ctx.root, ctx.details);
+  writeJsonAt_('d_' + ctx.details.month, ctx.folder, DETAILS_FILE, ctx.details);
+  updateIndex_(ctx.details);
 }
 
 function addHistory_(details, what) {
@@ -591,13 +649,37 @@ function publicDetails_(d) {
   return out;
 }
 
-/* ── records-index.json ── */
-function readIndex_(root) {
-  return readJson_(root, INDEX_FILE) || { schema: RECORDS_SCHEMA, months: {} };
+/* ── The records index ──
+   One short line per month (status, counts, headline figures), so the app can
+   list the months without opening every folder. It is kept in Script
+   Properties (IDX_YYYY-MM), which is far quicker than a Drive file, and can
+   always be rebuilt from the months' details.json. Version 13–15 kept it in
+   records-index.json; that is read once and moved across. */
+var INDEX_PREFIX = 'IDX_';
+
+function readIndex_() {
+  var all = PropertiesService.getScriptProperties().getProperties();
+  var months = {};
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf(INDEX_PREFIX) !== 0) return;
+    try { months[k.substring(INDEX_PREFIX.length)] = JSON.parse(all[k]); } catch (e) {}
+  });
+  if (!all.INDEX_MOVED) {
+    var old = readJsonAt_('index', recordsRoot_(), INDEX_FILE);
+    if (old && old.months) {
+      Object.keys(old.months).forEach(function (m) {
+        if (!months[m] && /^\d{4}-\d{2}$/.test(m)) {
+          months[m] = old.months[m];
+          setProp_(INDEX_PREFIX + m, JSON.stringify(old.months[m]));
+        }
+      });
+    }
+    setProp_('INDEX_MOVED', nowIso_());
+  }
+  return { schema: RECORDS_SCHEMA, months: months };
 }
 
-function updateIndex_(root, d) {
-  var index = readIndex_(root);
+function updateIndex_(d) {
   var answered = Object.keys(d.checklist.state || {}).filter(function (k) { return d.checklist.state[k]; }).length;
   var tq = d.testQuality && d.testQuality.site ? {
     period: d.testQuality.period || null,
@@ -605,7 +687,7 @@ function updateIndex_(root, d) {
     siteFailed: d.testQuality.site.failed,
     nationalFailed: d.testQuality.national ? d.testQuality.national.failed : null
   } : null;
-  index.months[d.month] = {
+  setProp_(INDEX_PREFIX + d.month, JSON.stringify({
     status: d.status,
     signedVersion: d.signedVersion,
     qcPages: d.qcPages.length,
@@ -615,8 +697,7 @@ function updateIndex_(root, d) {
     checklistAnswered: answered,
     testQuality: tq,
     updatedAt: d.updatedAt
-  };
-  writeJson_(root, INDEX_FILE, index);
+  }));
 }
 
 /* ── Requests ── */
@@ -639,13 +720,13 @@ function openSession_(data) {
     migration = migrateLegacy_(data);
   }
 
-  var eq = readJson_(root, EQUIPMENT_FILE);
+  var eq = readEquipment_();
   if (!eq && data.seedEquipment && data.seedEquipment.length) {
     eq = withLock_(function () {
-      var again = readJson_(root, EQUIPMENT_FILE);   // another computer may have just done it
+      var again = readEquipment_();   // another computer may have just done it
       if (again) return again;
       var fresh = { revision: 1, list: data.seedEquipment, updatedAt: nowIso_() };
-      writeJson_(root, EQUIPMENT_FILE, fresh);
+      writeEquipment_(fresh);
       return fresh;
     });
   }
@@ -657,7 +738,7 @@ function openSession_(data) {
     folderUrl: root.getUrl(),
     migration: migration,
     equipment: { exists: !!eq, list: eq ? eq.list : [], revision: eq ? eq.revision : 0 },
-    months: readIndex_(root).months,
+    months: readIndex_().months,
     month: { exists: m.exists, details: m.details }
   };
 }
@@ -672,8 +753,7 @@ function recordsStatus_() {
 }
 
 function listMonths_() {
-  var root = recordsRoot_();
-  return { status: 'success', months: readIndex_(root).months };
+  return { status: 'success', months: readIndex_().months };
 }
 
 function loadMonth_(month) {
@@ -739,10 +819,10 @@ function saveDvsaFile_(data) {
     var ctx = openMonth_(month, true);
     var d = ctx.details;
     assertEditable_(d);
-    var folder = childFolder_(ctx.folder, SUBFOLDERS.dvsa, true);
+    var folder = subFolder_(ctx, 'dvsa');
     var prev = d.dvsaFiles[data.inputId];
     if (prev) {
-      try { moveToRemoved_(ctx.folder, DriveApp.getFileById(prev.fileId)); } catch (e) { /* already gone */ }
+      try { moveToRemoved_(ctx, DriveApp.getFileById(prev.fileId)); } catch (e) { /* already gone */ }
     }
     var ext = (String(data.fileName || '').match(/\.[A-Za-z0-9]{1,5}$/) || ['.xlsx'])[0].toLowerCase();
     var blob = Utilities.newBlob(Utilities.base64Decode(data.base64),
@@ -830,7 +910,7 @@ function fileStep_(kind, month, data, markReading) {
     if (!page) {
       var no = d.nextPageNo++;
       var name = (kind === 'qc' ? 'page-' : 'cert-') + ('00' + no).slice(-3) + '.jpg';
-      var folder = childFolder_(ctx.folder, SUBFOLDERS[kind], true);
+      var folder = subFolder_(ctx, kind);
       var blob = Utilities.newBlob(Utilities.base64Decode(data.imageBase64), data.mimeType || 'image/jpeg', name);
       var file = folder.createFile(blob);
       page = {
@@ -947,7 +1027,7 @@ function removePage_(data) {
     var p = d && findPage_(d, kind, data.id);
     if (!p) throw appError_('missing', 'That page is not filed.');
     assertEditable_(d);
-    try { moveToRemoved_(ctx.folder, DriveApp.getFileById(p.fileId)); } catch (e) { /* already gone */ }
+    try { moveToRemoved_(ctx, DriveApp.getFileById(p.fileId)); } catch (e) { /* already gone */ }
     var list = pagesOf_(d, kind);
     list.splice(list.indexOf(p), 1);
     p.removedAt = nowIso_();
@@ -960,16 +1040,14 @@ function removePage_(data) {
 
 /* ── Equipment ── */
 function loadEquipment_() {
-  var root = recordsRoot_();
-  var eq = readJson_(root, EQUIPMENT_FILE);
+  var eq = readEquipment_();
   return { status: 'success', exists: !!eq, list: eq ? eq.list : [], revision: eq ? eq.revision : 0 };
 }
 
 function saveEquipment_(data) {
   if (!data.list || typeof data.list.length !== 'number') throw appError_('error', 'No equipment list received.');
   return withLock_(function () {
-    var root = recordsRoot_();
-    var eq = readJson_(root, EQUIPMENT_FILE) || { revision: 0, list: [] };
+    var eq = readEquipment_() || { revision: 0, list: [] };
     if (data.baseRevision !== eq.revision) {
       return { status: 'conflict', message: 'The equipment list was changed on another computer. Reload to see the latest.',
                revision: eq.revision, list: eq.list };
@@ -977,7 +1055,7 @@ function saveEquipment_(data) {
     eq.list = data.list;
     eq.revision++;
     eq.updatedAt = nowIso_();
-    writeJson_(root, EQUIPMENT_FILE, eq);
+    writeEquipment_(eq);
     return { status: 'success', revision: eq.revision };
   });
 }
@@ -1026,8 +1104,8 @@ function migrateLegacy_(data) {
           var ctx2 = month_(m2);
           if (!ctx2.details.testQuality) { ctx2.details.testQuality = v; touched[m2] = true; }
         } else if (k === DATA_PREFIX + 'calibration') {
-          if (!childFile_(root, EQUIPMENT_FILE) && v && v.length) {
-            writeJson_(root, EQUIPMENT_FILE, { revision: 1, list: v, updatedAt: nowIso_() });
+          if (!readEquipment_() && v && v.length) {
+            writeEquipment_({ revision: 1, list: v, updatedAt: nowIso_() });
           }
         }
       });

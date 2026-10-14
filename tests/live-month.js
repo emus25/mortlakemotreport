@@ -20,9 +20,12 @@ const problems = [];
 function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.push(what); }
 
 (async () => {
-  fs.writeFileSync(D + '/Test log by date May 2026.xlsx', fx.testLog(2026, 5, 212));
-  fs.writeFileSync(D + '/Test log by duration May 2026.xlsx', fx.testLog(2026, 5, 212));
-  fs.writeFileSync(D + '/Test Quality May-26.xlsx', fx.testQuality('May-26'));
+  const [YY, MM] = MONTH.split('-').map(Number);
+  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][MM - 1];
+  const LONG = new Date(YY, MM - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  fs.writeFileSync(D + '/Test log by date.xlsx', fx.testLog(YY, MM, 212));
+  fs.writeFileSync(D + '/Test log by duration.xlsx', fx.testLog(YY, MM, 212));
+  fs.writeFileSync(D + '/Test Quality.xlsx', fx.testQuality(MON + '-' + String(YY).slice(2)));
   fs.writeFileSync(D + '/blank-page.png', fx.png(400, 560, [252, 252, 252]));
 
   const browser = await chromium.launch(process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
@@ -44,7 +47,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     log(name, 'logged in, app ready in ' + ((Date.now() - t) / 1000).toFixed(1) + 's');
     await p.evaluate(m => { const el = document.getElementById('fMonth'); el.value = m; el.dispatchEvent(new Event('change')); switchTab('report'); }, MONTH);
     await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden, MONTH, { timeout: 120000 });
-    log(name, 'opened May 2026');
+    log(name, 'opened ' + MONTH);
     return p;
   }
   const allSaved = p => p.waitForFunction(() => !hasPendingSaves_() && document.getElementById('syncStatus').textContent === 'All saved ✓', null, { timeout: 300000 });
@@ -55,9 +58,9 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     const A = await computer('A');
 
     log('A adds the three DVSA files');
-    await A.setInputFiles('#fileLogDate', D + '/Test log by date May 2026.xlsx');
-    await A.setInputFiles('#fileLogDuration', D + '/Test log by duration May 2026.xlsx');
-    await A.setInputFiles('#fileRating', D + '/Test Quality May-26.xlsx');
+    await A.setInputFiles('#fileLogDate', D + '/Test log by date.xlsx');
+    await A.setInputFiles('#fileLogDuration', D + '/Test log by duration.xlsx');
+    await A.setInputFiles('#fileRating', D + '/Test Quality.xlsx');
     await A.waitForFunction(() => ['statusLogDate', 'statusLogDuration', 'statusRating'].every(id => /Filed in Google Drive|Not saved/.test(document.getElementById(id).textContent)), null, { timeout: 180000 });
     for (const id of ['statusLogDate', 'statusLogDuration', 'statusRating']) check(/Filed in Google Drive/.test(await txt(A, '#' + id)), (await txt(A, '#' + id)).replace('Filed', ' · Filed'));
 
@@ -66,7 +69,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
       'WR19KXA-emissions.jpg', 'WR19KXA-inspection-sideways.jpg', 'GN71TVZ-scan.pdf', 'blank-page.png'].map(f => D + '/' + f));
     let t = Date.now();
     await A.click('#sortScansBtn');
-    await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length === 9 && !savesInFlight_, null, { timeout: 600000 });
+    await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length === 9 && !savesInFlight_ && document.getElementById('sortScansBtn').textContent !== 'Reading…', null, { timeout: 600000 });
     log('   sorted in ' + ((Date.now() - t) / 1000).toFixed(0) + 's');
     const pages = await A.evaluate(() => savedPages_.qc.map(p => ({ src: p.sourceName, status: p.status, reg: p.reading && p.reading.registration, doc: p.reading && p.reading.document_type, rot: p.reading && p.reading.rotation, ev: p.reading && p.reading.is_electric, qc: p.reading && p.reading.qc_flag })));
     pages.forEach(p => log('     ' + p.src.padEnd(34) + ' ' + p.status + '  ' + (p.reg || '—') + '  ' + (p.doc || '') + (p.rot ? '  rotate ' + p.rot + '°' : '') + (p.ev ? '  electric' : '') + (p.qc ? '  QC-marked' : '')));
@@ -83,15 +86,16 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
 
     log('A removes the blank page');
     const blankId = await A.evaluate(() => (savedPages_.qc.find(p => /blank/.test(p.sourceName)) || {}).id);
+    const before = await A.evaluate(() => savedPages_.qc.length);
     await A.click('#qcPageList summary');
     await A.click(`#qcPageList [data-remove="${blankId}"]`);
-    await A.waitForFunction(() => savedPages_.qc.length === 8, null, { timeout: 120000 });
+    await A.waitForFunction(n => savedPages_.qc.length === n - 1, before, { timeout: 120000 });
     check(true, 'blank page removed (moved to the Removed folder)');
 
     log('A adds the calibration certificate and presses Read');
     await A.setInputFiles('#fileCalCerts', D + '/calibration-cert-brake-tester.jpg');
     await A.click('#readCertsBtn');
-    await A.waitForFunction(() => savedPages_.cert.length === 1 && !savesInFlight_, null, { timeout: 300000 });
+    await A.waitForFunction(() => savedPages_.cert.length === 1 && !savesInFlight_ && document.getElementById('readCertsBtn').textContent !== 'Reading…', null, { timeout: 300000 });
     const certText = await txt(A, '#calCertResults');
     log('   screen says: ' + certText.replace(/\s+/g, ' ').slice(0, 160));
     check(/Roller Brake Tester/i.test(certText) && /80780205/.test(certText), 'certificate read: roller brake tester, serial 80780205');
@@ -125,7 +129,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
                text: b.innerText, kpiTests: (b.innerText.match(/Tests carried out\s*(\d+)/) || [])[1] };
     });
     log('   report header: ' + rep.head.replace(/\n/g, ' | '));
-    check(/May 2026/.test(rep.head) && /Tests 0?1 May 2026 – 28 May 2026/.test(rep.head), 'report is dated May 2026 with the test date range');
+    check(rep.head.indexOf(LONG) > -1 && /Tests 0?1 \w+ \d{4} – 28 \w+ \d{4}/.test(rep.head), 'report is dated ' + LONG + ' with the test date range');
     check(rep.imgs === 9, 'report includes all 9 scanned pages (8 QC + 1 certificate): ' + rep.imgs);
     check(/LB22FLC/.test(rep.text) && /WR19KXA/.test(rep.text) && /GN71TVZ/.test(rep.text), 'all three cars named in the report');
     check(/Triangle sign faded/.test(rep.text) && /CCTV monitor flickering/.test(rep.text), 'the two NO answers and their notes are in the report');

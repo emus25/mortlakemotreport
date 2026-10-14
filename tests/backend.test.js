@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 15);
+  assert.equal(b.call('getVersion', { password: '' }).version, 16);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -262,7 +262,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 15);
+  assert.equal(r.version, 16);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -316,4 +316,27 @@ test('a page being read by another request is not read twice', () => {
   const r = b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
   assert.equal(r.page.status, 'reading');
   assert.equal(b.calls.claude, 0);
+});
+
+test('each save makes only a handful of Drive calls (they are what makes saving slow)', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'warm-up' });
+  const per = (action, payload) => { const before = b.drive.calls.n; const r = b.call(action, payload); return { r, n: b.drive.calls.n - before }; };
+  const f = per('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
+  assert.ok(f.n <= 8, 'filing a page: ' + f.n + ' Drive calls');
+  const r = per('readPage', { month: '2026-09', kind: 'qc', id: f.r.page.id });
+  assert.ok(r.n <= 10, 'reading a page: ' + r.n + ' Drive calls');
+  const c = per('saveMonthFields', { month: '2026-09', field: 'checklist', value: { state: { '0-0': 'yes' } }, baseRevision: 0 });
+  assert.ok(c.n <= 5, 'saving the checklist: ' + c.n + ' Drive calls');
+  const o = per('openSession', { month: '2026-09' });
+  assert.ok(o.n <= 8, 'opening the app: ' + o.n + ' Drive calls');
+  assert.equal(o.r.months['2026-09'].qcPages, 2, 'the index (now in Script Properties) is up to date');
+});
+
+test('a records index from an earlier version is moved across', () => {
+  const b = loadBackend();
+  b.call('saveEquipment', { list: [], baseRevision: 0 });
+  const root = b.drive.DriveApp.getFolderById(b.props.get('RECORDS_FOLDER_ID'));
+  root.createFile('records-index.json', JSON.stringify({ months: { '2026-07': { status: 'draft', qcPages: 4 } } }), 'application/json');
+  assert.equal(b.call('listMonths').months['2026-07'].qcPages, 4);
 });

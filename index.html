@@ -3255,7 +3255,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 15;
+  var EXPECTED_BACKEND_VERSION = 16;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -3534,21 +3534,29 @@
         return apiOnce_('readPage', { month: month, kind: kind, id: res.page.id }).then(function (r) {
           if (r.page) { showFiledPage_(kind, r.page, token); return { page: r.page }; }
           var filed = res.page;
-          if (r.noReply) return waitForReading_(kind, month, filed.id, token, Date.now());
+          if (r.noReply) return waitForReading_(kind, month, filed.id, token, Date.now(), false);
           // Filed, but couldn't be read (e.g. the month was signed meanwhile).
           return { page: filed };
         });
       });
   }
 
-  function waitForReading_(kind, month, id, token, started) {
+  /* Asks how a page's reading went. If Google never got the request (the page
+     is still "unread"), it asks once more for it to be read. */
+  function waitForReading_(kind, month, id, token, started, askedAgain) {
     return new Promise(function (r) { setTimeout(r, READ_POLL_MS); })
       .then(function () { return api_('getPage', { month: month, kind: kind, id: id }); })
       .then(function (res) {
         if (!res.page) return { page: null, message: res.message };
         showFiledPage_(kind, res.page, token);
+        if (res.page.status === 'unread' && !askedAgain) {
+          return apiOnce_('readPage', { month: month, kind: kind, id: id }).then(function (r) {
+            if (r.page) { showFiledPage_(kind, r.page, token); return { page: r.page }; }
+            return waitForReading_(kind, month, id, token, started, true);
+          });
+        }
         if (res.page.status !== 'reading' || Date.now() - started > READ_WAIT_MS) return { page: res.page };
-        return waitForReading_(kind, month, id, token, started);
+        return waitForReading_(kind, month, id, token, started, askedAgain);
       });
   }
 

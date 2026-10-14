@@ -137,7 +137,7 @@ test('Paul fills in September; everything is filed and comes back on another com
     // 3. A calibration certificate.
     await a.setInputFiles('#fileCalCerts', [CERT]);
     await a.click('#readCertsBtn');
-    await a.waitForFunction(() => savedPages_.cert.length === 1);
+    await a.waitForFunction(() => savedPages_.cert.length === 1 && !savesInFlight_);
     assert.match(await a.textContent('#calCertResults'), /Roller Brake Tester/);
 
     // 4. Checklist answers save on their own.
@@ -415,7 +415,7 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read', 'found out it had been read');
     assert.equal(await p.evaluate(() => unsavedPages_.qc.length), 0);
 
-    srv.failures.readPage = 1;
+    srv.failures.readPage = 2;           // never arrives, even when asked again
     await p.setInputFiles('#fileQcScans', [SCAN_B]);
     await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
@@ -432,5 +432,19 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 3 && !savesInFlight_ && savedPages_.qc.every(x => x.status === 'read'));
     assert.equal(srv.backend.drive.list().filter(f => f.includes('2026-09/QC paperwork/')).length, 3, 'no duplicate files');
+  } finally { srv.server.close(); }
+});
+
+test('a reading request that never reached Google is asked for again', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.evaluate(() => { READ_POLL_MS = 200; });
+    srv.failures.readPage = 1;           // the first request to read never arrives
+    await p.setInputFiles('#fileQcScans', [SCAN_A]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
+    assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read');
   } finally { srv.server.close(); }
 });
