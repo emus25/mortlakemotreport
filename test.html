@@ -1483,7 +1483,8 @@
      short pause, if Google fails to answer — a single hiccup (often while the
      back office is being updated) shouldn't stop Paul opening the app.
      Saves are not repeated here: they have their own Retry. */
-  var READ_ONLY_ACTIONS_ = { openSession: 1, loadMonth: 1, getDvsaFile: 1, getPageImage: 1, listMonths: 1, loadEquipment: 1 };
+  var READ_ONLY_ACTIONS_ = { openSession: 1, loadMonth: 1, getDvsaFile: 1, getPageImage: 1, listMonths: 1, loadEquipment: 1,
+                            getPage: 1, filePage: 1 };   // filePage is safe to repeat: a filed page is recognised
   var READ_RETRY_DELAY_MS = 2000;
 
   function api_(action, payload) {
@@ -3099,7 +3100,7 @@
   // Firing every page at once is what trips API rate limits on a big scan.
   // Work through them a few at a time instead — slower per burst, but it
   // actually finishes rather than half the pages failing.
-  var SCAN_CONCURRENCY = 3;
+  var SCAN_CONCURRENCY = 2;
 
   /* Runs `worker` over `items`, at most SCAN_CONCURRENCY at a time.
      onProgress fires as each one finishes. Results keep their input order. */
@@ -3254,7 +3255,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 14;
+  var EXPECTED_BACKEND_VERSION = 18;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -3488,20 +3489,15 @@
         savesInFlight_ += pages.length;
         renderSaveIndicator_();
         return runWithConcurrency_(pages, function (pg) {
-          return api_(ui.action, { month: month, imageBase64: pg.base64, mimeType: pg.mimeType,
-                                   fingerprint: pg.fingerprint, sourceName: pg.label })
-            .then(function (res) {
-              savesInFlight_--;
-              if (token !== openToken_) return;   // another month was opened; this page is filed in its own
-              if (res.page) {
-                upsertSavedPage_(kind, res.page);
-                pageImageCache_[month + ':' + res.page.id] = pg.base64;
-              } else {
-                pg.message = res.message || 'Could not be filed';
-                unsavedPages_[kind].push(pg);
-              }
-              renderSaveIndicator_();
-            });
+          return fileAndReadPage_(kind, month, pg, token).then(function (out) {
+            savesInFlight_--;
+            if (token !== openToken_) return;   // another month was opened; this page is filed in its own
+            if (!out.page) {
+              pg.message = out.message || 'Could not be filed';
+              unsavedPages_[kind].push(pg);
+            }
+            renderSaveIndicator_();
+          });
         }, function (done, total) { progress.set(done, total); });
       })
       .then(function () {
@@ -3516,6 +3512,60 @@
         statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those pages: ' +
           escapeHtml_(err.message || 'unknown error') + '</span>';
       });
+  }
+
+  /* Two short requests per page rather than one long one: first the page is
+     filed (a few seconds), then Claude reads it (15–25 seconds). If the reply
+     to the reading request is lost — a network that cuts long requests off, a
+     hiccup — the page is still filed, and Google keeps whatever Claude read,
+     so the app asks how it went (waitForReading_) instead of calling it a
+     failure. */
+  var READ_WAIT_MS = 120000;
+  var READ_POLL_MS = 5000;
+
+  function fileAndReadPage_(kind, month, pg, token) {
+    return api_('filePage', { month: month, kind: kind, imageBase64: pg.base64, mimeType: pg.mimeType,
+                              fingerprint: pg.fingerprint, sourceName: pg.label })
+      .then(function (res) {
+        if (!res.page) return { page: null, message: res.message };
+        pageImageCache_[month + ':' + res.page.id] = pg.base64;
+        showFiledPage_(kind, res.page, token);
+        if (res.page.status === 'read') return { page: res.page };
+        return apiOnce_('readPage', { month: month, kind: kind, id: res.page.id }).then(function (r) {
+          if (r.page) { showFiledPage_(kind, r.page, token); return { page: r.page }; }
+          var filed = res.page;
+          if (r.noReply) return waitForReading_(kind, month, filed.id, token, Date.now(), false);
+          // Filed, but couldn't be read (e.g. the month was signed meanwhile).
+          return { page: filed };
+        });
+      });
+  }
+
+  /* Asks how a page's reading went. If Google never got the request (the page
+     is still "unread"), it asks once more for it to be read. */
+  function waitForReading_(kind, month, id, token, started, askedAgain) {
+    return new Promise(function (r) { setTimeout(r, READ_POLL_MS); })
+      .then(function () { return api_('getPage', { month: month, kind: kind, id: id }); })
+      .then(function (res) {
+        if (!res.page) return { page: null, message: res.message };
+        showFiledPage_(kind, res.page, token);
+        if (res.page.status === 'unread' && !askedAgain) {
+          return apiOnce_('readPage', { month: month, kind: kind, id: id }).then(function (r) {
+            if (r.page) { showFiledPage_(kind, r.page, token); return { page: r.page }; }
+            return waitForReading_(kind, month, id, token, started, true);
+          });
+        }
+        if (res.page.status !== 'reading' || Date.now() - started > READ_WAIT_MS) return { page: res.page };
+        return waitForReading_(kind, month, id, token, started, askedAgain);
+      });
+  }
+
+  // Updates the list as each page is filed and read, so progress is visible.
+  function showFiledPage_(kind, page, token) {
+    if (token !== openToken_) return;
+    upsertSavedPage_(kind, page);
+    renderPageList_(kind);
+    refreshStatuses();
   }
 
   /* Turns a file into page images, each with a fingerprint made from the
@@ -3553,6 +3603,7 @@
     if (p.status === 'read') return { status: 'success', result: p.reading };
     return { status: 'error', message: p.status === 'reading'
       ? 'Still being read — try again in a minute'
+      : p.status === 'unread' ? 'Filed, not read yet — press Retry'
       : (p.error || 'Could not read this page') };
   }
 
@@ -3638,6 +3689,7 @@
     var rows = saved.map(function (p) {
       var state = p.status === 'read' ? '<span class="pl-ok">Read ✓</span>'
         : p.status === 'reading' ? '<span class="pl-wait">Being read…</span>'
+        : p.status === 'unread' ? '<span class="pl-wait">Filed · waiting to be read</span>'
         : '<span class="pl-bad">Could not read: ' + escapeHtml_(p.error || 'unknown') + '</span>';
       return '<div class="pl-row">' +
         '<span class="pl-name">' + escapeHtml_(p.sourceName) + '</span>' + state +
