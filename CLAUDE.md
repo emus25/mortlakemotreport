@@ -308,6 +308,12 @@ From Ediz, in priority order:
      background. Possible speed-up later: cache Drive folder and file ids
      in Script Properties, which would avoid the name searches on every
      save.
+   - **15 Oct 2026: v18 passed the full made-up month** (`tests/live-month.js`,
+     month 2025-09) against the real TEST back office: 3 DVSA files filed in
+     about 20s; 9 scanned pages filed and read in 65s (172s and failing on
+     v17); sideways page turned upright; second computer saw everything; the
+     report built with all pages. TEST months 2025-09 to 2026-06 contain
+     made-up test data.
    - **How to work:** Ediz is not a coder and must not be used as the
      tester. Before asking him to try anything, run
      `TEST_PASSWORD=… node tests/live-check.js` (ask Ediz for the password;
