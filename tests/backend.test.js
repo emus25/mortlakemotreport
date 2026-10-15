@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 17);
+  assert.equal(b.call('getVersion', { password: '' }).version, 18);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -183,10 +183,12 @@ test('a signed month refuses every change, on the server', () => {
   const r = b.call('analyzeQcPage', { month: '2026-09', imageBase64: IMG, fingerprint: 'fp1' });
   // Sign-off itself is stage B; set the status directly to test the lock.
   const p = 'Mortlake Garage Records/2026-09/details.json';
+  b.call('loadMonth', { month: '2026-09' });   // writes the page list into details.json
   const d = JSON.parse(b.drive.readText(p));
   d.status = 'signed';
   const file = [...b.drive.items.values()].find(x => x._name === 'details.json');
   file.setContent(JSON.stringify(d));
+  b.props.set('MST_2026-09', 'signed');   // where the server keeps the status (sign-off sets both)
 
   const locked = (res) => assert.equal(res.status, 'locked', JSON.stringify(res));
   locked(b.call('analyzeQcPage', { month: '2026-09', imageBase64: IMG2, fingerprint: 'fp2' }));
@@ -262,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 17);
+  assert.equal(r.version, 18);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -309,10 +311,10 @@ test('filing and reading are separate short steps, each safe to repeat', () => {
 test('a page being read by another request is not read twice', () => {
   const b = loadBackend(backendReading(QC_READ));
   const f = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'fp1' });
-  const file = [...b.drive.items.values()].find(x => x._name === 'details.json');
-  const d = JSON.parse(file._bytes.toString());
-  d.qcPages[0].status = 'reading'; d.qcPages[0].readingStartedAt = new Date().toISOString();
-  file.setContent(JSON.stringify(d));
+  const key = 'PG_2026-09_' + f.page.id;
+  const pg = JSON.parse(b.props.get(key));
+  pg.status = 'reading'; pg.readingStartedAt = new Date().toISOString();
+  b.props.set(key, JSON.stringify(pg));
   const r = b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
   assert.equal(r.page.status, 'reading');
   assert.equal(b.calls.claude, 0);
@@ -327,11 +329,12 @@ test('saves hold the queue for only a handful of Drive calls (that is what makes
     return { r, n: b.drive.calls.n - n0, locked: b.drive.calls.locked - l0 };
   };
   const f = per('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
-  assert.ok(f.locked <= 7, 'filing a page holds the queue for ' + f.locked + ' Drive calls');
+  assert.ok(f.locked <= 1, 'filing a page holds the queue for ' + f.locked + ' Drive calls');
   const r = per('readPage', { month: '2026-09', kind: 'qc', id: f.r.page.id });
-  assert.ok(r.locked <= 12, 'reading a page holds the queue for ' + r.locked + ' Drive calls');
+  assert.ok(r.locked <= 1, 'reading a page holds the queue for ' + r.locked + ' Drive calls');
   const c = per('saveMonthFields', { month: '2026-09', field: 'checklist', value: { state: { '0-0': 'yes' } }, baseRevision: 0 });
   assert.ok(c.n <= 6, 'saving the checklist: ' + c.n + ' Drive calls');
+  per('openSession', { month: '2026-09' });   // the first open writes the page list into Drive
   const o = per('openSession', { month: '2026-09' });
   assert.ok(o.n <= 8, 'opening the app: ' + o.n + ' Drive calls');
   assert.equal(o.r.months['2026-09'].qcPages, 2, 'the index (now in Script Properties) is up to date');
@@ -359,4 +362,40 @@ test('a records index from an earlier version is moved across', () => {
   const root = b.drive.DriveApp.getFolderById(b.props.get('RECORDS_FOLDER_ID'));
   root.createFile('records-index.json', JSON.stringify({ months: { '2026-07': { status: 'draft', qcPages: 4 } } }), 'application/json');
   assert.equal(b.call('listMonths').months['2026-07'].qcPages, 4);
+});
+
+test('the page list is written into the Drive record when the month is opened', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const f = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'fp1', sourceName: 'a.pdf (page 1)' });
+  b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  const f2 = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
+  b.call('removePage', { month: '2026-09', kind: 'qc', id: f2.page.id });
+  b.call('loadMonth', { month: '2026-09' });
+  const d = JSON.parse(b.drive.readText('Mortlake Garage Records/2026-09/details.json'));
+  assert.equal(d.qcPages.length, 1);
+  assert.equal(d.qcPages[0].reading.registration, 'AB12CDE');
+  assert.equal(d.removedPages.length, 1);
+  assert.equal(d.nextPageNo, 3);
+  assert.ok(d.history.some(h => /Added QC page page-001.jpg/.test(h.what)));
+  assert.ok(d.history.some(h => /Read page-001.jpg/.test(h.what)));
+  assert.ok(d.history.some(h => /Removed page-002.jpg/.test(h.what)));
+  assert.ok(!['HB_', 'PGX_', 'PGDIRTY_'].some(pre => [...b.props.keys()].some(k => k.startsWith(pre))), 'nothing left waiting');
+});
+
+test('a month untouched for over a month is cleared from quick storage, and comes back if worked on', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const f = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'fp1' });
+  b.call('readPage', { month: '2026-09', kind: 'qc', id: f.page.id });
+  // Pretend it was all done 40 days ago.
+  const key = 'PG_2026-09_' + f.page.id;
+  const pg = JSON.parse(b.props.get(key));
+  pg.readAt = pg.addedAt = new Date(Date.now() - 40 * 864e5).toISOString();
+  b.props.set(key, JSON.stringify(pg));
+  b.call('loadMonth', { month: '2026-09' });
+  assert.ok(![...b.props.keys()].some(k => k.startsWith('PG_2026-09')), 'cleared from quick storage');
+  const m = b.call('loadMonth', { month: '2026-09' }).details;
+  assert.equal(m.qcPages.length, 1, 'still there, from details.json');
+  const f2 = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
+  assert.equal(f2.page.id, 'qc-2', 'numbering carries on');
+  assert.equal(b.call('loadMonth', { month: '2026-09' }).details.qcPages.length, 2);
 });

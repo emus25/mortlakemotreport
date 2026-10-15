@@ -295,6 +295,7 @@ test('a signed month cannot be changed from the page', async () => {
     // Sign-off is stage B; mark it signed directly to check the lock holds.
     const file = [...srv.backend.drive.items.values()].find(x => x._name === 'details.json');
     const d = JSON.parse(file._bytes.toString()); d.status = 'signed'; file.setContent(JSON.stringify(d));
+    srv.backend.props.set('MST_2026-09', 'signed');   // sign-off sets both
     await p.evaluate(() => { checklistState['0-1'] = 'yes'; persistChecklistState(); });
     await p.waitForFunction(() => !clPending_ && !clSaving_);
     assert.match(p.dialogs.pop(), /September 2026 is signed off/);

@@ -57,6 +57,7 @@ wins.
 |---|---|---|
 | Password and Claude key | Back office settings (Script Properties) | Same as today. These are the only things left there. |
 | Everything about a month | `Mortlake Garage Records/YYYY-MM/` in Drive | See section 5. |
+| Page list while a month is being worked on | The back office's quick storage (Script Properties) | Decided 15 Oct 2026, for speed. Each page's details (what Claude read, its status) are kept here as Paul works, because rewriting `details.json` in Drive for every page made batches of scans queue and fail. The page **images** still go straight into Drive. The full list is written into `details.json` whenever the month is opened, and at sign-off. Months untouched for 35 days are cleared from quick storage; their pages live in `details.json` and come back automatically if the month is worked on again. |
 | Equipment list (current calibration dates) | `Mortlake Garage Records/equipment.json` | Shared by all months. Each month keeps its own snapshot at sign-off. |
 | Records index | `Mortlake Garage Records/records-index.json` | One line per month: status, version, headline figures. It powers the Records screen and the dashboard trend without opening every folder. |
 | Browser storage | Paul's browser | A temporary copy only. Losing it loses nothing. |

@@ -110,7 +110,7 @@ one Google Apps Script file.
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
   1560px on the long edge. Pages are sent 2 at a time (`SCAN_CONCURRENCY`); more just lengthens the back office's queue.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (17 on this branch; the live site is still 12) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (18 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -160,6 +160,16 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
   page left "reading" for 3 minutes (`READING_STALE_MS`) may be read again.
   Server errors are logged in the `ERRLOG` property; read them with
   `getErrors`.
+- **Quick-storage page list (v18, decided 15 Oct 2026):** while a month is
+  worked on, page records live in Script Properties (`PG_<month>_<id>`,
+  plus `PGNEXT_`, `PGLIVE_`, `PGX_` for removals, `HB_` for history lines,
+  `PGDIRTY_`, and `MST_` for the month's status). Filing and reading a page
+  touches no Drive file while holding the lock. `flushPages_` writes it all
+  into `details.json` when the month is opened (`loadMonth`); a month whose
+  pages are settled and untouched for 35 days is cleared from quick storage,
+  and `makeLive_` brings it back if needed. **Sign-off (stage B) must flush
+  and set `MST_`**. Anything that changes a month's status must set `MST_`
+  (`saveMonth_` does).
 - **Records rules enforced on the server:**
   - Every change to a month runs inside `withLock_`.
   - A month with status `signed` refuses all changes (`assertEditable_`).
@@ -207,7 +217,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 24 back-office checks + 11 real-browser checks
+npm test               # 26 back-office checks + 11 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 17;
+var BACKEND_VERSION = 18;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -611,7 +611,6 @@ function emptyDetails_(month) {
 /* Returns { folder, details } for a month. With create=false and nothing
    saved yet, returns null rather than leaving empty folders behind. */
 function openMonth_(month, create) {
-  recordsRoot_();   // checks the records folder still exists (and starts afresh if not)
   var folder = monthFolder_(month, create);
   if (!folder) return null;
   var details = readJsonAt_('d_' + month, folder, DETAILS_FILE);
@@ -625,6 +624,7 @@ function openMonth_(month, create) {
 function saveMonth_(ctx) {
   ctx.details.updatedAt = nowIso_();
   writeJsonAt_('d_' + ctx.details.month, ctx.folder, DETAILS_FILE, ctx.details);
+  putProp_('MST_' + ctx.details.month, ctx.details.status);
   updateIndex_(ctx.details);
 }
 
@@ -703,6 +703,7 @@ function readIndex_() {
 }
 
 function updateIndex_(d) {
+  var pages = pagesLive_(d.month) ? readLivePages_(d.month) : { qc: d.qcPages, cert: d.certPages };
   var answered = Object.keys(d.checklist.state || {}).filter(function (k) { return d.checklist.state[k]; }).length;
   var tq = d.testQuality && d.testQuality.site ? {
     period: d.testQuality.period || null,
@@ -713,9 +714,9 @@ function updateIndex_(d) {
   setProp_(INDEX_PREFIX + d.month, JSON.stringify({
     status: d.status,
     signedVersion: d.signedVersion,
-    qcPages: d.qcPages.length,
-    qcUnread: d.qcPages.filter(function (p) { return p.status !== 'read'; }).length,
-    certPages: d.certPages.length,
+    qcPages: pages.qc.length,
+    qcUnread: pages.qc.filter(function (p) { return p.status !== 'read'; }).length,
+    certPages: pages.cert.length,
     dvsaFiles: Object.keys(d.dvsaFiles),
     checklistAnswered: answered,
     testQuality: tq,
@@ -781,9 +782,20 @@ function listMonths_() {
 
 function loadMonth_(month) {
   checkMonth_(month);
+  // Opening a month brings its Drive record up to date with quick storage.
+  if (pagesLive_(month) && allProps_()['PGDIRTY_' + month]) {
+    withLock_(function () { flushPages_(month); });
+    memo_ = {};
+  }
   var ctx = openMonth_(month, false);
   if (!ctx) return { status: 'success', exists: false, details: emptyDetails_(month) };
-  return { status: 'success', exists: true, details: publicDetails_(ctx.details) };
+  var d = ctx.details;
+  if (pagesLive_(month)) {
+    var live = readLivePages_(month);
+    d.qcPages = live.qc;
+    d.certPages = live.cert;
+  }
+  return { status: 'success', exists: true, details: publicDetails_(d) };
 }
 
 /* Saves one part of a month that Paul edits by hand (only the checklist so
@@ -838,22 +850,29 @@ function saveDvsaFile_(data) {
   var month = checkMonth_(data.month);
   var slot = dvsaSlot_(data.inputId);
   if (!data.base64) throw appError_('error', 'No file received.');
-  return withLock_(function () {
+  assertMonthEditable_(month);
+  if (!prop_('ID_s_' + month + '_dvsa')) {
+    withLock_(function () {
+      var c = openMonth_(month, true);
+      subFolder_(c, 'dvsa');
+      if (!readJsonAt_('d_' + month, c.folder, DETAILS_FILE)) saveMonth_(c);
+    });
+    memo_ = {};
+  }
+  // Upload outside the lock (the slow part); only the record change is inside.
+  var ext = (String(data.fileName || '').match(/\.[A-Za-z0-9]{1,5}$/) || ['.xlsx'])[0].toLowerCase();
+  var folder = folderAt_('s_' + month + '_dvsa', function () { return monthFolder_(month, true); }, SUBFOLDERS.dvsa, true);
+  var file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(data.base64),
+                                                 data.mimeType || 'application/octet-stream', slot.base + ext));
+  var size = file.getSize();
+  var out = withLock_(function () {
     var ctx = openMonth_(month, true);
     var d = ctx.details;
     assertEditable_(d);
-    var folder = subFolder_(ctx, 'dvsa');
     var prev = d.dvsaFiles[data.inputId];
-    if (prev) {
-      try { moveToRemoved_(ctx, DriveApp.getFileById(prev.fileId)); } catch (e) { /* already gone */ }
-    }
-    var ext = (String(data.fileName || '').match(/\.[A-Za-z0-9]{1,5}$/) || ['.xlsx'])[0].toLowerCase();
-    var blob = Utilities.newBlob(Utilities.base64Decode(data.base64),
-                                 data.mimeType || 'application/octet-stream', slot.base + ext);
-    var file = folder.createFile(blob);
     d.dvsaFiles[data.inputId] = {
       fileId: file.getId(), fileName: String(data.fileName || slot.base + ext),
-      mimeType: data.mimeType || '', size: file.getSize(), savedAt: nowIso_()
+      mimeType: data.mimeType || '', size: size, savedAt: nowIso_()
     };
     var figures = data.figures || {};
     if (figures.testQuality) d.testQuality = figures.testQuality;
@@ -861,8 +880,13 @@ function saveDvsaFile_(data) {
     d.revisions.dvsa = (d.revisions.dvsa || 0) + 1;
     addHistory_(d, (prev ? 'Replaced ' : 'Added ') + slot.label + ': ' + d.dvsaFiles[data.inputId].fileName);
     saveMonth_(ctx);
-    return { status: 'success', file: d.dvsaFiles[data.inputId], revision: d.revisions.dvsa };
+    return { prev: prev, ctx: ctx, entry: d.dvsaFiles[data.inputId], revision: d.revisions.dvsa };
   });
+  if (out.prev) {
+    try { moveToRemoved_(out.ctx, DriveApp.getFileById(out.prev.fileId)); }
+    catch (e) { logError_('saveDvsaFile', 'Could not move the replaced file to Removed: ' + e.message); }
+  }
+  return { status: 'success', file: out.entry, revision: out.revision };
 }
 
 function dvsaSlot_(inputId) {
@@ -883,14 +907,160 @@ function getDvsaFile_(data) {
            base64: Utilities.base64Encode(file.getBlob().getBytes()) };
 }
 
-/* Files a scanned page and asks Claude to read it, in three steps so that the
-   slow part (Claude) happens outside the lock:
-     1. (locked)   file the image and mark the page "reading"
-     2. (unlocked) Claude reads it
-     3. (locked)   record what was read
-   The image is filed before it is read, so a page Claude can't read is still
-   kept and can be retried later. A page already filed (same fingerprint) is
-   not stored or read again. */
+/* ═══════════════ Pages: the quick-storage page list ═══════════════
+ * Decided 15 Oct 2026 (SPEC.md section 4), for speed. While a month is being
+ * worked on, each scanned page's details live in Script Properties, which
+ * takes a fraction of a second to change, instead of in details.json, which
+ * takes several seconds to read and rewrite in Drive. Saves happen one at a
+ * time, so that difference decides whether a batch of scans flows or queues.
+ *
+ *   PGLIVE_<month>        the month's page list is in quick storage
+ *   PGNEXT_<month>        the next page number
+ *   PG_<month>_<id>       one page (what Claude read, its status, its file)
+ *   PGX_<month>_<id>      a page removed since the last write to Drive
+ *   HB_<month>_<time>_<n> a history line not yet written to Drive
+ *   PGDIRTY_<month>       something changed since the last write to Drive
+ *   MST_<month>           the month's status (draft / signed / amending)
+ *
+ * The page IMAGES always go straight into Drive. flushPages_ writes the list
+ * into details.json whenever the month is opened; months untouched for a
+ * while are then cleared from quick storage (makeLive_ brings them back). */
+
+var ARCHIVE_AFTER_MS = 35 * 24 * 60 * 60 * 1000;
+
+function allProps_(fresh) {
+  if (fresh || !memo_.props) memo_.props = PropertiesService.getScriptProperties().getProperties();
+  return memo_.props;
+}
+function putProp_(k, v) {
+  PropertiesService.getScriptProperties().setProperty(k, v);
+  if (memo_.props) memo_.props[k] = v;
+}
+function dropProp_(k) {
+  PropertiesService.getScriptProperties().deleteProperty(k);
+  if (memo_.props) delete memo_.props[k];
+}
+
+function monthStatus_(month) {
+  var s = allProps_()['MST_' + month];
+  if (s) return s;
+  var ctx = openMonth_(month, false);
+  s = ctx ? ctx.details.status : 'draft';
+  putProp_('MST_' + month, s);
+  return s;
+}
+
+function assertMonthEditable_(month) {
+  if (monthStatus_(month) === 'signed') {
+    throw appError_('locked', formatMonthName_(month) + ' is signed off. Use Amend to make changes.');
+  }
+}
+
+function pagesLive_(month) { return !!allProps_()['PGLIVE_' + month]; }
+
+function pageNo_(p) { return parseInt(String(p.id).split('-')[1], 10) || 0; }
+
+function readLivePages_(month) {
+  var all = allProps_(), pre = 'PG_' + month + '_', out = { qc: [], cert: [] };
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf(pre) !== 0) return;
+    try { var p = JSON.parse(all[k]); (out[p.kind] || out.qc).push(p); } catch (e) {}
+  });
+  out.qc.sort(function (a, b) { return pageNo_(a) - pageNo_(b); });
+  out.cert.sort(function (a, b) { return pageNo_(a) - pageNo_(b); });
+  return out;
+}
+
+/* Puts a month's page list into quick storage. Called inside the lock, and
+   only the first time a month is worked on (or after it was cleared). */
+function makeLive_(month) {
+  if (allProps_(true)['PGLIVE_' + month]) return;
+  var ctx = openMonth_(month, true);
+  var d = ctx.details;
+  if (!readJsonAt_('d_' + month, ctx.folder, DETAILS_FILE)) saveMonth_(ctx);   // first ever save of this month
+  d.qcPages.concat(d.certPages).forEach(function (p) { putProp_('PG_' + month + '_' + p.id, JSON.stringify(p)); });
+  putProp_('PGNEXT_' + month, String(d.nextPageNo || 1));
+  putProp_('MST_' + month, d.status);
+  putProp_('PGLIVE_' + month, nowIso_());
+}
+
+function putPage_(month, p) {
+  putProp_('PG_' + month + '_' + p.id, JSON.stringify(p));
+  putProp_('PGDIRTY_' + month, nowIso_());
+}
+
+function pageHistory_(month, what) {
+  putProp_('HB_' + month + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+           JSON.stringify({ at: nowIso_(), what: what }));
+  putProp_('PGDIRTY_' + month, nowIso_());
+}
+
+function findLivePage_(month, kind, id) {
+  var s = allProps_()['PG_' + month + '_' + id];
+  if (!s) return null;
+  var p = JSON.parse(s);
+  return p.kind === kind ? p : null;
+}
+
+/* The index's page counts, kept up to date from quick storage. */
+function updateIndexPages_(month) {
+  var key = INDEX_PREFIX + month;
+  var entry = {};
+  try { entry = JSON.parse(allProps_()[key] || '{}'); } catch (e) {}
+  var live = readLivePages_(month);
+  entry.qcPages = live.qc.length;
+  entry.qcUnread = live.qc.filter(function (p) { return p.status !== 'read'; }).length;
+  entry.certPages = live.cert.length;
+  entry.status = entry.status || 'draft';
+  entry.updatedAt = nowIso_();
+  putProp_(key, JSON.stringify(entry));
+}
+
+/* Writes the quick-storage page list, removals and history into
+   details.json. Inside the lock. Clears quick storage for a month nobody has
+   touched for ARCHIVE_AFTER_MS once every page is settled. */
+function flushPages_(month) {
+  var all = allProps_(true);
+  if (!all['PGLIVE_' + month]) return;
+  var ctx = openMonth_(month, true);
+  var d = ctx.details;
+  var live = readLivePages_(month);
+  if (all['PGDIRTY_' + month]) {
+    d.qcPages = live.qc;
+    d.certPages = live.cert;
+    d.nextPageNo = parseInt(all['PGNEXT_' + month] || d.nextPageNo || 1, 10);
+    Object.keys(all).sort().forEach(function (k) {
+      if (k.indexOf('PGX_' + month + '_') === 0) {
+        try { d.removedPages.push(JSON.parse(all[k])); } catch (e) {}
+        dropProp_(k);
+      } else if (k.indexOf('HB_' + month + '_') === 0) {
+        try { d.history.push(JSON.parse(all[k])); } catch (e) {}
+        dropProp_(k);
+      }
+    });
+    saveMonth_(ctx);
+    dropProp_('PGDIRTY_' + month);
+  }
+  var settled = live.qc.concat(live.cert).every(function (p) { return p.status === 'read' || p.status === 'error'; });
+  var newest = 0;
+  live.qc.concat(live.cert).forEach(function (p) { newest = Math.max(newest, new Date(p.readAt || p.addedAt || 0).getTime()); });
+  if (settled && Date.now() - newest > ARCHIVE_AFTER_MS) {
+    live.qc.concat(live.cert).forEach(function (p) { dropProp_('PG_' + month + '_' + p.id); });
+    dropProp_('PGNEXT_' + month);
+    dropProp_('PGLIVE_' + month);
+  }
+}
+
+/* A page by id from quick storage, or from details.json for a month not in
+   quick storage. */
+function lookupPage_(month, kind, id) {
+  if (pagesLive_(month)) return findLivePage_(month, kind, id);
+  var ctx = openMonth_(month, false);
+  return ctx ? findPage_(ctx.details, kind, id) : null;
+}
+
+/* ── Requests ── */
+
 function fileAndReadPage_(kind, data) {
   var month = checkMonth_(data.month);
   if (!data.imageBase64) throw appError_('error', 'No image received.');
@@ -902,11 +1072,9 @@ function fileAndReadPage_(kind, data) {
   return readAndRecord_(kind, month, step1.page.id, data.imageBase64, data.mimeType);
 }
 
-/* Filing on its own: a few seconds, and safe to send twice (the fingerprint
-   recognises a page already filed). The app files every page this way first,
-   then asks for each to be read in a separate request (readPage_), so no
-   single request has to wait for Claude and Drive together. A slow network or
-   a lost reply can then never make a filed page look unfiled. */
+/* Filing on its own: safe to send twice (the fingerprint recognises a page
+   already filed). The app files every page this way first, then asks for
+   each to be read in a separate request (readPage_). */
 function filePage_(data) {
   var kind = checkKind_(data.kind);
   var month = checkMonth_(data.month);
@@ -915,80 +1083,72 @@ function filePage_(data) {
   return { status: 'success', duplicate: !!step1.duplicate, page: publicPage_(step1.page) };
 }
 
-/* markReading: the combined request reads straight away, so the page is
-   marked "reading" while still locked; filing alone leaves it "unread". */
 function fileStep_(kind, month, data, markReading) {
-  function duplicateOf_(d) {
+  function duplicateOf_(live) {
     var existing = null;
     if (data.fingerprint) {
-      pagesOf_(d, kind).forEach(function (p) { if (p.fingerprint === data.fingerprint) existing = p; });
+      live[kind].forEach(function (p) { if (p.fingerprint === data.fingerprint) existing = p; });
     }
     if (!existing) return null;
     if (existing.status === 'read' || isFreshlyReading_(existing) || !markReading) return { duplicate: true, page: existing };
     return { again: existing };   // filed before but not read: read it now
   }
 
-  // 1. A page already filed needs no upload at all (a quick look, no lock).
-  var peek = openMonth_(month, false);
-  if (peek) {
-    assertEditable_(peek.details);
-    var known = duplicateOf_(peek.details);
-    if (known && known.duplicate) return known;
-  }
+  assertMonthEditable_(month);
 
-  // 2. Make sure the month's folders exist. Only the first page of a month
-  //    needs the lock for this, so two pages can't create two folders.
-  if (!prop_('ID_s_' + month + '_' + kind)) {
+  // 1. The first page of a month (or after it was cleared) sets things up.
+  if (!pagesLive_(month) || !prop_('ID_s_' + month + '_' + kind)) {
     withLock_(function () {
-      var c = openMonth_(month, true);
-      subFolder_(c, kind);
-      if (!readJsonAt_('d_' + month, c.folder, DETAILS_FILE)) saveMonth_(c);
+      makeLive_(month);
+      subFolder_(openMonth_(month, true), kind);
     });
-    memo_ = {};
+    allProps_(true);
   }
 
-  // 3. Upload the image OUTSIDE the lock. This is the slowest part (a second
-  //    or more), and doing it while holding the lock made every other save
-  //    queue behind it. It gets its proper name once it is filed below.
+  // 2. A page already filed needs no upload at all.
+  var known = duplicateOf_(readLivePages_(month));
+  if (known && known.duplicate) return known;
+
+  // 3. Upload the image OUTSIDE the lock: the slow part.
   var folder = folderAt_('s_' + month + '_' + kind, function () { return monthFolder_(month, true); }, SUBFOLDERS[kind], true);
   var blob = Utilities.newBlob(Utilities.base64Decode(data.imageBase64), data.mimeType || 'image/jpeg',
                                'incoming ' + nowIso_().replace(/[:.]/g, '-') + ' ' + Math.random().toString(36).slice(2, 8) + '.jpg');
   var file = folder.createFile(blob);
 
-  // 4. File it: a few quick Drive calls inside the lock.
-  return withLock_(function () {
-    var ctx = openMonth_(month, true);
-    var d = ctx.details;
-    assertEditable_(d);
-    var dup = duplicateOf_(d);
-    if (dup && dup.duplicate) {
-      // Another request filed this same page while it was uploading. This
-      // copy was never part of the records, so it is simply binned.
-      file.setTrashed(true);
-      return dup;
-    }
+  // 4. File it: quick storage only, so the lock is held for a moment.
+  var out = withLock_(function () {
+    allProps_(true);
+    assertMonthEditable_(month);
+    var dup = duplicateOf_(readLivePages_(month));
+    if (dup && dup.duplicate) return { result: dup, binUpload: true };
     var page = dup && dup.again;
-    if (page) {
-      file.setTrashed(true);   // the earlier copy is already filed
-    } else {
-      var no = d.nextPageNo++;
-      var name = (kind === 'qc' ? 'page-' : 'cert-') + ('00' + no).slice(-3) + '.jpg';
-      file.setName(name);
+    var name = null;
+    if (!page) {
+      var no = parseInt(prop_('PGNEXT_' + month) || '1', 10);
+      putProp_('PGNEXT_' + month, String(no + 1));
+      name = (kind === 'qc' ? 'page-' : 'cert-') + ('00' + no).slice(-3) + '.jpg';
       page = {
         id: kind + '-' + no, kind: kind, fileId: file.getId(), fileName: name,
         mimeType: data.mimeType || 'image/jpeg', sourceName: String(data.sourceName || name),
         fingerprint: data.fingerprint || null, addedAt: nowIso_(), status: 'unread'
       };
-      pagesOf_(d, kind).push(page);
-      addHistory_(d, 'Added ' + (kind === 'qc' ? 'QC page ' : 'certificate ') + name + ' (' + page.sourceName + ')');
+      pageHistory_(month, 'Added ' + (kind === 'qc' ? 'QC page ' : 'certificate ') + name + ' (' + page.sourceName + ')');
     }
     if (markReading) {
       page.status = 'reading';
       page.readingStartedAt = nowIso_();
     }
-    saveMonth_(ctx);
-    return { page: page };
+    putPage_(month, page);
+    updateIndexPages_(month);
+    return { result: { page: page }, name: name, binUpload: !name };
   });
+
+  // 5. Tidy the upload outside the lock: give it its page name, or bin it if
+  //    this page was already filed (that copy was never part of the records).
+  try {
+    if (out.binUpload) file.setTrashed(true); else file.setName(out.name);
+  } catch (e) { logError_('fileStep', 'Could not rename/bin upload: ' + e.message); }
+  return out.result;
 }
 
 function isFreshlyReading_(p) {
@@ -996,24 +1156,29 @@ function isFreshlyReading_(p) {
          Date.now() - new Date(p.readingStartedAt).getTime() < READING_STALE_MS;
 }
 
+/* Claude reads the page (outside the lock), then the result is recorded in
+   quick storage. Recording waits longer for its turn (RECORD_WAIT_MS), so a
+   finished reading is never thrown away. */
 function readAndRecord_(kind, month, pageId, imageBase64, mimeType) {
   var res = kind === 'qc' ? analyzeQcPage_(imageBase64, mimeType) : analyzeCalibrationCert_(imageBase64, mimeType);
   var page = withLock_(function () {
-    var ctx = openMonth_(month, false);
-    var p = ctx && findPage_(ctx.details, kind, pageId);
+    allProps_(true);
+    var p = findLivePage_(month, kind, pageId);
     if (!p) return null;   // removed while it was being read
     if (res.status === 'success') {
       p.status = 'read';
       p.reading = res.result;
       p.error = null;
-      addHistory_(ctx.details, 'Read ' + p.fileName + describeReading_(kind, res.result));
+      pageHistory_(month, 'Read ' + p.fileName + describeReading_(kind, res.result));
     } else {
       p.status = 'error';
       p.error = res.message || 'Could not read this page.';
-      addHistory_(ctx.details, 'Could not read ' + p.fileName + ': ' + p.error);
+      pageHistory_(month, 'Could not read ' + p.fileName + ': ' + p.error);
     }
+    p.readAt = nowIso_();
     delete p.readingStartedAt;
-    saveMonth_(ctx);
+    putPage_(month, p);
+    updateIndexPages_(month);
     return p;
   }, RECORD_WAIT_MS);
   return {
@@ -1041,14 +1206,15 @@ function readPage_(data, again) {
   var month = checkMonth_(data.month);
   var kind = checkKind_(data.kind);
   var step1 = withLock_(function () {
-    var ctx = openMonth_(month, false);
-    var p = ctx && findPage_(ctx.details, kind, data.id);
+    allProps_(true);
+    assertMonthEditable_(month);
+    makeLive_(month);
+    var p = findLivePage_(month, kind, data.id);
     if (!p) throw appError_('missing', 'That page is no longer filed.');
-    assertEditable_(ctx.details);
     if (isFreshlyReading_(p) || (p.status === 'read' && !again)) return { already: true, page: p };
     p.status = 'reading';
     p.readingStartedAt = nowIso_();
-    saveMonth_(ctx);
+    putPage_(month, p);
     return { page: p };
   });
   if (step1.already) {
@@ -1061,8 +1227,7 @@ function readPage_(data, again) {
 function getPage_(data) {
   var month = checkMonth_(data.month);
   var kind = checkKind_(data.kind);
-  var ctx = openMonth_(month, false);
-  var p = ctx && findPage_(ctx.details, kind, data.id);
+  var p = lookupPage_(month, kind, data.id);
   if (!p) throw appError_('missing', 'That page is not filed.');
   return { status: 'success', page: publicPage_(p) };
 }
@@ -1070,8 +1235,7 @@ function getPage_(data) {
 function getPageImage_(data) {
   var month = checkMonth_(data.month);
   var kind = checkKind_(data.kind);
-  var ctx = openMonth_(month, false);
-  var p = ctx && findPage_(ctx.details, kind, data.id);
+  var p = lookupPage_(month, kind, data.id);
   if (!p) throw appError_('missing', 'That page is not filed.');
   var file;
   try { file = DriveApp.getFileById(p.fileId); }
@@ -1082,21 +1246,25 @@ function getPageImage_(data) {
 function removePage_(data) {
   var month = checkMonth_(data.month);
   var kind = checkKind_(data.kind);
-  return withLock_(function () {
-    var ctx = openMonth_(month, false);
-    var d = ctx && ctx.details;
-    var p = d && findPage_(d, kind, data.id);
+  var removed = withLock_(function () {
+    allProps_(true);
+    assertMonthEditable_(month);
+    makeLive_(month);
+    var p = findLivePage_(month, kind, data.id);
     if (!p) throw appError_('missing', 'That page is not filed.');
-    assertEditable_(d);
-    try { moveToRemoved_(ctx, DriveApp.getFileById(p.fileId)); } catch (e) { /* already gone */ }
-    var list = pagesOf_(d, kind);
-    list.splice(list.indexOf(p), 1);
+    dropProp_('PG_' + month + '_' + p.id);
     p.removedAt = nowIso_();
-    d.removedPages.push(p);
-    addHistory_(d, 'Removed ' + p.fileName + ' (' + p.sourceName + ')');
-    saveMonth_(ctx);
-    return { status: 'success' };
+    putProp_('PGX_' + month + '_' + p.id, JSON.stringify(p));
+    pageHistory_(month, 'Removed ' + p.fileName + ' (' + p.sourceName + ')');
+    updateIndexPages_(month);
+    return p;
   });
+  // Moving the file is Drive work, so it happens after the lock is released.
+  try {
+    var ctx = { folder: monthFolder_(month, true), details: { month: month } };
+    moveToRemoved_(ctx, DriveApp.getFileById(removed.fileId));
+  } catch (e) { logError_('removePage', 'Could not move ' + removed.fileName + ' to Removed: ' + e.message); }
+  return { status: 'success' };
 }
 
 /* ── Equipment ── */
