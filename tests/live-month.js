@@ -69,8 +69,12 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
       'WR19KXA-emissions.jpg', 'WR19KXA-inspection-sideways.jpg', 'GN71TVZ-scan.pdf', 'blank-page.png'].map(f => D + '/' + f));
     let t = Date.now();
     await A.click('#sortScansBtn');
-    await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length === 9 && !savesInFlight_ && document.getElementById('sortScansBtn').textContent !== 'Reading…', null, { timeout: 600000 });
-    log('   sorted in ' + ((Date.now() - t) / 1000).toFixed(0) + 's');
+    // Since v19 the readings appear first and the pages are filed behind them.
+    await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length >= 9 && document.getElementById('sortScansBtn').textContent !== 'Reading…', null, { timeout: 600000 });
+    log('   results on screen in ' + ((Date.now() - t) / 1000).toFixed(0) + 's' +
+        ((await A.isVisible('#savingPanel')) ? ' (tyre panel showing: ' + (await txt(A, '#savingPanel')) + ')' : ''));
+    await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length === 9 && !savesInFlight_, null, { timeout: 600000 });
+    log('   all filed in Google Drive in ' + ((Date.now() - t) / 1000).toFixed(0) + 's');
     const pages = await A.evaluate(() => savedPages_.qc.map(p => ({ src: p.sourceName, status: p.status, reg: p.reading && p.reading.registration, doc: p.reading && p.reading.document_type, rot: p.reading && p.reading.rotation, ev: p.reading && p.reading.is_electric, qc: p.reading && p.reading.qc_flag })));
     pages.forEach(p => log('     ' + p.src.padEnd(34) + ' ' + p.status + '  ' + (p.reg || '—') + '  ' + (p.doc || '') + (p.rot ? '  rotate ' + p.rot + '°' : '') + (p.ev ? '  electric' : '') + (p.qc ? '  QC-marked' : '')));
     check(pages.length === 9 && pages.every(p => p.status === 'read'), 'all 9 pages filed and read');
