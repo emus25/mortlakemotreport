@@ -109,7 +109,7 @@ one Google Apps Script file.
     them (`ensureEvidence_`), and are turned upright using the rotation
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
-  1560px on the long edge. Pages are sent 2 at a time (`SCAN_CONCURRENCY`); more just lengthens the back office's queue.
+  1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`), one request per page (`analyzeQcPage`/`analyzeCalibrationCert` with `month`); the two-step `filePage` → `readPage` route is only the fallback when a reply is lost.
 - **Backend version check:** `EXPECTED_BACKEND_VERSION` (18 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.

@@ -3100,7 +3100,7 @@
   // Firing every page at once is what trips API rate limits on a big scan.
   // Work through them a few at a time instead — slower per burst, but it
   // actually finishes rather than half the pages failing.
-  var SCAN_CONCURRENCY = 2;
+  var SCAN_CONCURRENCY = 3;
 
   /* Runs `worker` over `items`, at most SCAN_CONCURRENCY at a time.
      onProgress fires as each one finishes. Results keep their input order. */
@@ -3523,7 +3523,26 @@
   var READ_WAIT_MS = 120000;
   var READ_POLL_MS = 5000;
 
+  /* One trip per page: the back office files the image and has Claude read
+     it in the same request (the image is already in hand, so it isn't
+     downloaded back out of Drive). Only if that reply is lost does the app
+     fall back to the two-step route below, which finds out what happened —
+     the fingerprint means nothing is ever filed twice. */
   function fileAndReadPage_(kind, month, pg, token) {
+    return apiOnce_(SCAN_UI[kind].action, { month: month, imageBase64: pg.base64, mimeType: pg.mimeType,
+                                            fingerprint: pg.fingerprint, sourceName: pg.label })
+      .then(function (res) {
+        if (res.page) {
+          pageImageCache_[month + ':' + res.page.id] = pg.base64;
+          showFiledPage_(kind, res.page, token);
+          return { page: res.page };
+        }
+        if (res.noReply || res.status === 'busy') return fileThenReadPage_(kind, month, pg, token);
+        return { page: null, message: res.message };
+      });
+  }
+
+  function fileThenReadPage_(kind, month, pg, token) {
     return api_('filePage', { month: month, kind: kind, imageBase64: pg.base64, mimeType: pg.mimeType,
                               fingerprint: pg.fingerprint, sourceName: pg.label })
       .then(function (res) {
