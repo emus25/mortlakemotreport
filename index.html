@@ -557,6 +557,10 @@
   .lock-box .btn { width: 100%; }
   .lock-error { display: none; font-size: 13px; color: var(--danger); margin-bottom: 12px; }
   .lock-error.show { display: block; }
+  .lock-caps { font-size: 12px; color: var(--warning); margin: -6px 0 10px; }
+  .lock-caps[hidden] { display: none; }
+  .logout-btn { background: none; border: 0; padding: 4px 2px; font: inherit; font-size: 12px; color: var(--text-tertiary); cursor: pointer; text-decoration: underline; }
+  .logout-btn:hover { color: var(--text-secondary); }
 
   /* ══════════ Responsive ══════════ */
   @media (max-width: 1080px) {
@@ -828,7 +832,9 @@
   <div class="lock-box">
     <img src="assets/mortlake-logo.png" alt="Mortlake Garage">
     <div class="lock-title">Enter password</div>
-    <input type="password" id="lockPasswordInput" class="lock-input" autocomplete="current-password">
+    <input type="password" id="lockPasswordInput" class="lock-input" autocomplete="current-password"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="lock-caps" id="lockCaps" hidden>Caps Lock is on</div>
     <div class="lock-error" id="lockError"></div>
     <button type="button" class="btn btn-primary" id="lockSubmitBtn" onclick="submitLockScreen()">Unlock</button>
   </div>
@@ -856,6 +862,7 @@
         <input type="month" id="fMonth">
       </div>
       <button class="btn btn-primary" id="generateBtn" onclick="handleGenerate()">Generate Report</button>
+      <button type="button" class="logout-btn" id="logoutBtn" onclick="logOut()" title="Log this computer out">Log out</button>
     </div>
   </header>
 
@@ -1259,23 +1266,86 @@
 <script>
   /* ═══════════════ Auth (unchanged behaviour) ═══════════════ */
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdGsxn9KKbppvezpumA7uaN4QZv5ez0LZDfIwBoHFEVoIMQPia2bLk2RhMAemlc7OoMA/exec';
-  var PW_KEY = 'mortlake_report_password';
+  var PASS_KEY = 'mortlake_report_pass';
 
-  function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
+  /* ── Logging in: secure, and a correct password never fails ──
+     (Ediz, 16 Oct 2026.)
+     - The password is checked once. Google then gives this computer a
+       "pass" that works for 30 days; the app keeps the pass, never the
+       password. Every request to Google is checked against the pass.
+     - If Google is slow to wake up, the app keeps asking for up to two
+       minutes rather than giving up. A slow answer still counts.
+     - The box doesn't auto-capitalise or autocorrect, a stray space at the
+       end is ignored, and "Caps Lock is on" is shown when it is.
+     - After 5 wrong passwords Google pauses logging in for 15 minutes;
+       computers that already have a pass carry on.
+     Only a real "wrong" answer from Google may say "Incorrect password". A
+     Google that can't be reached says NOTHING about the password. */
+  var LOGIN_ATTEMPT_MS = 40000;
+  var LOGIN_GIVE_UP_MS = 120000;
+  var NO_REPLY_MSG = 'Couldn’t reach Google for two minutes — this is not a password problem. ' +
+                     'Check the internet connection and press Unlock again.';
 
-  function verifyPassword(pw, onResult) {
-    if (!SCRIPT_URL) { onResult(false, 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
-    fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'checkDashboardPassword', password: pw })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (data) { onResult(data.status === 'success'); })
-      .catch(function () { onResult(false); });
+  // Earlier versions kept the password itself in the browser. Not any more.
+  try { localStorage.removeItem('mortlake_report_password'); } catch (e) {}
+
+  function readPass_() {
+    try {
+      var p = JSON.parse(localStorage.getItem(PASS_KEY));
+      return p && p.token && p.expires > Date.now() ? p : null;
+    } catch (e) { return null; }
+  }
+  function getPass_() { var p = readPass_(); return p ? p.token : ''; }
+  function forgetPass_() { try { localStorage.removeItem(PASS_KEY); } catch (e) {} }
+
+  function askPasswordOnce_(pw) {
+    return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'checkDashboardPassword', password: pw }) })
+      .then(function (r) { return r.text(); })
+      .then(function (text) {
+        var data = null;
+        try { data = JSON.parse(text); } catch (e) {}
+        if (data && data.status === 'success' && data.token) return { result: 'ok', pass: { token: data.token, expires: data.expires } };
+        if (data && data.status === 'fail') return { result: 'wrong' };
+        if (data && data.status === 'paused') return { result: 'paused', message: data.message };
+        return { result: 'noreply' };
+      })
+      .catch(function () { return { result: 'noreply' }; });
+  }
+
+  function verifyPassword(pw, onResult, onWait) {
+    if (!SCRIPT_URL) { onResult('noreply', 'Backend not deployed yet.'); return; }
+    var started = Date.now(), done = false, delay = 1000, nextTry = null;
+    var ticker = onWait ? setInterval(function () { onWait(Math.round((Date.now() - started) / 1000)); }, 1000) : null;
+    var giveUp = setTimeout(function () { finish('noreply', NO_REPLY_MSG); }, LOGIN_GIVE_UP_MS);
+    function finish(result, msg, pass) {
+      if (done) return;
+      done = true;
+      clearInterval(ticker); clearTimeout(giveUp); clearTimeout(nextTry);
+      onResult(result, msg, pass);
+    }
+    function ask() {
+      return askPasswordOnce_(pw).then(function (a) {
+        if (a.result === 'wrong' && pw.trim() !== pw && pw.trim()) return askPasswordOnce_(pw.trim());
+        return a;
+      });
+    }
+    function again(wait) { clearTimeout(nextTry); nextTry = setTimeout(attempt, wait); }
+    function attempt() {
+      if (done) return;
+      again(LOGIN_ATTEMPT_MS);
+      ask().then(function (a) {
+        if (a.result === 'ok') return finish('ok', '', a.pass);
+        if (a.result === 'wrong') return finish('wrong', 'Incorrect password.');
+        if (a.result === 'paused') return finish('paused', a.message);
+        again(delay);
+        delay = Math.min(delay * 2, 8000);
+      });
+    }
+    attempt();
   }
 
   function lockApp(msg) {
-    localStorage.removeItem(PW_KEY);
+    forgetPass_();
     document.getElementById('lockScreen').style.display = 'flex';
     document.getElementById('appRoot').style.display = 'none';
     var err = document.getElementById('lockError');
@@ -1290,35 +1360,70 @@
     if (typeof syncDown_ === 'function') syncDown_();
   }
 
+  // Google refused the pass: 30 days are up, or the password was changed.
+  var passRefused_ = false;
+  function passRefused() {
+    if (passRefused_) return;
+    passRefused_ = true;
+    forgetPass_();
+    try { sessionStorage.setItem('mortlake_pass_ended', '1'); } catch (e) {}
+    location.reload();
+  }
+
+  function logOut() {
+    var token = getPass_();
+    forgetPass_();
+    if (token && SCRIPT_URL) {
+      fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'logout', token: token }) }).catch(function () {});
+    }
+    location.reload();
+  }
+
   function submitLockScreen() {
     var pw = document.getElementById('lockPasswordInput').value;
     var btn = document.getElementById('lockSubmitBtn');
+    var errEl = document.getElementById('lockError');
+    if (btn.disabled || !pw) return;
+    errEl.textContent = '';
+    errEl.classList.remove('show');
     btn.disabled = true;
     btn.textContent = 'Checking…';
-    verifyPassword(pw, function (ok, err) {
+    verifyPassword(pw, function (result, msg, pass) {
       btn.disabled = false;
       btn.textContent = 'Unlock';
-      if (ok) {
-        localStorage.setItem(PW_KEY, pw);
+      if (result === 'ok') {
+        try { localStorage.setItem(PASS_KEY, JSON.stringify(pass)); } catch (e) {}
+        document.getElementById('lockPasswordInput').value = '';
         unlockApp();
       } else {
-        var errEl = document.getElementById('lockError');
-        errEl.textContent = err || 'Incorrect password.';
+        errEl.textContent = msg;
         errEl.classList.add('show');
       }
+    }, function (secs) {
+      if (secs >= 4) btn.textContent = 'Waking Google up… ' + secs + 's';
     });
   }
 
-  document.getElementById('lockPasswordInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') submitLockScreen();
-  });
+  (function () {
+    var input = document.getElementById('lockPasswordInput');
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submitLockScreen();
+    });
+    function capsHint(e) {
+      var hint = document.getElementById('lockCaps');
+      if (hint && e.getModifierState) hint.hidden = !e.getModifierState('CapsLock');
+    }
+    input.addEventListener('keyup', capsHint);
+    input.addEventListener('keydown', capsHint);
+  })();
 
   (function () {
     // No backend deployed yet, so skip the lock screen for local review.
-    if (!SCRIPT_URL) { unlockApp(); return; }
-    var pw = getPassword();
-    if (!pw) return;
-    verifyPassword(pw, function (ok) { if (ok) unlockApp(); else lockApp('Session expired — please re-enter the password.'); });
+    if (!SCRIPT_URL) { setTimeout(unlockApp, 0); return; }
+    var ended = false;
+    try { ended = !!sessionStorage.getItem('mortlake_pass_ended'); sessionStorage.removeItem('mortlake_pass_ended'); } catch (e) {}
+    if (ended) { lockApp('Please type the password again — it’s been 30 days, or the password was changed.'); return; }
+    if (readPass_()) setTimeout(unlockApp, 0);
   })();
 
   function escapeHtml_(s) {
@@ -1377,19 +1482,19 @@
      server. If the server can't be reached this stays false, so the worst case
      is "not backed up" (and the indicator says so) rather than data loss. */
   function scheduleSyncUp_() {
-    if (!SCRIPT_URL || syncSuppressed || !syncDownDone || !getPassword()) return;
+    if (!SCRIPT_URL || syncSuppressed || !syncDownDone || !getPass_()) return;
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncUp_, 1500);
   }
 
   function syncUp_() {
-    if (!SCRIPT_URL || !getPassword()) return;
+    if (!SCRIPT_URL || !getPass_()) return;
     setSyncStatus_('saving');
     fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({
         action: 'saveAppData',
-        password: getPassword(),
+        token: getPass_(),
         data: {
           calibration: store.calibration || [],
           months: store.months || {},
@@ -1406,14 +1511,15 @@
      truth for anything it holds, since it is the copy that survives a change
      of computer — but a failed or empty response never wipes what is local. */
   function syncDown_() {
-    if (!SCRIPT_URL || !getPassword()) return Promise.resolve();
+    if (!SCRIPT_URL || !getPass_()) return Promise.resolve();
     setSyncStatus_('loading');
     return fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'loadAppData', password: getPassword() })
+      body: JSON.stringify({ action: 'loadAppData', token: getPass_() })
     })
       .then(function (r) { return r.json(); })
       .then(function (res) {
+        if (res.status === 'forbidden') { passRefused(); return; }
         if (res.status !== 'success') {
           // An older backend that predates saveAppData/loadAppData answers
           // "Unknown action" — say so rather than implying it is backed up.
@@ -1502,7 +1608,7 @@
     // If the server copy never arrived, no upload will follow this save — so
     // say "on this computer only" now rather than a bare "Saved" that implies
     // a backup which is not going to happen.
-    if (SCRIPT_URL && getPassword() && !syncDownDone) {
+    if (SCRIPT_URL && getPass_() && !syncDownDone) {
       el.className = 'cs-save is-error';
       el.textContent = 'Saved on this computer only';
       return;
@@ -2772,7 +2878,7 @@
     if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
     return fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'analyzeQcPage', password: getPassword(), imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
+      body: JSON.stringify({ action: 'analyzeQcPage', token: getPass_(), imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
     }).then(function (r) { return r.json(); }).catch(function () {
       return { status: 'error', message: 'Network error contacting the backend.' };
     });
@@ -2795,7 +2901,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 12;
+  var EXPECTED_BACKEND_VERSION = 20;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -2914,7 +3020,7 @@
     if (!SCRIPT_URL) return Promise.resolve({ status: 'error', message: 'Backend not deployed yet.' });
     return fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({ action: 'analyzeCalibrationCert', password: getPassword(),
+      body: JSON.stringify({ action: 'analyzeCalibrationCert', token: getPass_(),
                              imageBase64: pageImg.base64, mimeType: pageImg.mimeType })
     }).then(function (r) { return r.json(); }).catch(function () {
       return { status: 'error', message: 'Network error contacting the backend.' };
