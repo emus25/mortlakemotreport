@@ -123,6 +123,11 @@ one Google Apps Script file.
   leave yet, we're saving stuff in the backend", with a tyre that fills as
   each is filed. (Ediz's wording and idea, 16 Oct 2026. The browser's own
   "leave page?" box can't show custom text.)
+- **Every loading indicator is the tyre** (`tyreSvg_`, Ediz, 16 Oct 2026):
+  the records cover (`#monthOverlay`), the sort/read progress (fills up as
+  pages are read, `setTyreProgress_`), the small "Loading…/Reading…/Saving…"
+  icons (`ICON_SPIN`), the login button, and a cover while the report fetches
+  its pages. Use it for any new waiting state.
 - **Backend version check:** `EXPECTED_BACKEND_VERSION` (19 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.

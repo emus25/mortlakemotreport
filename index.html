@@ -461,19 +461,10 @@
   .qc-group-docs { font-size: 12px; color: var(--text-secondary); margin-top: 4px; text-transform: capitalize; }
   .qc-page-flag { font-size: 12px; color: var(--warning); margin-top: 6px; }
 
-  /* Sort progress bar (master box + QC box) */
-  .sort-progress { display: none; margin-top: 12px; }
-  .sort-progress.show { display: block; }
-  .sort-progress-bar { height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
-  .sort-progress-bar > span {
-    display: block; height: 100%; width: 0%; background: var(--brand); border-radius: 5px;
-    transition: width .25s ease;
-  }
-  .sort-progress-bar.indeterminate > span {
-    width: 40%; background: linear-gradient(90deg, var(--border) 0%, var(--brand) 50%, var(--border) 100%);
-    animation: sweep 1.1s ease-in-out infinite;
-  }
-  @keyframes sweep { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  /* Sort progress: a tyre that fills up, with the count beside it */
+  .sort-progress { display: none; margin-top: 12px; align-items: center; gap: 12px; }
+  .sort-progress.show { display: flex; }
+  .sort-progress .sort-progress-label { flex: 1; margin-top: 0; }
   .sort-progress-label { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
   .sort-progress-label .spl-pct { font-variant-numeric: tabular-nums; }
 
@@ -869,16 +860,22 @@
     max-width: calc(100vw - 32px); padding: 10px 16px 10px 10px; background: #fff; border: 1px solid #e3e3e3;
     border-left: 4px solid var(--brand); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.15); }
   .saving-panel[hidden] { display: none; }
-  .saving-panel .tyre { width: 64px; height: 64px; flex: none; }
-  .saving-panel .tyre-spin { transform-origin: 32px 32px; animation: tyre-roll 2.4s linear infinite; }
+  .tyre { display: inline-block; vertical-align: middle; flex: none; }
+  .tyre .tyre-spin { transform-origin: 32px 32px; animation: tyre-roll 2.4s linear infinite; }
+  .tyre-arc { transition: stroke-dashoffset .4s ease; }
+  .saving-panel .tyre { width: 64px; height: 64px; }
   .saving-panel.done .tyre-spin { animation: none; }
+  .mo-box .tyre { width: 72px; height: 72px; margin: 0 auto; }
+  .sort-progress .tyre { width: 44px; height: 44px; }
+  .tyre.tyre-xs { width: 16px; height: 16px; }
+  .btn .tyre.tyre-xs { width: 18px; height: 18px; margin: -2px 8px 0 0; }
+  .save-note .tyre.tyre-xs { width: 14px; height: 14px; margin: -2px 5px 0 0; }
   .saving-panel.done { border-left-color: #2e9e5b; }
   .saving-panel.failed { border-left-color: var(--danger); }
-  .saving-panel #tyreArc { transition: stroke-dashoffset .4s ease; }
   .saving-title { font-weight: 600; font-size: 14px; color: #181818; }
   .saving-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
   @keyframes tyre-roll { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .saving-panel .tyre-spin { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .tyre .tyre-spin { animation: none; } }
   @media print { .saving-panel { display: none !important; } }
 </style>
 <!-- Local libraries for reading Excel/CSV/PDF files entirely in the browser
@@ -888,23 +885,7 @@
 </head>
 <body>
 <div id="savingPanel" class="saving-panel" role="status" aria-live="polite" hidden>
-  <svg class="tyre" viewBox="0 0 64 64" aria-hidden="true">
-    <circle cx="32" cy="32" r="31" fill="#1f1f1f"/>
-    <g class="tyre-spin">
-      <circle cx="32" cy="32" r="29.5" fill="none" stroke="#3a3a3a" stroke-width="3" stroke-dasharray="3.5 2.7"/>
-      <circle cx="32" cy="32" r="18" fill="#cfd3d8"/>
-      <g stroke="#9aa0a6" stroke-width="2.5" stroke-linecap="round">
-        <line x1="32" y1="32" x2="32" y2="16"/><line x1="32" y1="32" x2="47.2" y2="27.1"/>
-        <line x1="32" y1="32" x2="41.4" y2="44.9"/><line x1="32" y1="32" x2="22.6" y2="44.9"/>
-        <line x1="32" y1="32" x2="16.8" y2="27.1"/>
-      </g>
-    </g>
-    <circle cx="32" cy="32" r="24" fill="none" stroke="#2c2c2c" stroke-width="4"/>
-    <circle id="tyreArc" cx="32" cy="32" r="24" fill="none" stroke="var(--brand)" stroke-width="4" stroke-linecap="round"
-            stroke-dasharray="150.8" stroke-dashoffset="150.8" transform="rotate(-90 32 32)"/>
-    <circle cx="32" cy="32" r="10" fill="#fff" stroke="#9aa0a6"/>
-    <text id="tyreCount" x="32" y="35.5" text-anchor="middle" font-size="9" font-weight="700" fill="#181818" font-family="system-ui, sans-serif">0/0</text>
-  </svg>
+  <span data-tyre="saving"></span>
   <div>
     <div class="saving-title" id="savingTitle"></div>
     <div class="saving-sub" id="savingSub"></div>
@@ -927,6 +908,7 @@
 
   <div class="month-overlay" id="monthOverlay" hidden>
     <div class="mo-box" role="status" aria-live="polite">
+      <span data-tyre="overlay"></span>
       <div id="monthOverlayText">Loading…</div>
       <div id="monthOverlayNote" class="mo-note"></div>
       <button type="button" class="btn btn-primary" id="monthOverlayRetry" hidden>Try again</button>
@@ -1253,7 +1235,7 @@
           </details>
           <button type="button" class="btn btn-secondary btn-sm" id="sortScansBtn" style="margin-top:14px" disabled onclick="runSmartScan()">Sort scanned pages</button>
           <div class="sort-progress" id="qcProgress">
-            <div class="sort-progress-bar" id="qcProgressBar"><span></span></div>
+            <span data-tyre="qcProgress"></span>
             <div class="sort-progress-label">
               <span id="qcProgressText">Preparing…</span>
               <span class="spl-pct" id="qcProgressPct"></span>
@@ -1283,7 +1265,7 @@
           </details>
           <button type="button" class="btn btn-secondary btn-sm" id="readCertsBtn" style="margin-top:14px" disabled onclick="runCertScan()">Read certificates</button>
           <div class="sort-progress" id="calProgress">
-            <div class="sort-progress-bar" id="calProgressBar"><span></span></div>
+            <span data-tyre="calProgress"></span>
             <div class="sort-progress-label">
               <span id="calProgressText">Preparing…</span>
               <span class="spl-pct" id="calProgressPct"></span>
@@ -1434,7 +1416,7 @@
     errEl.textContent = '';
     errEl.classList.remove('show');
     btn.disabled = true;
-    btn.textContent = 'Checking…';
+    btn.innerHTML = tyreSvg_({ small: true }) + 'Checking…';
     verifyPassword(pw, function (result, msg) {
       btn.disabled = false;
       btn.textContent = 'Unlock';
@@ -1637,7 +1619,7 @@
      seconds it says why: Google can take a while to wake the back office up
      when it hasn't been used for a bit. */
   var overlayTimer_ = null;
-  function showMonthOverlay_(text, retry) {
+  function showMonthOverlay_(text, retry, why) {
     var el = document.getElementById('monthOverlay');
     if (!el) return;
     var textEl = document.getElementById('monthOverlayText');
@@ -1648,12 +1630,14 @@
     noteEl.textContent = '';
     btn.hidden = !retry;
     btn.onclick = retry || null;
+    var tyre = el.querySelector('.tyre');
+    if (tyre) tyre.style.display = retry ? 'none' : '';
     el.hidden = false;
     if (retry) return;
     var started = Date.now();
     overlayTimer_ = setInterval(function () {
       var secs = Math.round((Date.now() - started) / 1000);
-      noteEl.textContent = secs + 's' + (secs >= 10
+      noteEl.textContent = secs + 's' + (why ? ' — ' + why : secs >= 10
         ? ' — Google can take up to half a minute to wake up if the app hasn’t been used for a while.' : '');
     }, 1000);
   }
@@ -2173,7 +2157,7 @@
   var ICON_UPLOADED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#2f7d4a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
   var ICON_REQUIRED = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>';
   var ICON_WARN = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#a66a00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>';
-  var ICON_SPIN = '<svg class="us-icon" viewBox="0 0 24 24" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="40" stroke-dashoffset="15"/></svg>';
+  var ICON_SPIN = tyreSvg_({ small: true });
 
   /* ═══════════════ Reading Excel / CSV / PDF files ═══════════════ */
   // Everything happens right here in the browser — the file never gets sent
@@ -2794,6 +2778,7 @@
       failed: 'Not saved' + (message ? ': ' + message : '')
     }[state] || '';
     note.textContent = text;
+    if (state === 'saving') note.insertAdjacentHTML('afterbegin', tyreSvg_({ small: true }));
     note.className = 'save-note' + (state === 'failed' ? ' is-error' : '');
   }
 
@@ -3169,33 +3154,29 @@
     return Promise.all(runners).then(function () { return results; });
   }
 
-  /* Small progress-bar helper shared by both sort buttons. Opening and
-     converting files has no countable steps, so that phase shows a sweeping
-     "indeterminate" bar; once we know the page count it switches to a real
-     percentage. */
+  /* Progress helper shared by both sort buttons: a turning tyre that fills
+     up as pages are read. Opening and converting files has no countable
+     steps, so the tyre just turns until the page count is known. */
   function makeProgress(prefix) {
     var wrap = document.getElementById(prefix + 'Progress');
-    var bar = document.getElementById(prefix + 'ProgressBar');
+    var tyre = prefix + 'Tyre';
     var text = document.getElementById(prefix + 'ProgressText');
     var pct = document.getElementById(prefix + 'ProgressPct');
     return {
       start: function (label) {
         wrap.classList.add('show');
-        bar.classList.add('indeterminate');
-        bar.firstElementChild.style.width = '';
+        setTyreProgress_(tyre, 0);
         text.textContent = label || 'Working…';
         pct.textContent = '';
       },
       set: function (done, total, label) {
-        bar.classList.remove('indeterminate');
         var p = total ? Math.round(done / total * 100) : 0;
-        bar.firstElementChild.style.width = p + '%';
+        setTyreProgress_(tyre, total ? done / total : 0);
         text.textContent = label || (done + ' of ' + total + ' pages read');
         pct.textContent = p + '%';
       },
       finish: function () {
-        bar.classList.remove('indeterminate');
-        bar.firstElementChild.style.width = '100%';
+        setTyreProgress_(tyre, 1);
         pct.textContent = '100%';
         setTimeout(function () { wrap.classList.remove('show'); }, 900);
       },
@@ -3645,6 +3626,50 @@
   var tyre_ = { total: 0, done: 0, hideTimer: null };
   var TYRE_ARC = 2 * Math.PI * 24;
 
+  /* Every "please wait" in the app is the same tyre (Ediz's idea): it turns
+     while something is happening, and where there is a count it fills up in
+     Mortlake yellow like a progress bar. `id` names its parts (id + 'Arc',
+     id + 'Count') so they can be updated; `small` is a 16px icon. */
+  function tyreSvg_(o) {
+    o = o || {};
+    var spokes = [[32, 16], [47.2, 27.1], [41.4, 44.9], [22.6, 44.9], [16.8, 27.1]].map(function (e) {
+      return '<line x1="32" y1="32" x2="' + e[0] + '" y2="' + e[1] + '"/>';
+    }).join('');
+    return '<svg class="tyre' + (o.small ? ' tyre-xs us-icon' : '') + '" viewBox="0 0 64 64" aria-hidden="true">' +
+      '<circle cx="32" cy="32" r="31" fill="#1f1f1f"/>' +
+      '<g class="tyre-spin">' +
+        '<circle cx="32" cy="32" r="29.5" fill="none" stroke="#3a3a3a" stroke-width="3" stroke-dasharray="3.5 2.7"/>' +
+        '<circle cx="32" cy="32" r="18" fill="#cfd3d8"/>' +
+        '<g stroke="#9aa0a6" stroke-width="' + (o.small ? 4 : 2.5) + '" stroke-linecap="round">' + spokes + '</g>' +
+        // The yellow valve shows the wheel turning.
+        '<circle cx="32" cy="' + (o.small ? 14 : 17.5) + '" r="' + (o.small ? 4.5 : 3) + '" fill="#ffd400"/>' +
+      '</g>' +
+      (o.id
+        ? '<circle cx="32" cy="32" r="24" fill="none" stroke="#2c2c2c" stroke-width="4"/>' +
+          '<circle class="tyre-arc" id="' + o.id + 'Arc" cx="32" cy="32" r="24" fill="none" stroke="var(--brand)" stroke-width="4" ' +
+          'stroke-linecap="round" stroke-dasharray="150.8" stroke-dashoffset="150.8" transform="rotate(-90 32 32)"/>'
+        : '') +
+      (o.count
+        ? '<circle cx="32" cy="32" r="10" fill="#fff" stroke="#9aa0a6"/>' +
+          '<text id="' + o.id + 'Count" x="32" y="35.5" text-anchor="middle" font-size="9" font-weight="700" fill="#181818" ' +
+          'font-family="system-ui, sans-serif"></text>'
+        : '<circle cx="32" cy="32" r="' + (o.small ? 7 : 5) + '" fill="#8a9096"/>') +
+      '</svg>';
+  }
+
+  function setTyreProgress_(id, fraction) {
+    var arc = document.getElementById(id + 'Arc');
+    if (arc) arc.style.strokeDashoffset = String(TYRE_ARC * (1 - Math.max(0, Math.min(1, fraction))));
+  }
+
+  // Draws the tyres that are part of the page itself.
+  (function () {
+    var opts = { saving: { id: 'tyre', count: true }, qcProgress: { id: 'qcTyre' }, calProgress: { id: 'calTyre' }, overlay: {} };
+    document.querySelectorAll('[data-tyre]').forEach(function (el) {
+      el.outerHTML = tyreSvg_(opts[el.getAttribute('data-tyre')]);
+    });
+  })();
+
   function busyStart_() {
     // A new batch after everything finished starts counting from zero.
     if (tyre_.done >= tyre_.total) tyre_.total = tyre_.done = 0;
@@ -3668,7 +3693,7 @@
     panel.classList.toggle('done', !busy);
     panel.classList.toggle('failed', !busy && failed > 0);
     document.getElementById('tyreCount').textContent = tyre_.done + '/' + tyre_.total;
-    document.getElementById('tyreArc').style.strokeDashoffset = String(TYRE_ARC * (1 - tyre_.done / tyre_.total));
+    setTyreProgress_('tyre', tyre_.done / tyre_.total);
     document.getElementById('savingTitle').textContent = busy
       ? "Don't leave yet, we're saving stuff in the backend"
       : failed ? 'Some things were not saved' : 'All saved ✓';
@@ -5290,6 +5315,10 @@
     btns.forEach(function (b) { b.disabled = true; });
     var restore = function () { btns.forEach(function (b) { b.disabled = false; }); };
 
+    // Fetching the scanned pages from Google Drive can take a while on
+    // another computer, so the tyre shows rather than nothing at all.
+    showMonthOverlay_('Putting the report together…', null,
+                      'The scanned pages are being fetched from Google Drive.');
     ensureEvidence_()
       .then(function () {
         document.getElementById('printReport').innerHTML = buildReportHTML();
@@ -5304,7 +5333,8 @@
         alert('Could not attach the scanned paperwork:\n\n' + err.message +
               '\n\nThe report has not been generated.');
       })
-      .then(restore, restore);
+      .then(restore, restore)
+      .then(hideMonthOverlay_);
   }
 
   function closePreview() {
