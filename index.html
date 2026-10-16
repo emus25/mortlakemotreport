@@ -3646,6 +3646,8 @@
   var TYRE_ARC = 2 * Math.PI * 24;
 
   function busyStart_() {
+    // A new batch after everything finished starts counting from zero.
+    if (tyre_.done >= tyre_.total) tyre_.total = tyre_.done = 0;
     tyre_.total++;
     clearTimeout(tyre_.hideTimer);
     renderTyre_();

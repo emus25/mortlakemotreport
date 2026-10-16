@@ -468,6 +468,7 @@ test('pages are read first, then filed in the background with the reading, under
     await p.waitForFunction(() => savedPages_.qc.length === 2 && savedPages_.qc.every(x => x.provisional));
     assert.ok(await p.isVisible('#savingPanel'), 'tyre panel shows');
     assert.match(await p.textContent('#savingPanel'), /Don't leave yet, we're saving stuff in the backend/);
+    assert.match(await p.textContent('#savingSub'), / of 2 saved/, 'counts this batch only');
     assert.match(await p.textContent('#qcPageList'), /saving to Google Drive/);
     assert.ok(await p.evaluate(() => hasPendingSaves_()), 'report blocked while filing');
     await p.waitForFunction(() => !savesInFlight_ && savedPages_.qc.length === 2 && savedPages_.qc.every(x => !x.provisional && x.status === 'read'));
