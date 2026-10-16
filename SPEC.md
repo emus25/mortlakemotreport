@@ -270,7 +270,7 @@ This mostly stays the same. The month-by-month trend reads from
 | Paul does | What gets saved | When |
 |---|---|---|
 | Adds a DVSA file | The original file, plus the parsed figures in `details.json` | Straight away |
-| Adds QC scans and clicks Sort | Each page image is saved by the back office during the same request that asks Claude to read it, so it isn't sent twice; the reading goes into `details.json` | Page by page |
+| Adds QC scans and clicks Sort | Claude reads each page first, in a quick request that saves nothing, and the result shows straight away. The page is then filed in the background with what Claude read, so it is never read (or paid for) twice. Until every page is filed, a panel says "Don't leave yet, we're saving stuff in the backend" with a tyre that fills up, the report can't be generated, and closing the tab asks first. A page that can't be filed is listed as "Not saved" with Retry, which files it without reading it again. *(Changed 16 Oct 2026, for speed.)* | Read: page by page. Filed: a few seconds later |
 | A page can't be read | The image is still saved, marked "not read" with the reason, and can be retried later | Straight away |
 | Adds the same scan twice | Detected by the page fingerprint: "Page already filed (page 7)". It isn't stored again. | Straight away |
 | Removes a page (Draft or Amending only) | It's moved to the month's `Removed` folder, not deleted, and the history records it | Straight away |

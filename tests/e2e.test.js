@@ -409,16 +409,17 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     const p = await newComputer(srv);
     await setMonth(p, '2026-09');
     await p.evaluate(() => { READ_POLL_MS = 200; });
-    // Page A: Google files and reads it, but the reply is lost.
-    // Page B: the request never reaches Google at all.
-    srv.lostReplies.analyzeQcPage = 1;
+    // Page A: the quick read's reply is lost, then Google files and reads it
+    // on the backup route, but that reply is lost too.
+    // Page B: neither request reaches Google at all.
+    srv.lostReplies.analyzeQcPage = 2;
     await p.setInputFiles('#fileQcScans', [SCAN_A]);
     await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
     assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read', 'found out it had been read');
     assert.equal(await p.evaluate(() => unsavedPages_.qc.length), 0);
 
-    srv.failures.analyzeQcPage = 1;      // the one-trip request never arrives…
+    srv.failures.analyzeQcPage = 2;      // the quick read and the one-trip request never arrive…
     srv.failures.readPage = 2;           // …and neither does reading it, even when asked again
     await p.setInputFiles('#fileQcScans', [SCAN_B]);
     await p.click('#sortScansBtn');
@@ -431,7 +432,7 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     await p.click('#qcPageList [data-retry]');
     await p.waitForFunction(() => savedPages_.qc.every(x => x.status === 'read'));
     // A lost filing reply on the backup route is simply tried again and recognised.
-    srv.failures.analyzeQcPage = 1;
+    srv.failures.analyzeQcPage = 2;
     srv.lostReplies.filePage = 1;
     await p.setInputFiles('#fileQcScans', [SCAN_C]);
     await p.click('#sortScansBtn');
@@ -446,11 +447,35 @@ test('a reading request that never reached Google is asked for again', async () 
     const p = await newComputer(srv);
     await setMonth(p, '2026-09');
     await p.evaluate(() => { READ_POLL_MS = 200; });
-    srv.failures.analyzeQcPage = 1;      // the one-trip request never arrives
+    srv.failures.analyzeQcPage = 2;      // the quick read and the one-trip request never arrive
     srv.failures.readPage = 1;           // and the first request to read never arrives either
     await p.setInputFiles('#fileQcScans', [SCAN_A]);
     await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
     assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read');
+  } finally { srv.server.close(); }
+});
+
+test('pages are read first, then filed in the background with the reading, under the tyre', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    srv.slow.filePage = 1500;   // filing is slow, so the panel can be seen
+    await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
+    await p.click('#sortScansBtn');
+    // The readings are on screen while the pages are still being filed.
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && savedPages_.qc.every(x => x.provisional));
+    assert.ok(await p.isVisible('#savingPanel'), 'tyre panel shows');
+    assert.match(await p.textContent('#savingPanel'), /Don't leave yet, we're saving stuff in the backend/);
+    assert.match(await p.textContent('#qcPageList'), /saving to Google Drive/);
+    assert.ok(await p.evaluate(() => hasPendingSaves_()), 'report blocked while filing');
+    await p.waitForFunction(() => !savesInFlight_ && savedPages_.qc.length === 2 && savedPages_.qc.every(x => !x.provisional && x.status === 'read'));
+    assert.match(await p.textContent('#savingPanel'), /All saved/);
+    // Claude was asked once per page: the quick read. Filing didn't read again.
+    const reads = srv.log.filter(a => a === 'analyzeQcPage' || a === 'readPage' || a === 'retryPage').length;
+    assert.equal(reads, 2);
+    assert.equal(srv.backend.call('loadMonth', { month: '2026-09' }).details.qcPages.filter(x => x.status === 'read').length, 2);
+    await p.waitForFunction(() => document.getElementById('savingPanel').hidden, null, { timeout: 6000 });
   } finally { srv.server.close(); }
 });

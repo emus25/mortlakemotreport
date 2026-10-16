@@ -25,6 +25,7 @@ function start(port, backendOptions) {
   const log = [];
   // Real Apps Script takes a second or more per request; tests can add that.
   const latencyMs = backendOptions.latencyMs || 0;
+  const slow = {};   // extra delay for one action, e.g. slow: { filePage: 1500 }
   const server = http.createServer((req, res) => {
     if (req.method === 'POST' && req.url === '/exec') {
       let body = '';
@@ -33,7 +34,7 @@ function start(port, backendOptions) {
         let action = '';
         try { action = JSON.parse(body).action; } catch (e) {}
         log.push(action);
-        setTimeout(() => answer(action), latencyMs);
+        setTimeout(() => answer(action), latencyMs + (slow[action] || 0));
       });
       const answer = (action) => {
         if (failures[action] > 0) {
@@ -67,7 +68,7 @@ function start(port, backendOptions) {
     res.end(data);
   });
   return new Promise((resolve) => {
-    server.listen(port, () => resolve({ server, backend, failures, lostReplies, log, url: 'http://localhost:' + server.address().port }));
+    server.listen(port, () => resolve({ server, backend, failures, lostReplies, slow, log, url: 'http://localhost:' + server.address().port }));
   });
 }
 

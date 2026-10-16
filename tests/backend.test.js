@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 18);
+  assert.equal(b.call('getVersion', { password: '' }).version, 19);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 18);
+  assert.equal(r.version, 19);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -398,4 +398,27 @@ test('a month untouched for over a month is cleared from quick storage, and come
   const f2 = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2' });
   assert.equal(f2.page.id, 'qc-2', 'numbering carries on');
   assert.equal(b.call('loadMonth', { month: '2026-09' }).details.qcPages.length, 2);
+});
+
+test('a page filed with what Claude already read is not read again', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const f = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'fp1', sourceName: 'a.jpg', reading: QC_READ });
+  assert.equal(f.status, 'success');
+  assert.equal(f.page.status, 'read');
+  assert.equal(f.page.reading.registration, 'AB12CDE');
+  assert.equal(b.calls.claude, 0, 'no second reading');
+  const e = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG2, fingerprint: 'fp2', readError: 'Too blurry' });
+  assert.equal(e.page.status, 'error');
+  assert.equal(e.page.error, 'Too blurry');
+  // A page filed earlier without a reading takes the reading when it arrives, with no new upload.
+  const u = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: Buffer.from('p3').toString('base64'), fingerprint: 'fp3' });
+  assert.equal(u.page.status, 'unread');
+  const files = b.drive.list().length;
+  const r = b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: Buffer.from('p3').toString('base64'), fingerprint: 'fp3', reading: QC_READ });
+  assert.equal(r.page.status, 'read');
+  assert.equal(b.drive.list().length, files, 'no extra upload');
+  assert.equal(b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: IMG, fingerprint: 'x', reading: 'nonsense' }).status, 'error');
+  const d = b.call('loadMonth', { month: '2026-09' }).details;
+  assert.ok(d.history.some(h => /Read page-001.jpg \(AB12CDE/.test(h.what)));
+  assert.ok(d.history.some(h => /Could not read page-002.jpg: Too blurry/.test(h.what)));
 });

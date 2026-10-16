@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 18;
+var BACKEND_VERSION = 19;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -1073,14 +1073,35 @@ function fileAndReadPage_(kind, data) {
 }
 
 /* Filing on its own: safe to send twice (the fingerprint recognises a page
-   already filed). The app files every page this way first, then asks for
-   each to be read in a separate request (readPage_). */
+   already filed). Since v19 the app has Claude read each page first (a quick
+   read-only request) so Paul sees the results straight away, then files the
+   page in the background with what was read (`reading`, or `readError` if
+   Claude couldn't read it), so the page is never read twice. */
 function filePage_(data) {
   var kind = checkKind_(data.kind);
   var month = checkMonth_(data.month);
   if (!data.imageBase64) throw appError_('error', 'No image received.');
+  if (data.reading != null && (typeof data.reading !== 'object' || Array.isArray(data.reading))) {
+    throw appError_('error', 'That reading could not be understood.');
+  }
   var step1 = fileStep_(kind, month, data, false);
   return { status: 'success', duplicate: !!step1.duplicate, page: publicPage_(step1.page) };
+}
+
+/* Records a reading the app already has on a page in quick storage. */
+function applyReading_(month, page, data) {
+  if (data.reading) {
+    page.status = 'read';
+    page.reading = data.reading;
+    page.error = null;
+    pageHistory_(month, 'Read ' + page.fileName + describeReading_(page.kind, data.reading));
+  } else {
+    page.status = 'error';
+    page.error = String(data.readError).slice(0, 300);
+    pageHistory_(month, 'Could not read ' + page.fileName + ': ' + page.error);
+  }
+  page.readAt = nowIso_();
+  delete page.readingStartedAt;
 }
 
 function fileStep_(kind, month, data, markReading) {
@@ -1105,9 +1126,20 @@ function fileStep_(kind, month, data, markReading) {
     allProps_(true);
   }
 
-  // 2. A page already filed needs no upload at all.
+  // 2. A page already filed needs no upload at all. If it arrives with a
+  //    reading and isn't read yet, the reading is recorded on it.
+  var hasReading = !!(data.reading || data.readError);
   var known = duplicateOf_(readLivePages_(month));
-  if (known && known.duplicate) return known;
+  if (known && known.duplicate) {
+    if (!hasReading || known.page.status === 'read') return known;
+    return withLock_(function () {
+      allProps_(true);
+      var p = findLivePage_(month, kind, known.page.id);
+      if (!p) return known;
+      if (p.status !== 'read') { applyReading_(month, p, data); putPage_(month, p); updateIndexPages_(month); }
+      return { duplicate: true, page: p };
+    }, RECORD_WAIT_MS);
+  }
 
   // 3. Upload the image OUTSIDE the lock: the slow part.
   var folder = folderAt_('s_' + month + '_' + kind, function () { return monthFolder_(month, true); }, SUBFOLDERS[kind], true);
@@ -1137,6 +1169,8 @@ function fileStep_(kind, month, data, markReading) {
     if (markReading) {
       page.status = 'reading';
       page.readingStartedAt = nowIso_();
+    } else if (hasReading && page.status !== 'read') {
+      applyReading_(month, page, data);
     }
     putPage_(month, page);
     updateIndexPages_(month);

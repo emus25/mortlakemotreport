@@ -109,8 +109,21 @@ one Google Apps Script file.
     them (`ensureEvidence_`), and are turned upright using the rotation
     Claude reported.
 - **Page images:** `fileToPageImages_` turns files into JPEGs no larger than
-  1560px on the long edge. Pages are sent 3 at a time (`SCAN_CONCURRENCY`), one request per page (`analyzeQcPage`/`analyzeCalibrationCert` with `month`); the two-step `filePage` → `readPage` route is only the fallback when a reply is lost.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (18 on this branch; the live site is still 12) must
+  1560px on the long edge. **Read first, file in the background (v19):** each page is read by
+  Claude in a quick request that saves nothing (`analyzeQcPage` /
+  `analyzeCalibrationCert` without `month`, 3 at a time), and the result
+  shows straight away as a "provisional" page. A separate queue
+  (`fileQueue_`, 3 at a time) then files it with `filePage`, sending the
+  `reading` (or `readError`) so Claude is never paid twice. Until filed,
+  pages count as unsaved and block the report. If the quick read gets no
+  answer, the page falls back to the one-trip filed-and-read request, then
+  the two-step `filePage` → `readPage` route.
+- **Tyre panel** (`#savingPanel`, `busyStart_`/`busyEnd_`/`renderTyre_`):
+  shown bottom-right while pages or DVSA files are being saved: "Don't
+  leave yet, we're saving stuff in the backend", with a tyre that fills as
+  each is filed. (Ediz's wording and idea, 16 Oct 2026. The browser's own
+  "leave page?" box can't show custom text.)
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (19 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -140,7 +153,7 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `listMonths`, `loadMonth` | yes | The records index; one month's `details.json` (no Drive ids or images). |
 | `saveMonthFields` | yes | Checklist only. Refused with `conflict` if `baseRevision` is stale. |
 | `saveDvsaFile`, `getDvsaFile` | yes | File and fetch the original DVSA export. A replaced one goes to `Removed/`. |
-| `filePage`, `readPage`, `getPage` | yes | **How the page sends scans (v15+):** file a page (a few seconds, safe to repeat), then have it read in a separate request, then check on it if the reading reply was lost. No single request has to wait for Drive and Claude together, because long requests were being cut off at 30s. |
+| `filePage`, `readPage`, `getPage` | yes | **How the page sends scans (v15+):** file a page (a few seconds, safe to repeat), then have it read in a separate request, then check on it if the reading reply was lost. Since v19 `filePage` also takes `reading`/`readError`, so a page Claude already read is filed as read. No single request has to wait for Drive and Claude together, because long requests were being cut off at 30s. |
 | `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again (Retry). |
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
 
@@ -217,7 +230,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 26 back-office checks + 11 real-browser checks
+npm test               # 27 back-office checks + 12 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
