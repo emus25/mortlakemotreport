@@ -1385,7 +1385,7 @@
                      'Check the internet connection and press Unlock again.';
 
   // Earlier versions kept the password itself in the browser. Not any more.
-  try { localStorage.removeItem('mortlake_report_password'); localStorage.removeItem('mortlake_report_password_TEST'); } catch (e) {}
+  try { localStorage.removeItem('mortlake_report_password'); localStorage.removeItem('mortlake_report_password_' + 'TEST'); } catch (e) {}
 
   function readPass_() {
     try {
