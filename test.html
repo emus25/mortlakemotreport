@@ -864,6 +864,22 @@
     #lockScreen, #appRoot, .preview-overlay { display: none !important; }
     #printReport { display: block !important; }
   }
+  /* The tyre panel: shown while things are being saved. */
+  .saving-panel { position: fixed; right: 16px; bottom: 16px; z-index: 900; display: flex; align-items: center; gap: 12px;
+    max-width: calc(100vw - 32px); padding: 10px 16px 10px 10px; background: #fff; border: 1px solid #e3e3e3;
+    border-left: 4px solid var(--brand); border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.15); }
+  .saving-panel[hidden] { display: none; }
+  .saving-panel .tyre { width: 64px; height: 64px; flex: none; }
+  .saving-panel .tyre-spin { transform-origin: 32px 32px; animation: tyre-roll 2.4s linear infinite; }
+  .saving-panel.done .tyre-spin { animation: none; }
+  .saving-panel.done { border-left-color: #2e9e5b; }
+  .saving-panel.failed { border-left-color: var(--danger); }
+  .saving-panel #tyreArc { transition: stroke-dashoffset .4s ease; }
+  .saving-title { font-weight: 600; font-size: 14px; color: #181818; }
+  .saving-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+  @keyframes tyre-roll { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .saving-panel .tyre-spin { animation: none; } }
+  @media print { .saving-panel { display: none !important; } }
 </style>
 <!-- Local libraries for reading Excel/CSV/PDF files entirely in the browser
      — no upload, no server, works even with no internet connection. -->
@@ -871,6 +887,29 @@
 <script src="assets/lib/pdf.min.js"></script>
 </head>
 <body>
+<div id="savingPanel" class="saving-panel" role="status" aria-live="polite" hidden>
+  <svg class="tyre" viewBox="0 0 64 64" aria-hidden="true">
+    <circle cx="32" cy="32" r="31" fill="#1f1f1f"/>
+    <g class="tyre-spin">
+      <circle cx="32" cy="32" r="29.5" fill="none" stroke="#3a3a3a" stroke-width="3" stroke-dasharray="3.5 2.7"/>
+      <circle cx="32" cy="32" r="18" fill="#cfd3d8"/>
+      <g stroke="#9aa0a6" stroke-width="2.5" stroke-linecap="round">
+        <line x1="32" y1="32" x2="32" y2="16"/><line x1="32" y1="32" x2="47.2" y2="27.1"/>
+        <line x1="32" y1="32" x2="41.4" y2="44.9"/><line x1="32" y1="32" x2="22.6" y2="44.9"/>
+        <line x1="32" y1="32" x2="16.8" y2="27.1"/>
+      </g>
+    </g>
+    <circle cx="32" cy="32" r="24" fill="none" stroke="#2c2c2c" stroke-width="4"/>
+    <circle id="tyreArc" cx="32" cy="32" r="24" fill="none" stroke="var(--brand)" stroke-width="4" stroke-linecap="round"
+            stroke-dasharray="150.8" stroke-dashoffset="150.8" transform="rotate(-90 32 32)"/>
+    <circle cx="32" cy="32" r="10" fill="#fff" stroke="#9aa0a6"/>
+    <text id="tyreCount" x="32" y="35.5" text-anchor="middle" font-size="9" font-weight="700" fill="#181818" font-family="system-ui, sans-serif">0/0</text>
+  </svg>
+  <div>
+    <div class="saving-title" id="savingTitle"></div>
+    <div class="saving-sub" id="savingSub"></div>
+  </div>
+</div>
 
 <!-- ══════════ Lock screen ══════════ -->
 <div class="lock-screen" id="lockScreen">
@@ -1555,6 +1594,7 @@
   }
 
   function renderSaveIndicator_() {
+    renderTyre_();
     var el = document.getElementById('syncStatus');
     if (!el) return;
     var failed = unsavedCount_();
@@ -2724,12 +2764,14 @@
       ? { testQuality: (TEST_QUALITY && !TEST_QUALITY.isSample) ? TEST_QUALITY : null }
       : { testLog: (store.testLog || {})[month] || null };
     setDvsaSaveNote_(slot.status, 'saving');
+    busyStart_();
     return trackSave_(file.name, function () {
       return fileToBase64_(file).then(function (b64) {
         return api_('saveDvsaFile', { month: month, inputId: inputId, fileName: file.name,
                                       mimeType: file.type, base64: b64, figures: figures });
       });
     }, function () { return saveDvsaFile_(inputId, file); }).then(function (res) {
+      busyEnd_();
       if (month !== currentMonth || pickedFiles[inputId][0] !== file) return;
       if (res.status === 'success') {
         if (monthDoc_) monthDoc_.dvsaFiles[inputId] = res.file;
@@ -2972,7 +3014,7 @@
     if (dvsaMissing === 0) { dvsaSub.textContent = 'All uploaded'; dvsaSub.className = 'sc-sub'; }
     else { dvsaSub.textContent = dvsaMissing + ' file' + (dvsaMissing === 1 ? '' : 's') + ' missing'; dvsaSub.className = 'sc-sub attention'; }
 
-    var qc = savedPages_.qc.length;
+    var qc = scanCounts_('qc').filed;
     document.getElementById('tileQcScans').textContent = qc;
     document.getElementById('tileQcSub').textContent = qc === 1 ? 'page filed' : 'pages filed';
 
@@ -2996,8 +3038,10 @@
      not yet read (plus any pages that could not be filed and need retrying). */
   function scanCounts_(kind) {
     var inputId = kind === 'qc' ? 'fileQcScans' : 'fileCalCerts';
+    var saving = savedPages_[kind].filter(function (p) { return p.provisional; }).length;
     return {
-      filed: savedPages_[kind].length,
+      filed: savedPages_[kind].length - saving,
+      saving: saving,
       unread: savedPages_[kind].filter(function (p) { return p.status !== 'read'; }).length,
       waiting: pickedFiles[inputId].length + unsavedPages_[kind].length
     };
@@ -3005,6 +3049,7 @@
 
   function scanCountText_(c) {
     var parts = [c.filed + (c.filed === 1 ? ' page filed' : ' pages filed')];
+    if (c.saving) parts.push(c.saving + ' being saved');
     if (c.waiting) parts.push(c.waiting + ' waiting to be read');
     return parts.join(' · ');
   }
@@ -3255,7 +3300,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 18;
+  var EXPECTED_BACKEND_VERSION = 19;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -3483,21 +3528,20 @@
         unsavedPages_[kind] = [];
         pickedFiles[ui.input] = pickedFiles[ui.input].filter(function (f) { return files.indexOf(f) === -1; });
         renderFileList(ui.input, ui.list, null);
+        // A page already filed and read in this month needs nothing doing.
+        pages = pages.filter(function (pg) {
+          return !savedPages_[kind].some(function (p) {
+            return !p.provisional && p.status === 'read' && pg.fingerprint && p.fingerprint === pg.fingerprint;
+          });
+        });
         progress.set(0, pages.length);
         // Every page counts as "saving" until it is filed or set aside, even
         // while it waits its turn, so the indicator stays honest throughout.
         savesInFlight_ += pages.length;
+        pages.forEach(function () { busyStart_(); });
         renderSaveIndicator_();
         return runWithConcurrency_(pages, function (pg) {
-          return fileAndReadPage_(kind, month, pg, token).then(function (out) {
-            savesInFlight_--;
-            if (token !== openToken_) return;   // another month was opened; this page is filed in its own
-            if (!out.page) {
-              pg.message = out.message || 'Could not be filed';
-              unsavedPages_[kind].push(pg);
-            }
-            renderSaveIndicator_();
-          });
+          return readFirst_(kind, month, pg, token);
         }, function (done, total) { progress.set(done, total); });
       })
       .then(function () {
@@ -3512,6 +3556,133 @@
         statusEl.innerHTML = '<span style="color:var(--danger)">Something went wrong reading those pages: ' +
           escapeHtml_(err.message || 'unknown error') + '</span>';
       });
+  }
+
+  /* Read first, file in the background (v19). Claude reads each page in a
+     quick request that saves nothing, so Paul sees the results as fast as the
+     old app did. The page is then filed in Google Drive behind the scenes,
+     with what Claude read, so it is never paid for twice. Until it is filed
+     the page shows as "saving", the report stays blocked, and the tyre panel
+     asks Paul not to leave. If the quick read gets no answer, the page goes
+     the older way (filed and read in one request, fileAndReadPage_). */
+  var provisionalSeq_ = 0;
+
+  function readFirst_(kind, month, pg, token) {
+    var read = (pg.reading || pg.readError || pg.oneTrip) ? Promise.resolve(null)
+      : apiOnce_(SCAN_UI[kind].action, { imageBase64: pg.base64, mimeType: pg.mimeType });
+    return read.then(function (res) {
+      if (res) {
+        if (res.status === 'success' && res.result) pg.reading = res.result;
+        else if (res.status === 'error' && !res.noReply) pg.readError = res.message || 'Could not read this page';
+        else pg.oneTrip = true;
+      }
+      if (pg.reading && token === openToken_) {
+        pg.tempId = pg.tempId || 'new-' + (++provisionalSeq_);
+        showFiledPage_(kind, { id: pg.tempId, kind: kind, sourceName: pg.label, status: 'read',
+                               reading: pg.reading, fingerprint: pg.fingerprint, provisional: true }, token);
+      }
+      fileQueue_.push({ kind: kind, month: month, pg: pg, token: token });
+      pumpFiling_();
+    });
+  }
+
+  var fileQueue_ = [];
+  var filingActive_ = 0;
+
+  function pumpFiling_() {
+    while (filingActive_ < SCAN_CONCURRENCY && fileQueue_.length) {
+      filingActive_++;
+      fileOne_(fileQueue_.shift()).then(function () { filingActive_--; pumpFiling_(); });
+    }
+  }
+
+  function fileOne_(job) {
+    var kind = job.kind, month = job.month, pg = job.pg, token = job.token;
+    var run = pg.oneTrip ? fileAndReadPage_(kind, month, pg, token)
+      : api_('filePage', { month: month, kind: kind, imageBase64: pg.base64, mimeType: pg.mimeType,
+                           fingerprint: pg.fingerprint, sourceName: pg.label,
+                           reading: pg.reading || null, readError: pg.readError || null })
+          .then(function (res) {
+            if (!res.page) return { page: null, message: res.message };
+            // An older back office ignores the reading; it is then read there.
+            if (res.page.status === 'unread') return fileThenReadPage_(kind, month, pg, token);
+            pageImageCache_[month + ':' + res.page.id] = pg.base64;
+            return { page: res.page };
+          });
+    return run.catch(function (err) {
+      return { page: null, message: (err && err.message) || 'Could not be filed' };
+    }).then(function (out) {
+      savesInFlight_--;
+      busyEnd_();
+      if (token === openToken_) {   // otherwise another month is open; this page is filed in its own
+        dropProvisional_(kind, pg, out.page);
+        if (!out.page) {
+          pg.message = out.message || 'Could not be filed';
+          unsavedPages_[kind].push(pg);
+        }
+        renderPageResults_(kind);
+      }
+      renderSaveIndicator_();
+    });
+  }
+
+  // Swaps the "read, not filed yet" entry for the filed page, in the same place.
+  function dropProvisional_(kind, pg, page) {
+    var list = savedPages_[kind];
+    var at = -1;
+    for (var i = 0; i < list.length; i++) if (pg.tempId && list[i].id === pg.tempId) at = i;
+    var already = page && list.some(function (p) { return p.id === page.id; });
+    if (at > -1) {
+      if (page && !already) list[at] = page; else list.splice(at, 1);
+    }
+    if (page) upsertSavedPage_(kind, page);
+  }
+
+  /* ── The tyre: "don't leave yet" ──
+     A panel in the corner while pages or DVSA files are being saved, with a
+     tyre that fills up as each one is filed. The browser's own "leave this
+     page?" box can't carry a message, so this is where Paul is told. */
+  var tyre_ = { total: 0, done: 0, hideTimer: null };
+  var TYRE_ARC = 2 * Math.PI * 24;
+
+  function busyStart_() {
+    // A new batch after everything finished starts counting from zero.
+    if (tyre_.done >= tyre_.total) tyre_.total = tyre_.done = 0;
+    tyre_.total++;
+    clearTimeout(tyre_.hideTimer);
+    renderTyre_();
+  }
+
+  function busyEnd_() {
+    tyre_.done++;
+    renderTyre_();
+  }
+
+  function renderTyre_() {
+    var panel = document.getElementById('savingPanel');
+    if (!panel) return;
+    if (!tyre_.total) { panel.hidden = true; return; }
+    var busy = tyre_.done < tyre_.total;
+    var failed = unsavedCount_();
+    panel.hidden = false;
+    panel.classList.toggle('done', !busy);
+    panel.classList.toggle('failed', !busy && failed > 0);
+    document.getElementById('tyreCount').textContent = tyre_.done + '/' + tyre_.total;
+    document.getElementById('tyreArc').style.strokeDashoffset = String(TYRE_ARC * (1 - tyre_.done / tyre_.total));
+    document.getElementById('savingTitle').textContent = busy
+      ? "Don't leave yet, we're saving stuff in the backend"
+      : failed ? 'Some things were not saved' : 'All saved ✓';
+    document.getElementById('savingSub').textContent = busy
+      ? tyre_.done + ' of ' + tyre_.total + ' saved'
+      : failed ? 'Press Retry at the top of the page.' : 'Everything is filed in Google Drive.';
+    if (!busy && !failed) {
+      clearTimeout(tyre_.hideTimer);
+      tyre_.hideTimer = setTimeout(function () {
+        if (tyre_.done < tyre_.total) return;
+        tyre_.total = tyre_.done = 0;
+        panel.hidden = true;
+      }, 3000);
+    }
   }
 
   /* Two short requests per page rather than one long one: first the page is
@@ -3706,6 +3877,10 @@
     if (!saved.length && !unsaved.length) { host.innerHTML = ''; return; }
     var open = host.querySelector('details') ? host.querySelector('details').open : !!unsaved.length;
     var rows = saved.map(function (p) {
+      if (p.provisional) {
+        return '<div class="pl-row"><span class="pl-name">' + escapeHtml_(p.sourceName) + '</span>' +
+          '<span class="pl-wait">Read ✓ · saving to Google Drive…</span><span class="pl-actions"></span></div>';
+      }
       var state = p.status === 'read' ? '<span class="pl-ok">Read ✓</span>'
         : p.status === 'reading' ? '<span class="pl-wait">Being read…</span>'
         : p.status === 'unread' ? '<span class="pl-wait">Filed · waiting to be read</span>'
@@ -3723,7 +3898,7 @@
         '<span class="pl-actions"><button type="button" class="pl-btn" data-resend="1">Retry</button>' +
         '<button type="button" class="pl-btn" data-discard="' + i + '">Discard</button></span></div>';
     }));
-    host.innerHTML = '<details class="page-list"' + (open ? ' open' : '') + '><summary>Filed pages (' + saved.length + ')' +
+    host.innerHTML = '<details class="page-list"' + (open ? ' open' : '') + '><summary>Filed pages (' + saved.filter(function (p) { return !p.provisional; }).length + ')' +
       (unsaved.length ? ' · ' + unsaved.length + ' not saved' : '') + '</summary>' + rows.join('') + '</details>';
 
     host.querySelectorAll('[data-remove]').forEach(function (b) {
