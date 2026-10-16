@@ -327,6 +327,13 @@ From Ediz, in priority order:
      v17); sideways page turned upright; second computer saw everything; the
      report built with all pages. TEST months 2025-09 to 2026-06 contain
      made-up test data.
+   - **16 Oct 2026: v19 (read first, file in the background, tyre panel)
+     passed the same month** (2025-03): 9 pages' results on screen in 16s
+     (the old live app: 16s), all filed in Drive by 24s (v18: 52–65s).
+     TEST months 2025-03, 2025-05 and 2025-07 now also hold made-up data;
+     use an unused month (e.g. 2025-01) for the next run. The "offers to
+     update the due date" check fails on a re-run because the brake tester
+     date was already updated by an earlier run: a test artefact.
    - **How to work:** Ediz is not a coder and must not be used as the
      tester. Before asking him to try anything, run
      `TEST_PASSWORD=… node tests/live-check.js` (ask Ediz for the password;
