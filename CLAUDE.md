@@ -61,12 +61,20 @@ one Google Apps Script file.
 ### Front end (`index.html`)
 
 - **Navigation:** `switchTab('dashboard' | 'report' | 'checklist')`.
-- **Login:** `verifyPassword` posts `checkDashboardPassword` and keeps the
-  password in localStorage so later backend calls can send it. It returns
-  `ok`, `wrong` or `noreply`. **Only `wrong` may ever say "Incorrect
-  password"**: a network failure, timeout or Google error page is
-  `noreply`. It says "not a password problem", and the saved password is
-  kept. A test enforces this.
+- **Login (v20, secure and never failing, agreed with Ediz 16 Oct 2026):**
+  `verifyPassword` posts `checkDashboardPassword` once; Google answers with a
+  **pass** (random token, 30 days) which is kept in localStorage
+  (`PASS_KEY`). **The password itself is never stored in the browser**; an
+  old saved one is wiped on load. Every request sends `token`. A computer
+  with an unexpired pass goes straight in. A `forbidden` answer means the
+  pass ran out or the password changed: `passRefused()` reloads to the lock
+  screen with "Please type the password again". Logging in keeps trying for
+  up to 2 minutes (`LOGIN_GIVE_UP_MS`, overlapping tries every
+  `LOGIN_ATTEMPT_MS`, a late answer still counts), ignores a trailing space,
+  doesn't autocapitalise, and warns about Caps Lock. Four answers that must
+  never be confused: `ok`, `wrong` (the only one that may say "Incorrect
+  password"), `paused` (too many guesses) and `noreply`. Tests enforce all
+  of this. A **Log out** button ends this computer's pass.
 - **Storage (Monthly Records, stage A):** the true copy of everything is in
   Paul's Google Drive, filed by the back office as he works. `store`
   (localStorage, `mortlake_report_v1`) is only a cache.
@@ -128,7 +136,7 @@ one Google Apps Script file.
   pages are read, `setTyreProgress_`), the small "Loading…/Reading…/Saving…"
   icons (`ICON_SPIN`), the login button, and a cover while the report fetches
   its pages. Use it for any new waiting state.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (19 on this branch; the live site is still 12) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (20 on this branch; the live site is still 12) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -148,7 +156,8 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | Action | Password needed? | Purpose |
 |---|---|---|
 | `getVersion` | no | Returns `BACKEND_VERSION`. |
-| `checkDashboardPassword` | n/a | Login check. |
+| `checkDashboardPassword` | n/a | Login. Returns a 30-day pass (`token`). After 5 wrong passwords in a row, logging in is paused for 15 minutes (`paused`); computers with a pass carry on. |
+| `logout` | yes | Ends this computer's pass. |
 | `analyzeQcPage` | yes | Claude reads one QC page and returns category, document type, registration, make/model, whether it's an EV, tester, date, period, QC flag, rotation and confidence. |
 | `analyzeCalibrationCert` | yes | Claude reads one calibration certificate and returns equipment, serial number, calibration and next-due dates, rotation and confidence. |
 | `loadAppData` / `saveAppData` | yes | **Old storage, kept only so the current live page keeps working after v13 is deployed.** Script Properties under `DATA_calibration`, `DATA_month_YYYY-MM` and `DATA_tq_Mon-YY`. |
@@ -163,7 +172,13 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
 
 - **Secrets:** `DASHBOARD_PASSWORD` and `ANTHROPIC_API_KEY` are kept in
-  Script Properties and must never be in `index.html`. Other properties are
+  Script Properties and must never be in `index.html`.
+- **Passes (v20):** every request needs a pass (`token`) or, for the older
+  live page only, the password. Passes are stored as `TOK_<sha256>` (never
+  the pass itself) with an expiry and a fingerprint of the password, so
+  **changing `DASHBOARD_PASSWORD` logs every computer out**. Wrong passwords
+  are counted in `LOGIN_FAILS`. Once every page uses passes, accepting the
+  password on every request can be removed. Other properties are
   `RECORDS_FOLDER_ID` (set automatically), `RECORDS_FOLDER_NAME` (TEST copy
   only) and `RECORDS_MIGRATED`.
 - **Speed (v16):** saves run one at a time inside the lock, so the number of
@@ -235,7 +250,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 27 back-office checks + 12 real-browser checks
+npm test               # 28 back-office checks + 13 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

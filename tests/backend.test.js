@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 19);
+  assert.equal(b.call('getVersion', { password: '' }).version, 20);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 19);
+  assert.equal(r.version, 20);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -421,4 +421,53 @@ test('a page filed with what Claude already read is not read again', () => {
   const d = b.call('loadMonth', { month: '2026-09' }).details;
   assert.ok(d.history.some(h => /Read page-001.jpg \(AB12CDE/.test(h.what)));
   assert.ok(d.history.some(h => /Could not read page-002.jpg: Too blurry/.test(h.what)));
+});
+
+test('logging in gives a 30-day pass; the password is never needed again, and guessing is slowed down', () => {
+  const b = loadBackend();
+  const raw = (body) => b.doPostRaw(JSON.stringify(body));
+  const login = raw({ action: 'checkDashboardPassword', password: 'pw' });
+  assert.equal(login.status, 'success');
+  assert.ok(login.token.length >= 32);
+  assert.ok(Math.abs(login.expires - (Date.now() + 30 * 86400000)) < 60000, '30 days');
+  // Only a fingerprint of the pass is stored, never the pass itself.
+  assert.ok(![...b.props.values()].some(v => v.includes(login.token)));
+  assert.ok(![...b.props.keys()].some(k => k.includes(login.token)));
+  // The pass works on its own; a made-up one doesn't.
+  assert.equal(raw({ action: 'listMonths', token: login.token }).status, 'success');
+  assert.equal(raw({ action: 'listMonths', token: 'x'.repeat(64) }).status, 'forbidden');
+  assert.equal(raw({ action: 'listMonths' }).status, 'forbidden');
+  // The older page, sending the password itself, keeps working.
+  assert.equal(raw({ action: 'listMonths', password: 'pw' }).status, 'success');
+
+  // Five wrong guesses pause logging in, even with the right password…
+  for (let i = 0; i < 4; i++) assert.equal(raw({ action: 'checkDashboardPassword', password: 'guess' + i }).status, 'fail');
+  assert.equal(raw({ action: 'checkDashboardPassword', password: 'guess5' }).status, 'fail');
+  const paused = raw({ action: 'checkDashboardPassword', password: 'pw' });
+  assert.equal(paused.status, 'paused');
+  assert.match(paused.message, /paused for 15 more minutes/);
+  assert.equal(raw({ action: 'listMonths', password: 'pw' }).status, 'forbidden', 'no guessing through other requests');
+  // …but a computer that already has a pass carries on.
+  assert.equal(raw({ action: 'listMonths', token: login.token }).status, 'success');
+  // After the pause, the right password works again.
+  const f = JSON.parse(b.props.get('LOGIN_FAILS')); f.until = Date.now() - 1; b.props.set('LOGIN_FAILS', JSON.stringify(f));
+  const second = raw({ action: 'checkDashboardPassword', password: 'pw' });
+  assert.equal(second.status, 'success');
+
+  // Logging out ends that pass only.
+  assert.equal(raw({ action: 'logout', token: second.token }).status, 'success');
+  assert.equal(raw({ action: 'listMonths', token: second.token }).status, 'forbidden');
+  assert.equal(raw({ action: 'listMonths', token: login.token }).status, 'success');
+
+  // A pass runs out after 30 days.
+  const key = [...b.props.keys()].find(k => k.startsWith('TOK_'));
+  const p = JSON.parse(b.props.get(key)); p.exp = Date.now() - 1; b.props.set(key, JSON.stringify(p));
+  assert.equal(raw({ action: 'listMonths', token: login.token }).status, 'forbidden');
+
+  // Changing the password logs every computer out.
+  const third = raw({ action: 'checkDashboardPassword', password: 'pw' }).token;
+  b.props.set('DASHBOARD_PASSWORD', 'new-password');
+  assert.equal(raw({ action: 'listMonths', token: third }).status, 'forbidden');
+  assert.equal(raw({ action: 'checkDashboardPassword', password: 'new-password' }).status, 'success');
+  assert.equal([...b.props.keys()].filter(k => k.startsWith('TOK_')).length, 1, 'old passes tidied away');
 });

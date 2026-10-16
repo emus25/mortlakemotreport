@@ -19,9 +19,9 @@ let html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const before = html;
 html = html.replace(/var SCRIPT_URL = '[^']*';/, "var SCRIPT_URL = '" + url + "';");
 html = html.replace('var IS_TEST_COPY = false;', 'var IS_TEST_COPY = true;');
-// Its own saved password and cache, so the test copy and the real app never
-// share anything in the browser either.
-html = html.replace("var PW_KEY = 'mortlake_report_password';", "var PW_KEY = 'mortlake_report_password_TEST';");
+// Its own pass and cache, so the test copy and the real app never share
+// anything in the browser either.
+html = html.replace("var PASS_KEY = 'mortlake_report_pass';", "var PASS_KEY = 'mortlake_report_pass_TEST';");
 html = html.replace("var STORE_KEY = 'mortlake_report_v1';", "var STORE_KEY = 'mortlake_report_v1_TEST';");
 html = html.replace("var MOVED_KEY = 'mortlake_testlog_moved';", "var MOVED_KEY = 'mortlake_testlog_moved_TEST';");
 if (html === before || (html.match(/_TEST'/g) || []).length !== 3 || html.indexOf('IS_TEST_COPY = true') < 0) {

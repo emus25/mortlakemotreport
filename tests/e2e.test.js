@@ -351,21 +351,19 @@ test('opening the app takes two round trips, shows a counter while waiting, and 
   } finally { slow.server.close(); }
 });
 
-test('login never blames the password when Google does not answer', async () => {
+test('a correct password always gets in, safely: the browser keeps a pass, never the password', async () => {
   const srv = await start(0, fakeClaude());
+  const appShown = (p) => p.waitForFunction(() => document.getElementById('appRoot').style.display === 'block', null, { timeout: 20000 });
   try {
     const ctx = await browser.newContext();
+    // An older version saved the password itself in the browser.
+    await ctx.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', 1); localStorage.setItem('mortlake_report_password', 'pw'); } });
     const p = await ctx.newPage();
+    p.on('dialog', (d) => d.accept());
     await p.goto(srv.url + '/index.html');
-
-    // Google fails: the message must say it is not a password problem.
-    srv.failures.checkDashboardPassword = 1;
-    await p.fill('#lockPasswordInput', 'pw');
-    await p.click('#lockSubmitBtn');
-    await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock');
-    const msg = await p.textContent('#lockError');
-    assert.match(msg, /not a password problem/);
-    assert.doesNotMatch(msg, /Incorrect password/);
+    assert.equal(await p.evaluate(() => localStorage.getItem('mortlake_report_password')), null, 'old saved password wiped');
+    assert.ok(await p.isVisible('#lockScreen'));
+    await p.evaluate(() => { LOGIN_ATTEMPT_MS = 1500; });
 
     // A genuinely wrong password says so.
     await p.fill('#lockPasswordInput', 'nope');
@@ -373,21 +371,79 @@ test('login never blames the password when Google does not answer', async () => 
     await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock');
     assert.equal(await p.textContent('#lockError'), 'Incorrect password.');
 
-    // While checking, the previous message is cleared.
-    srv.failures.checkDashboardPassword = 0;
-    await p.fill('#lockPasswordInput', 'pw');
+    // Google fails twice, then is slower than one try: the app keeps going,
+    // the late answer still counts, and a stray space on the end is ignored.
+    srv.failures.checkDashboardPassword = 2;
+    srv.slow.checkDashboardPassword = 2500;
+    await p.fill('#lockPasswordInput', 'pw ');
     await p.click('#lockSubmitBtn');
-    assert.equal(await p.textContent('#lockError'), '');
+    assert.equal(await p.textContent('#lockError'), '', 'old message cleared');
+    await appShown(p);
+    await waitReady(p);
+    srv.slow.checkDashboardPassword = 0;
+    const stored = JSON.stringify(await p.evaluate(() => Object.assign({}, localStorage)));
+    assert.doesNotMatch(stored, /"pw"|\bpw\b/, 'the password is not kept in the browser');
+    const pass = await p.evaluate(() => JSON.parse(localStorage.getItem('mortlake_report_pass')));
+    assert.ok(pass.token.length >= 32 && pass.expires > Date.now() + 29 * 86400000);
+
+    // Coming back: straight in, without asking Google for the password at all.
+    const before = srv.log.filter(a => a === 'checkDashboardPassword').length;
+    await p.reload();
+    await appShown(p);
+    await waitReady(p);
+    assert.equal(srv.log.filter(a => a === 'checkDashboardPassword').length, before);
+
+    // The pass is refused (30 days are up, or the password was changed): asked again, politely.
+    srv.backend.props.set('DASHBOARD_PASSWORD', 'new-password');
+    await p.reload();
+    await p.waitForFunction(() => /type the password again/.test(document.getElementById('lockError').textContent), null, { timeout: 20000 });
+    assert.doesNotMatch(await p.textContent('#lockError'), /Incorrect/);
+    assert.equal(await p.evaluate(() => localStorage.getItem('mortlake_report_pass')), null);
+    await p.fill('#lockPasswordInput', 'new-password');
+    await p.click('#lockSubmitBtn');
+    await appShown(p);
     await waitReady(p);
 
-    // Reopening while Google is down keeps the saved password and doesn't call it wrong.
-    srv.failures.checkDashboardPassword = 1;
-    await p.reload();
-    await p.waitForFunction(() => /not a password problem/.test(document.getElementById('lockError').textContent));
-    assert.equal(await p.evaluate(() => localStorage.getItem('mortlake_report_password')), 'pw');
-    assert.equal(await p.inputValue('#lockPasswordInput'), 'pw', 'Paul just presses Unlock again');
+    // Log out ends this computer's pass with Google too.
+    const token = await p.evaluate(() => JSON.parse(localStorage.getItem('mortlake_report_pass')).token);
+    await p.click('#logoutBtn');
+    await p.waitForFunction(() => { const l = document.getElementById('lockScreen'), a = document.getElementById('appRoot');
+      return l && a && a.style.display === 'none' && !localStorage.getItem('mortlake_report_pass'); });
+    await p.waitForTimeout(300);
+    assert.equal(srv.backend.doPostRaw(JSON.stringify({ action: 'listMonths', token })).status, 'forbidden');
+  } finally { srv.server.close(); }
+});
+
+test('the guessing pause and a missing Google are never called a wrong password', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await (await browser.newContext()).newPage();
+    await p.goto(srv.url + '/index.html');
+    // Too many wrong guesses: says it's paused, not "incorrect".
+    for (let i = 0; i < 5; i++) srv.backend.doPostRaw(JSON.stringify({ action: 'checkDashboardPassword', password: 'guess' + i }));
+    await p.fill('#lockPasswordInput', 'pw');
     await p.click('#lockSubmitBtn');
-    await waitReady(p);
+    await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock');
+    assert.match(await p.textContent('#lockError'), /paused for 15 more minutes/);
+    srv.backend.props.delete('LOGIN_FAILS');
+
+    // Google can't be reached at all.
+    await p.evaluate(() => { LOGIN_GIVE_UP_MS = 4000; LOGIN_ATTEMPT_MS = 1000; });
+    srv.failures.checkDashboardPassword = 999;
+    await p.click('#lockSubmitBtn');
+    await p.waitForFunction(() => document.getElementById('lockSubmitBtn').textContent === 'Unlock', null, { timeout: 15000 });
+    const msg = await p.textContent('#lockError');
+    assert.match(msg, /not a password problem/);
+    assert.doesNotMatch(msg, /Incorrect password/);
+    assert.ok(srv.log.filter(a => a === 'checkDashboardPassword').length >= 3, 'it kept trying');
+
+    // Caps Lock is pointed out.
+    const capsKey = (on) => p.evaluate((on) => document.getElementById('lockPasswordInput')
+      .dispatchEvent(new KeyboardEvent('keyup', { key: 'a', modifierCapsLock: on })), on);
+    await capsKey(true);
+    assert.ok(await p.isVisible('#lockCaps'), 'Caps Lock warning shown');
+    await capsKey(false);
+    assert.equal(await p.isVisible('#lockCaps'), false);
   } finally { srv.server.close(); }
 });
 

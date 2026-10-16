@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 19;
+var BACKEND_VERSION = 20;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -63,12 +63,18 @@ function route_(data) {
   // purely so the app can check the right code is live.
   if (data.action === 'getVersion') return { status: 'success', version: BACKEND_VERSION };
 
-  if (data.action === 'checkDashboardPassword') {
-    return { status: checkPassword_(data.password) ? 'success' : 'fail' };
-  }
+  if (data.action === 'checkDashboardPassword') return logIn_(data.password);
 
-  // Everything below needs the password.
-  if (!checkPassword_(data.password)) return { status: 'forbidden' };
+  // Everything below needs a pass (from logging in) or, for the older page
+  // that doesn't know about passes, the password itself.
+  if (data.token) {
+    if (!passOk_(data.token)) return { status: 'forbidden', message: 'Please type the password again.' };
+  } else {
+    if (!data.password) return { status: 'forbidden' };   // nothing sent: not a guess
+    if (loginPaused_()) return { status: 'forbidden' };
+    if (!checkPassword_(data.password)) { noteWrongPassword_(); return { status: 'forbidden' }; }
+  }
+  if (data.action === 'logout') { forgetPass_(data.token); return { status: 'success' }; }
 
   switch (data.action) {
     // Reading a page. With a month, the page is also filed (Monthly Records);
@@ -167,6 +173,92 @@ function saveAppData_(data) {
 function checkPassword_(submitted) {
   var correct = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD');
   return !!correct && submitted === correct;
+}
+
+/* ─────────────────── Logging in (v20) ───────────────────
+ * The password is checked once; the computer then gets a "pass": a long
+ * random code that works for PASS_DAYS. The app keeps the pass, never the
+ * password. Only a fingerprint of each pass is stored here (TOK_<sha256>),
+ * so even someone reading the Script Properties can't use one.
+ *
+ * Changing DASHBOARD_PASSWORD logs every computer out: each pass remembers a
+ * fingerprint of the password it was given under, and stops working when
+ * that no longer matches. That's the "log out everywhere" switch.
+ *
+ * Guessing is slowed down: after LOGIN_MAX_WRONG wrong passwords in a row,
+ * logging in is paused for LOGIN_PAUSE_MS. Computers that already have a pass
+ * carry on working, so this can't lock Paul out of his own computer. */
+var PASS_DAYS = 30;
+var LOGIN_MAX_WRONG = 5;
+var LOGIN_PAUSE_MS = 15 * 60 * 1000;
+var PASS_PREFIX = 'TOK_';
+
+function sha256Hex_(text) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(text), Utilities.Charset.UTF_8);
+  return bytes.map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
+}
+
+function passwordStamp_() {
+  var correct = PropertiesService.getScriptProperties().getProperty('DASHBOARD_PASSWORD') || '';
+  return sha256Hex_('stamp:' + correct).slice(0, 16);
+}
+
+function loginPaused_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('LOGIN_FAILS');
+  var f = raw ? JSON.parse(raw) : null;
+  return f && f.until && f.until > Date.now() ? f.until : 0;
+}
+
+function noteWrongPassword_() {
+  var props = PropertiesService.getScriptProperties();
+  var raw = props.getProperty('LOGIN_FAILS');
+  var f = raw ? JSON.parse(raw) : { n: 0 };
+  f.n = (f.n || 0) + 1;
+  if (f.n >= LOGIN_MAX_WRONG) { f = { n: 0, until: Date.now() + LOGIN_PAUSE_MS }; }
+  props.setProperty('LOGIN_FAILS', JSON.stringify(f));
+}
+
+function logIn_(password) {
+  var until = loginPaused_();
+  if (until) {
+    var mins = Math.max(1, Math.ceil((until - Date.now()) / 60000));
+    return { status: 'paused', minutes: mins,
+             message: 'Too many wrong passwords were tried, so logging in is paused for ' + mins +
+                      ' more minute' + (mins === 1 ? '' : 's') + '. This is a safety lock, not a fault.' };
+  }
+  if (!checkPassword_(password)) { noteWrongPassword_(); return { status: 'fail' }; }
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('LOGIN_FAILS');
+  var token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  var expires = Date.now() + PASS_DAYS * 24 * 3600 * 1000;
+  props.setProperty(PASS_PREFIX + sha256Hex_(token), JSON.stringify({ exp: expires, stamp: passwordStamp_() }));
+  prunePasses_();
+  return { status: 'success', token: token, expires: expires };
+}
+
+function passOk_(token) {
+  if (typeof token !== 'string' || token.length < 32) return false;
+  var raw = PropertiesService.getScriptProperties().getProperty(PASS_PREFIX + sha256Hex_(token));
+  if (!raw) return false;
+  var p = JSON.parse(raw);
+  return p.exp > Date.now() && p.stamp === passwordStamp_();
+}
+
+function forgetPass_(token) {
+  if (token) PropertiesService.getScriptProperties().deleteProperty(PASS_PREFIX + sha256Hex_(token));
+}
+
+// Old and expired passes are tidied away whenever someone logs in.
+function prunePasses_() {
+  var props = PropertiesService.getScriptProperties();
+  var all = props.getProperties(), now = Date.now(), stamp = passwordStamp_();
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf(PASS_PREFIX) !== 0) return;
+    try {
+      var p = JSON.parse(all[k]);
+      if (p.exp <= now || p.stamp !== stamp) props.deleteProperty(k);
+    } catch (e) { props.deleteProperty(k); }
+  });
 }
 
 /**

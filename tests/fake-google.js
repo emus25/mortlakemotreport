@@ -154,7 +154,11 @@ function loadBackend(options) {
     base64Decode: (s) => Array.from(Buffer.from(s, 'base64')).map(b => (b > 127 ? b - 256 : b)),
     base64Encode: (bytes) => toBuffer(bytes).toString('base64'),
     newBlob: (data, type, name) => makeBlob(typeof data === 'string' ? Buffer.from(data) : toBuffer(data), type, name),
-    sleep: () => {}
+    sleep: () => {},
+    getUuid: () => require('crypto').randomUUID(),
+    DigestAlgorithm: { SHA_256: 'sha256' },
+    Charset: { UTF_8: 'utf8' },
+    computeDigest: (alg, value) => Array.from(require('crypto').createHash(alg).update(String(value), 'utf8').digest()).map(b => (b > 127 ? b - 256 : b))
   };
 
   const ContentService = {

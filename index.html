@@ -597,6 +597,10 @@
   .lock-box .btn { width: 100%; }
   .lock-error { display: none; font-size: 13px; color: var(--danger); margin-bottom: 12px; }
   .lock-error.show { display: block; }
+  .lock-caps { font-size: 12px; color: var(--warning); margin: -6px 0 10px; }
+  .lock-caps[hidden] { display: none; }
+  .logout-btn { background: none; border: 0; padding: 4px 2px; font: inherit; font-size: 12px; color: var(--text-tertiary); cursor: pointer; text-decoration: underline; }
+  .logout-btn:hover { color: var(--text-secondary); }
 
   /* ══════════ Responsive ══════════ */
   @media (max-width: 1080px) {
@@ -897,7 +901,9 @@
   <div class="lock-box">
     <img src="assets/mortlake-logo.png" alt="Mortlake Garage">
     <div class="lock-title">Enter password</div>
-    <input type="password" id="lockPasswordInput" class="lock-input" autocomplete="current-password">
+    <input type="password" id="lockPasswordInput" class="lock-input" autocomplete="current-password"
+           autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="lock-caps" id="lockCaps" hidden>Caps Lock is on</div>
     <div class="lock-error" id="lockError"></div>
     <button type="button" class="btn btn-primary" id="lockSubmitBtn" onclick="submitLockScreen()">Unlock</button>
   </div>
@@ -934,6 +940,7 @@
         <input type="month" id="fMonth">
       </div>
       <button class="btn btn-primary" id="generateBtn" onclick="handleGenerate()">Generate Report</button>
+      <button type="button" class="logout-btn" id="logoutBtn" onclick="logOut()" title="Log this computer out">Log out</button>
     </div>
   </header>
 
@@ -1339,7 +1346,7 @@
 <script>
   /* ═══════════════ Auth (unchanged behaviour) ═══════════════ */
   var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxdGsxn9KKbppvezpumA7uaN4QZv5ez0LZDfIwBoHFEVoIMQPia2bLk2RhMAemlc7OoMA/exec';
-  var PW_KEY = 'mortlake_report_password';
+  var PASS_KEY = 'mortlake_report_pass';
   // The test copy (test.html) is made from this file with its own back office
   // and Drive folder, and says so on every screen so it can't be mistaken for
   // the real records.
@@ -1352,47 +1359,101 @@
     document.body.insertBefore(tb, document.body.firstChild);
   }
 
-  function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
-
-  /* Checks the password with the back office. There are three possible
-     answers, and they must never be confused:
-       'ok'      — the password is right
+  /* ── Logging in (v20) ──
+     Secure, and a correct password must never fail (Ediz, 16 Oct 2026).
+     - The password is checked once. Google then gives this computer a
+       "pass" that works for 30 days; the app keeps the pass, never the
+       password. Every request to Google is checked against the pass.
+     - If Google is slow to wake up, the app keeps asking for up to two
+       minutes, with the tyre turning, rather than giving up. A slow answer
+       still counts when it arrives.
+     - The box doesn't auto-capitalise or autocorrect, a stray space at the
+       end is ignored, and "Caps Lock is on" is shown when it is.
+     - After 5 wrong passwords Google pauses logging in for 15 minutes;
+       computers that already have a pass carry on.
+     There are four possible answers from Google, and they must never be
+     confused:
+       'ok'      — the password is right (a pass comes with it)
        'wrong'   — Google answered and said the password is wrong
+       'paused'  — too many wrong guesses; logging in is paused for a while
        'noreply' — Google couldn't be reached or didn't answer properly.
                    This says NOTHING about the password, so it must never be
                    shown as "Incorrect password". */
-  var LOGIN_TIMEOUT_MS = 60000;
-  var NO_REPLY_MSG = 'Couldn’t reach Google just now — this is not a password problem. ' +
+  var LOGIN_ATTEMPT_MS = 40000;     // one try; Google can take ~30s to wake up
+  var LOGIN_GIVE_UP_MS = 120000;    // keep trying this long before saying so
+  var NO_REPLY_MSG = 'Couldn’t reach Google for two minutes — this is not a password problem. ' +
                      'Check the internet connection and press Unlock again.';
 
-  function verifyPassword(pw, onResult) {
-    if (!SCRIPT_URL) { onResult('noreply', 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
-    var finished = false;
-    function finish(result, msg) { if (finished) return; finished = true; clearTimeout(timer); onResult(result, msg); }
-    var timer = setTimeout(function () {
-      finish('noreply', 'Google is taking too long to answer — this is not a password problem. Press Unlock again.');
-    }, LOGIN_TIMEOUT_MS);
-    fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'checkDashboardPassword', password: pw })
-    })
+  // Earlier versions kept the password itself in the browser. Not any more.
+  try { localStorage.removeItem('mortlake_report_password'); localStorage.removeItem('mortlake_report_password_TEST'); } catch (e) {}
+
+  function readPass_() {
+    try {
+      var p = JSON.parse(localStorage.getItem(PASS_KEY));
+      return p && p.token && p.expires > Date.now() ? p : null;
+    } catch (e) { return null; }
+  }
+  function getPass_() { var p = readPass_(); return p ? p.token : ''; }
+  function forgetPass_() { try { localStorage.removeItem(PASS_KEY); } catch (e) {} }
+
+  // One question to Google. Always answers; never throws.
+  function askPasswordOnce_(pw) {
+    return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'checkDashboardPassword', password: pw }) })
       .then(function (r) { return r.text(); })
       .then(function (text) {
         var data = null;
         try { data = JSON.parse(text); } catch (e) {}
-        if (data && data.status === 'success') return finish('ok');
-        if (data && data.status === 'fail') return finish('wrong', 'Incorrect password.');
-        finish('noreply', data && data.message
-          ? 'Couldn’t check the password: ' + data.message + ' — this is not a password problem.'
-          : NO_REPLY_MSG);
+        if (data && data.status === 'success' && data.token) return { result: 'ok', pass: { token: data.token, expires: data.expires } };
+        if (data && data.status === 'fail') return { result: 'wrong' };
+        if (data && data.status === 'paused') return { result: 'paused', message: data.message };
+        return { result: 'noreply' };
       })
-      .catch(function () { finish('noreply', NO_REPLY_MSG); });
+      .catch(function () { return { result: 'noreply' }; });
   }
 
-  /* keepPassword: when Google simply couldn't be reached, the saved password
-     is kept — it hasn't been shown to be wrong. */
-  function lockApp(msg, keepPassword) {
-    if (!keepPassword) localStorage.removeItem(PW_KEY);
+  /* Asks Google until it gives a real answer, or two minutes pass. Calls
+     onResult(result, message, pass); onWait(seconds) while waiting. */
+  function verifyPassword(pw, onResult, onWait) {
+    if (!SCRIPT_URL) { onResult('noreply', 'Backend not deployed yet — ask Claude to wire this up once the Apps Script is ready.'); return; }
+    var started = Date.now(), done = false, delay = 1000, nextTry = null;
+    var ticker = onWait ? setInterval(function () { onWait(Math.round((Date.now() - started) / 1000)); }, 1000) : null;
+    var giveUp = setTimeout(function () { finish('noreply', NO_REPLY_MSG); }, LOGIN_GIVE_UP_MS);
+    function finish(result, msg, pass) {
+      if (done) return;
+      done = true;
+      clearInterval(ticker); clearTimeout(giveUp); clearTimeout(nextTry);
+      onResult(result, msg, pass);
+    }
+    function ask() {
+      return askPasswordOnce_(pw).then(function (a) {
+        // A space typed on the end by mistake.
+        if (a.result === 'wrong' && pw.trim() !== pw && pw.trim()) return askPasswordOnce_(pw.trim());
+        return a;
+      });
+    }
+    function again(wait) {
+      clearTimeout(nextTry);
+      nextTry = setTimeout(attempt, wait);
+    }
+    // Each attempt is waited for to the end, even when slow; if it takes
+    // longer than LOGIN_ATTEMPT_MS another starts alongside it, and whichever
+    // real answer comes first wins.
+    function attempt() {
+      if (done) return;
+      again(LOGIN_ATTEMPT_MS);
+      ask().then(function (a) {
+        if (a.result === 'ok') return finish('ok', '', a.pass);
+        if (a.result === 'wrong') return finish('wrong', 'Incorrect password.');
+        if (a.result === 'paused') return finish('paused', a.message);
+        again(delay);
+        delay = Math.min(delay * 2, 8000);
+      });
+    }
+    attempt();
+  }
+
+  function lockApp(msg) {
+    forgetPass_();
     document.getElementById('lockScreen').style.display = 'flex';
     document.getElementById('appRoot').style.display = 'none';
     var err = document.getElementById('lockError');
@@ -1407,47 +1468,76 @@
     startRecords_();
   }
 
+  /* Google refused this computer's pass: it ran out after 30 days, or the
+     password was changed. Start again from the lock screen, from a clean
+     page, so nothing half-loaded is left behind. */
+  var passRefused_ = false;
+  function passRefused() {
+    if (passRefused_) return;
+    passRefused_ = true;
+    forgetPass_();
+    try { sessionStorage.setItem('mortlake_pass_ended', '1'); } catch (e) {}
+    location.reload();
+  }
+
+  function logOut() {
+    var token = getPass_();
+    forgetPass_();
+    if (token && SCRIPT_URL) {
+      fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'logout', token: token }) }).catch(function () {});
+    }
+    location.reload();
+  }
+
   function submitLockScreen() {
     var pw = document.getElementById('lockPasswordInput').value;
     var btn = document.getElementById('lockSubmitBtn');
     var errEl = document.getElementById('lockError');
-    if (btn.disabled) return;
+    if (btn.disabled || !pw) return;
     // Clear the last message, so an old one can't sit there while checking.
     errEl.textContent = '';
     errEl.classList.remove('show');
     btn.disabled = true;
     btn.innerHTML = tyreSvg_({ small: true }) + 'Checking…';
-    verifyPassword(pw, function (result, msg) {
+    verifyPassword(pw, function (result, msg, pass) {
       btn.disabled = false;
       btn.textContent = 'Unlock';
       if (result === 'ok') {
-        localStorage.setItem(PW_KEY, pw);
+        try { localStorage.setItem(PASS_KEY, JSON.stringify(pass)); } catch (e) {}
+        document.getElementById('lockPasswordInput').value = '';
         unlockApp();
       } else {
         errEl.textContent = msg;
         errEl.classList.add('show');
       }
+    }, function (secs) {
+      if (secs >= 4) btn.innerHTML = tyreSvg_({ small: true }) + 'Waking Google up… ' + secs + 's';
     });
   }
 
-  document.getElementById('lockPasswordInput').addEventListener('keydown', function (e) {
-    if (e.key === 'Enter') submitLockScreen();
-  });
+  (function () {
+    var input = document.getElementById('lockPasswordInput');
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submitLockScreen();
+    });
+    // Caps Lock is the commonest reason a right password looks wrong.
+    function capsHint(e) {
+      var hint = document.getElementById('lockCaps');
+      if (hint && e.getModifierState) hint.hidden = !e.getModifierState('CapsLock');
+    }
+    input.addEventListener('keyup', capsHint);
+    input.addEventListener('keydown', capsHint);
+  })();
 
   (function () {
     // No backend deployed yet, so skip the lock screen for local review.
     if (!SCRIPT_URL) { unlockApp(); return; }
-    var pw = getPassword();
-    if (!pw) return;
-    verifyPassword(pw, function (result, msg) {
-      if (result === 'ok') unlockApp();
-      else if (result === 'wrong') lockApp('The password has changed — please enter the new one.');
-      else {
-        // Not a password problem: keep the saved password and let Paul retry.
-        lockApp(msg, true);
-        document.getElementById('lockPasswordInput').value = pw;
-      }
-    });
+    var ended = false;
+    try { ended = !!sessionStorage.getItem('mortlake_pass_ended'); sessionStorage.removeItem('mortlake_pass_ended'); } catch (e) {}
+    if (ended) { lockApp('Please type the password again — it’s been 30 days, or the password was changed.'); return; }
+    // This computer has a pass that hasn't run out: straight in, once the
+    // rest of the page's code has been set up.
+    if (readPass_()) setTimeout(unlockApp, 0);
   })();
 
   function escapeHtml_(s) {
@@ -1518,7 +1608,7 @@
 
   function apiOnce_(action, payload) {
     if (!SCRIPT_URL) return Promise.resolve({ status: 'offline', message: 'Not connected to the records.' });
-    var body = Object.assign({ action: action, password: getPassword() }, payload || {});
+    var body = Object.assign({ action: action, token: getPass_() }, payload || {});
     var t0 = Date.now();
     return fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(body) })
       .then(function (r) { return r.json(); })
@@ -1532,6 +1622,7 @@
         recordsTimings.push(t);
         if (recordsTimings.length > 200) recordsTimings.shift();
         try { console.info('[records] ' + action + ': ' + t.totalMs + 'ms (back office ' + t.serverMs + 'ms) ' + t.status); } catch (e) {}
+        if (res && res.status === 'forbidden') passRefused();
         return res;
       });
   }
@@ -3281,7 +3372,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 19;
+  var EXPECTED_BACKEND_VERSION = 20;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
