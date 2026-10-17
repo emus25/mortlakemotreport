@@ -117,6 +117,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     check(await signOff(A, 'sign-off'), 'filed and signed off');
     check(/is signed off\. Version 1/.test(await A.textContent('#monthBanner')), 'banner: signed off, version 1');
     check(await A.evaluate(() => document.body.classList.contains('month-locked')), 'the month is locked on screen');
+    if (!(await A.evaluate(() => monthStatus_() === 'signed'))) throw new Error('not signed, so stopping here');
     const locked = await A.evaluate(m => api_('saveMonthFields', { month: m, field: 'checklist', value: { state: {}, notes: {} }, baseRevision: checklistRev_[m] }), MONTH);
     check(locked.status === 'locked', 'Google itself refuses a change to the signed month (' + locked.status + ')');
     const v1 = await fetchVersion(A, 1);

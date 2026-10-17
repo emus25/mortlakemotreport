@@ -5932,7 +5932,8 @@
     });
   }
   function onScreenMatches_(d) {
-    var ids = function (l) { return l.filter(function (p) { return !p.provisional; }).map(function (p) { return p.id; }).join(','); };
+    // Same pages, whatever order they finished saving in.
+    var ids = function (l) { return l.filter(function (p) { return !p.provisional; }).map(function (p) { return p.id; }).sort().join(','); };
     return ids(savedPages_.qc) === ids(d.qcPages || []) && ids(savedPages_.cert) === ids(d.certPages || []) &&
       ((d.revisions && d.revisions.checklist) || 0) === (checklistRev_[currentMonth] || 0);
   }

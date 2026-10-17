@@ -556,6 +556,8 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
     await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
+    // Real pages finish saving in any order; the page must not mistake that for a change.
+    await p.evaluate(() => savedPages_.qc.reverse());
     await p.evaluate(() => {
       CHECKLIST.forEach((c, ci) => c.items.forEach((t, ii) => { checklistState[ci + '-' + ii] = 'yes'; }));
       checklistState['2-0'] = 'no';          // a NO with no note yet
