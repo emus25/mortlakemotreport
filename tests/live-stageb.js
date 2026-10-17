@@ -67,17 +67,10 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
   async function fetchVersion(p, v) {
     const t = Date.now();
     const out = await p.evaluate(async ({ month, v }) => {
-      let parts = [], i = 0, r;
-      let retries = 0, pieces = 1;
-      while (i < pieces) {
-        r = await apiOnce_('getReport', { month, version: v, index: i });
-        if (r.noReply && retries < 4) { retries++; continue; }   // the same patience the app has
-        if (r.status !== 'success') return { error: r.message };
-        pieces = r.pieces; parts.push(r.data); i++;
-      }
-      window.__retries = (window.__retries || 0) + retries;
-      const bin = atob(parts.join('')); const bytes = new Uint8Array(bin.length);
-      for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+      let rec;
+      try { rec = await fetchSignedReport_(month, v); } catch (e) { return { error: e.message }; }
+      const bytes = new Uint8Array(rec.bytes);
+      const r = { version: rec.meta };
       const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).map(b => b.toString(16).padStart(2, '0')).join('');
       const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
       const pg = await doc.getPage(1); const vp = pg.getViewport({ scale: 1.4 });

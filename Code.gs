@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 24;
+var BACKEND_VERSION = 25;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -1872,11 +1872,19 @@ function getReport_(data) {
   if (!ids || !ids.length || !piecesPresent_(ids)) ids = makePieces_(month, v, file);
   var i = parseInt(data.index, 10) || 0;
   if (i < 0 || i >= ids.length) throw appError_('error', 'Unexpected piece of the report.');
+  var text = DriveApp.getFileById(ids[i]).getBlob().getDataAsString();
+  // Since v25 the page asks for small bites of each piece: Google often
+  // stalls for half a minute, or gives up, on answers of 2MB, but answers
+  // of half a megabyte come back reliably in a second or two.
+  var from = data.from == null ? 0 : parseInt(data.from, 10) || 0;
+  var length = data.length == null ? text.length : Math.min(parseInt(data.length, 10) || 0, REPORT_BITE_CHARS);
   return {
     status: 'success', version: publicVersion_(v), pieces: ids.length, index: i,
-    data: DriveApp.getFileById(ids[i]).getBlob().getDataAsString(), url: file.getUrl()
+    pieceLength: text.length, from: from,
+    data: text.substr(from, length), url: file.getUrl()
   };
 }
+var REPORT_BITE_CHARS = 600000;
 
 function piecesPresent_(ids) {
   try { return ids.every(function (id) { return !DriveApp.getFileById(id).isTrashed(); }); }

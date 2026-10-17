@@ -650,6 +650,16 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     assert.equal(details(srv, '2026-09').qcPages.length, 4);
     assert.equal(signed().length, 2, 'no new version');
     assert.deepEqual(p.errors, []);
+    // A fresh computer fetches the signed report from Google, in small bites.
+    const q = await newComputer(srv);
+    await setMonth(q, '2026-09');
+    srv.log.length = 0;
+    await q.click('#monthBanner button:text-is("Open report")');
+    await q.waitForSelector('#pdfViewerBody iframe', { timeout: 20000 });
+    const got = await q.evaluate(async () => new Uint8Array(await (await fetch(document.querySelector('#pdfViewerBody iframe').src)).arrayBuffer()));
+    const v2 = srv.backend.drive.readBytes(signed().find(f => / v2 /.test(f)));
+    assert.deepEqual(Buffer.from(Object.values(got)), v2, 'exactly version 2, byte for byte');
+    assert.ok(srv.log.filter(a => a === 'getReport').length >= 1);
   } finally { srv.server.close(); }
 });
 
