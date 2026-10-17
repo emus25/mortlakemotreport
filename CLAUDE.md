@@ -136,7 +136,7 @@ one Google Apps Script file.
   pages are read, `setTyreProgress_`), the small "Loading…/Reading…/Saving…"
   icons (`ICON_SPIN`), the login button, and a cover while the report fetches
   its pages. Use it for any new waiting state.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (20 on this branch; the live site is still 12) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (20 on this branch and on the live page) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -362,10 +362,14 @@ From Ediz, in priority order:
      which were added on 13 Oct. With curl, POST with `--data` and `-L` but
      **without** `-X POST`, or Google's redirect returns a "Page Not Found"
      page.
-   - **Paul's real app** (`index.html` on `main`) is untouched and working.
-     It still has the old login bug: any failure to reach Google shows
-     "Incorrect password". This is fixed on this branch only, and Ediz has
-     been offered a fix for the live app.
+   - **Paul's real app** (`index.html` on `main`): **17 Oct 2026, the live
+     back office is v20** (this branch's `Code.gs`) and the live page has
+     the secure login (passes, patient retries, Log out), applied with
+     `tools/patch-live-login.py` and tested against v20; nothing else on
+     the live page changed. Paul types the password once more, then it
+     lasts 30 days. Both back offices (live and TEST) must now be updated
+     together whenever `Code.gs` changes, or the live one left alone if a
+     change isn't safe for the old live page.
 2. **Records screen** (year → month → open report). This is stage C of item
    1 and replaces the "completed reports list".
 3. ~~**Wrong report date.**~~ Done. The report is now headed with the month
