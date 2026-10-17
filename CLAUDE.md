@@ -136,7 +136,21 @@ one Google Apps Script file.
   pages are read, `setTyreProgress_`), the small "Loading…/Reading…/Saving…"
   icons (`ICON_SPIN`), the login button, and a cover while the report fetches
   its pages. Use it for any new waiting state.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (20 on this branch and on the live page) must
+- **Stage B (built 17 Oct 2026):** Preview report (`handleGenerate`) and
+  **Sign off** (`startSignOff` → `runSignOff_`). Sign off is greyed out until
+  `signOffBlockers_()` is empty: everything Preview needs plus every QC
+  vehicle's full set (`qcVehicleCheck_`), every page identified, every
+  certificate read, and a note on every checklist NO. Required items carry a
+  red `.req` asterisk. The PDF is made in the browser by `makeReportPdf_`
+  (html2canvas + jsPDF in `assets/lib`, loaded only when signing): the report
+  is laid out in a hidden frame and `planPdfPages_` cuts pages only between
+  rows/blocks, repeating table headings; scans are placed directly; footer
+  "Mortlake Station Garage · month · vN · page X of Y". `buildReportHTML(sign)`
+  adds who signed, the amendment box and the history page. Signed months get
+  a banner (`renderMonthState_`) and `body.month-locked`; Amend / Cancel
+  amendment / Open report (`openSignedReport`, a PDF viewer overlay) work from
+  it. `renderReminder_` nags from the 10th about last month if unsigned.
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (21 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -170,6 +184,9 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `filePage`, `readPage`, `getPage` | yes | **How the page sends scans (v15+):** file a page (a few seconds, safe to repeat), then have it read in a separate request, then check on it if the reading reply was lost. Since v19 `filePage` also takes `reading`/`readError`, so a page Claude already read is filed as read. No single request has to wait for Drive and Claude together, because long requests were being cut off at 30s. |
 | `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again (Retry). |
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
+| `signStart`, `signPiece`, `signFinish` | yes | **Stage B (v21).** Sign off: checks the month (3 DVSA files, every page read, name, tick), receives the PDF in pieces, joins and size-checks it, files it in `Signed reports/`, and only then marks the month signed — and only if nothing changed since `signStart` (`monthStamp_`). Repeat-safe. |
+| `startAmend`, `cancelAmend` | yes | Amend needs the tick and a reason; keeps `details-vN.json`. Cancel restores pages, DVSA files and checklist exactly as signed (files moved back from / to `Removed/`). |
+| `getReport` | yes | A signed PDF, in pieces (latest version unless `version` given). |
 
 - **Secrets:** `DASHBOARD_PASSWORD` and `ANTHROPIC_API_KEY` are kept in
   Script Properties and must never be in `index.html`.
@@ -250,7 +267,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 28 back-office checks + 13 real-browser checks
+npm test               # 30 back-office checks + 14 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
@@ -318,8 +335,10 @@ From Ediz, in priority order:
    stages on a test copy: **A built and tested ✅** (13 Oct 2026). The TEST
    back office is deployed (its URL is in `test.html`, regenerate with
    `node tools/make-test-copy.js <url>` after every `index.html` change);
-   `test.html` needs to be on `main` to be reachable online. B (sign-off,
-   PDF, amend) next, then C (the Records screen) → (5) a trial month, then go
+   `test.html` needs to be on `main` to be reachable online. **B (sign-off,
+   PDF, amend) built and tested on the pretend Google ✅ (17 Oct 2026, back
+   office v21)**; still to do: deploy v21 to TEST and run the stage B
+   acceptance test against real Google. Then C (the Records screen) → (5) a trial month, then go
    live.
    **Do not merge this branch into `main` before go-live.** The new
    `index.html` needs the v13 back office. The live back office can be

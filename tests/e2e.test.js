@@ -23,6 +23,8 @@ const SCAN_A = tmpFile('scan-a.png', fx.png(60, 85, [240, 240, 235]));
 const SCAN_B = tmpFile('scan-b.png', fx.png(60, 85, [230, 236, 240]));
 const SCAN_C = tmpFile('scan-c.png', fx.png(85, 60, [235, 230, 240]));
 const CERT = tmpFile('cert.png', fx.png(60, 85, [250, 250, 250]));
+const SCAN_D = tmpFile('scan-d.png', fx.png(60, 85, [228, 232, 236]));
+const SCAN_E = tmpFile('scan-e.png', fx.png(60, 85, [226, 238, 230]));
 
 // Claude, pretending: QC pages get a registration and document type in turn.
 function fakeClaude() {
@@ -161,7 +163,8 @@ test('Paul fills in September; everything is filed and comes back on another com
     // 6. Another computer, nothing in its browser storage.
     const b = await newComputer(srv);
     await setMonth(b, '2026-09');
-    await b.waitForFunction(() => Object.keys(TEST_LOGS).length === 2 && TEST_QUALITY && TEST_QUALITY.site.tests === 210);
+    await b.waitForFunction(() => Object.keys(TEST_LOGS).length === 2 && TEST_QUALITY && TEST_QUALITY.site.tests === 210 && !dvsaLoading_ &&
+      ['statusLogDate', 'statusLogDuration', 'statusRating'].every(id => /Filed in Google Drive/.test(document.getElementById(id).textContent)));
     const seen = await b.evaluate(() => ({
       qc: savedPages_.qc.length, cert: savedPages_.cert.length,
       checklist: checklistState['0-1'], note: checklistNotes['0-1'],
@@ -534,5 +537,116 @@ test('pages are read first, then filed in the background with the reading, under
     assert.equal(reads, 2);
     assert.equal(srv.backend.call('loadMonth', { month: '2026-09' }).details.qcPages.filter(x => x.status === 'read').length, 2);
     await p.waitForFunction(() => document.getElementById('savingPanel').hidden, null, { timeout: 6000 });
+  } finally { srv.server.close(); }
+});
+
+test('stage B: nothing missing, sign off, locked, open the report, amend to v2, cancel an amendment', async () => {
+  const plan = [['AB12CDE', 'vt20_certificate'], ['AB12CDE', 'inspection_sheet'], ['AB12CDE', 'emissions_test'], ['AB12CDE', 'vt20_certificate'], ['AB12CDE', 'inspection_sheet']];
+  let n = 0;
+  const srv = await start(0, { claude: (kind) => kind === 'cert'
+    ? { status: 'success', result: { is_calibration_certificate: true, equipment_name: 'Roller Brake Tester', serial_number: '80780205', next_due: '31/10/2027', rotation: 0, confidence: 'high' } }
+    : { status: 'success', result: { category: 'mot_vehicle_paperwork', document_type: plan[n % plan.length][1], registration: plan[n++ % plan.length][0], tester_name: 'T STONE', rotation: 0, confidence: 'high' } } });
+  const signed = () => srv.backend.drive.list().filter(p => p.startsWith('Mortlake Garage Records/2026-09/Signed reports/'));
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.setInputFiles('#fileLogDate', LOG_SEP);
+    await p.setInputFiles('#fileLogDuration', LOG_SEP_DUR);
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
+    await p.evaluate(() => {
+      CHECKLIST.forEach((c, ci) => c.items.forEach((t, ii) => { checklistState[ci + '-' + ii] = 'yes'; }));
+      checklistState['2-0'] = 'no';          // a NO with no note yet
+      persistChecklistState();
+    });
+    await waitSaved(p);
+
+    // Something is missing: Sign off is greyed out and says exactly what.
+    assert.ok(await p.isVisible('#signOffBtn'));
+    assert.ok(await p.evaluate(() => document.getElementById('signOffBtn').classList.contains('is-blocked')));
+    assert.ok(await p.isVisible('.req'), 'required items carry a red asterisk');
+    await p.click('#signOffBtn');
+    const why = await p.textContent('#reportBlockers');
+    assert.match(why, /Not ready to sign off/);
+    assert.match(why, /AB12CDE is missing its emissions test/);
+    assert.match(why, /marked NO needs a note/);
+    assert.equal(await p.isVisible('#signDialog'), false);
+
+    // Put it right.
+    await p.setInputFiles('#fileQcScans', [SCAN_C]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 3 && !savesInFlight_);
+    await p.evaluate(() => { checklistNotes['2-0'] = 'New sign ordered, fitted by 30 Sept'; persistChecklistState(); });
+    await waitSaved(p);
+    assert.equal(await p.evaluate(() => signOffBlockers_().length), 0);
+
+    // The sign-off screen needs the tick and a name.
+    await p.click('#signOffBtn');
+    assert.ok(await p.isVisible('#signDialog'));
+    assert.ok(await p.isDisabled('#signGo'));
+    await p.check('#signConfirm');
+    assert.ok(await p.isDisabled('#signGo'), 'still needs a name');
+    await p.fill('#signName', 'Paul Testman');
+    assert.ok(await p.isEnabled('#signGo'));
+    await p.click('#signGo');
+    await p.waitForFunction(() => /Filed\. September 2026 is signed off/.test(document.getElementById('signProgressText').textContent), null, { timeout: 60000 });
+    assert.equal(signed().length, 1);
+    const v1 = srv.backend.drive.readBytes(signed()[0]);
+    assert.equal(v1.slice(0, 4).toString(), '%PDF');
+    assert.equal(details(srv, '2026-09').status, 'signed');
+
+    // Signed: locked, with the banner and Open report.
+    await p.click('#signProgressActions .btn-secondary');
+    assert.match(await p.textContent('#monthBanner'), /September 2026 is signed off\. Version 1, .* by Paul Testman/);
+    assert.ok(await p.evaluate(() => document.body.classList.contains('month-locked')));
+    assert.equal(await p.isVisible('#signOffBtn'), false);
+    await p.click('#monthBanner button:text-is("Open report")');
+    await p.waitForSelector('#pdfViewerBody iframe', { timeout: 20000 });
+    assert.match(await p.textContent('#pdfViewerSub'), /Version 1 · signed off .* by Paul Testman/);
+    await p.click('#pdfViewerActions >> text=Back');
+
+    // Amend: needs the tick and a reason; then the month unlocks.
+    await p.click('#monthBanner button:text-is("Amend")');
+    assert.ok(await p.isDisabled('#amendGo'));
+    await p.check('#amendConfirm');
+    await p.fill('#amendReason', 'short');
+    assert.ok(await p.isDisabled('#amendGo'), 'a reason of a few words is needed');
+    await p.fill('#amendReason', 'Second inspection sheet found for AB12CDE');
+    await p.click('#amendGo');
+    await p.waitForFunction(() => /You are amending September 2026/.test(document.getElementById('monthBanner').textContent));
+    assert.equal(await p.evaluate(() => document.body.classList.contains('month-locked')), false);
+    assert.match(await p.textContent('#signOffBtn'), /Sign off amendment/);
+    await p.setInputFiles('#fileQcScans', [SCAN_D]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 4 && !savesInFlight_);
+    await waitSaved(p);
+    await p.click('#signOffBtn');
+    await p.check('#signConfirm');
+    assert.equal(await p.inputValue('#signName'), 'Paul Testman', 'the name is remembered');
+    await p.click('#signGo');
+    await p.waitForFunction(() => /Filed\./.test(document.getElementById('signProgressText').textContent), null, { timeout: 60000 });
+    await p.click('#signProgressActions .btn-secondary');
+    assert.equal(signed().length, 2);
+    assert.deepEqual(srv.backend.drive.readBytes(signed().find(f => / v1 /.test(f))), v1, 'v1 untouched');
+    assert.match(await p.textContent('#monthBanner'), /Version 2/);
+    assert.match(await p.textContent('#monthBanner'), /Older versions, kept as signed: version 1/);
+
+    // An amendment that is cancelled leaves the month exactly as signed.
+    await p.click('#monthBanner button:text-is("Amend")');
+    await p.check('#amendConfirm');
+    await p.fill('#amendReason', 'Trying something that turns out to be wrong');
+    await p.click('#amendGo');
+    await p.waitForFunction(() => monthStatus_() === 'amending');
+    await p.setInputFiles('#fileQcScans', [SCAN_E]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 5 && !savesInFlight_);
+    await waitSaved(p);
+    await p.click('#monthBanner button:text-is("Cancel amendment")');
+    await p.waitForFunction(() => monthStatus_() === 'signed' && savedPages_.qc.length === 4, null, { timeout: 20000 });
+    assert.equal(details(srv, '2026-09').qcPages.length, 4);
+    assert.equal(signed().length, 2, 'no new version');
+    assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
