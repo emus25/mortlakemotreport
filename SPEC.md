@@ -137,13 +137,24 @@ Not started ──first thing added──▶ Draft ──all checks pass──�
 | **Amending** | Paul clicks Amend, ticks "I am amending September 2026" and gives a reason | Everything in Draft, plus **Sign off amendment** or **Cancel amendment** |
 | **Amended** | An amendment is signed off. It's shown as "Signed off · v2". | Open any version (the latest is shown first); amend again |
 
-**Checks that make a month "Ready"** (the same rules that block Generate
-today):
+**Checks that make a month "Ready"** (agreed 17 Oct 2026: nothing can be
+signed off with anything missing). Every required item is marked with a red
+**\*** on screen, and Sign off lists exactly what is still missing, each with
+a "Go there" link:
 1. All 3 DVSA files are in, and they're for this month.
-2. At least one QC page is in, and every page has been read.
-3. Every checklist question is answered.
+2. At least one QC page is in; every page has been read, saved and
+   identified (a page with no readable registration must be removed or
+   rescanned).
+3. **Every QC vehicle has its full set:** VT20, inspection sheet, and an
+   emissions test unless it's electric.
+4. Every checklist question is answered, and **every NO has a note**
+   saying what needs fixing.
+5. Any calibration certificate added has been read. (Certificates stay
+   optional.)
+6. Nothing is still saving or waiting for Retry.
 
-Calibration certificates stay optional.
+The back office checks what it can itself (the DVSA files are in and every
+page is read) and refuses a sign-off that fails, whatever the page says.
 
 **Locked means locked.** Once a month is signed off, the back office itself
 refuses any change to its pieces unless an amendment has been opened, with
@@ -185,13 +196,20 @@ new version alongside them. There is no "un-sign".
 - **Signed month:** a banner at the top says "September 2026 is signed off.
   Open report · Amend". All controls are read-only.
 - **Generate report** becomes **Preview report.** It shows the report and
-  saves nothing. Next to it, **Sign off** appears once the month is Ready.
+  saves nothing, and can be printed as today. Next to it is **Sign off**,
+  greyed out until the month is Ready; pressing it while greyed out shows
+  what is still missing.
+- **Reminder** (agreed 17 Oct 2026): from the 10th of the month, if last
+  month isn't signed off, a note at the top says so with a button to open
+  it. A month with an amendment in progress is also mentioned.
 
 ### 7.3 Sign off
 
 1. **Paul clicks Sign off.** A confirmation screen shows the month, the counts, and
    "I confirm this is a complete and accurate record for September 2026", with a
-   tick box and the button **Sign off and file**.
+   tick box \*, **his full name** \* (printed on page 1 as "Signed off by …"),
+   and the button **Sign off and file**, which stays greyed out until both are
+   filled in.
 2. **The app makes the PDF,** with a progress bar ("Making page 12 of 41…").
    This takes about 15–20 seconds.
 3. **The PDF is sent to the back office in pieces of about 5MB.** The progress bar shows
@@ -294,9 +312,11 @@ looks at one. That keeps opening a month quick.
   middle of a table. The test version got this wrong, and it must be fixed.
 - **Expected size** is roughly 10–20MB a month, depending on the scans. That's
   about 250MB a year, against 15GB of free Google storage.
-- **The first page** says which month it covers and when it was signed, and
-  every page carries "Mortlake Station Garage · September 2026 · v1 · page
-  X of Y".
+- **The first page** says which month it covers, when it was signed and by
+  whom, and every page carries "Mortlake Station Garage · September 2026 ·
+  v1 · page X of Y".
+- **Long tables** that run over a page repeat their column headings at the
+  top of the next page.
 
 ## 10. History
 
@@ -385,9 +405,14 @@ permission to use Drive.
   alongside his usual way. If it's right, the live app is switched over. The
   previous version is kept so the switch can be undone.
 
-## 15. Still to confirm
+## 15. Decided 17 Oct 2026
 
-1. **Sign-off wording.** Is the confirmation sentence in 7.3 right? Should Paul
-   also type his name?
-2. **History in the PDF.** Is printing the history on the last page useful,
-   or is it clutter?
+1. **Sign-off wording** stays as in 7.3, and Paul types his full name.
+2. **History** is printed on the last page of each signed PDF.
+3. **Preview report** replaces Generate; Sign off sits next to it.
+4. **Reminder** for an unsigned month from the 10th of the next month.
+5. **Nothing missing:** the stricter Ready checks in section 6, with red
+   asterisks on every required item.
+6. **The look of the app (UI redesign)** is done after stage C and before
+   the trial month, so it isn't redone as new screens arrive, and the trial
+   month tests the final look.
