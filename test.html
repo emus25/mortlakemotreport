@@ -1703,7 +1703,7 @@
      back office is being updated) shouldn't stop Paul opening the app.
      Saves are not repeated here: they have their own Retry. */
   var READ_ONLY_ACTIONS_ = { openSession: 1, loadMonth: 1, getDvsaFile: 1, getPageImage: 1, listMonths: 1, loadEquipment: 1,
-                            getPage: 1, filePage: 1 };   // filePage is safe to repeat: a filed page is recognised
+                            getPage: 1, filePage: 1, getReport: 1 };   // filePage is safe to repeat: a filed page is recognised
   var READ_RETRY_DELAY_MS = 2000;
 
   function api_(action, payload) {
@@ -6104,8 +6104,16 @@
     document.getElementById('pdfViewer').style.display = 'flex';
     document.body.style.overflow = 'hidden';
     var parts = [];
-    function get(i) {
-      return api_('getReport', { month: month, version: version || null, index: i }).then(function (r) {
+    // Google now and then stalls on one of these large answers and gives up
+    // after half a minute, so each piece is asked for up to three times.
+    function get(i, tries) {
+      tries = tries == null ? 2 : tries;
+      return apiOnce_('getReport', { month: month, version: version || null, index: i }).then(function (r) {
+        if ((r.noReply || r.status === 'busy') && tries > 0) {
+          var w = document.getElementById('viewerWait');
+          if (w) w.textContent = 'Google is slow — asking again…';
+          return get(i, tries - 1);
+        }
         if (r.status !== 'success') throw new Error(r.message || 'The report could not be fetched.');
         parts[i] = r.data;
         setTyreProgress_('viewerTyre', (i + 1) / r.pieces);

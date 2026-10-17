@@ -68,7 +68,14 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     const t = Date.now();
     const out = await p.evaluate(async ({ month, v }) => {
       let parts = [], i = 0, r;
-      do { r = await api_('getReport', { month, version: v, index: i }); if (r.status !== 'success') return { error: r.message }; parts.push(r.data); i++; } while (i < r.pieces);
+      let retries = 0;
+      do {
+        r = await apiOnce_('getReport', { month, version: v, index: i });
+        if (r.noReply && retries < 4) { retries++; continue; }   // the same patience the app has
+        if (r.status !== 'success') return { error: r.message };
+        parts.push(r.data); i++;
+      } while (i < r.pieces);
+      window.__retries = (window.__retries || 0) + retries;
       const bin = atob(parts.join('')); const bytes = new Uint8Array(bin.length);
       for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
       const h = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))).map(b => b.toString(16).padStart(2, '0')).join('');
