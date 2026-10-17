@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 20;
+var BACKEND_VERSION = 21;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -105,6 +105,13 @@ function route_(data) {
     case 'getPage':          return getPage_(data);
     case 'getErrors':        return { status: 'success', errors: readErrors_() };
     case 'loadEquipment':    return loadEquipment_();
+    // Stage B: signing off, amending, and opening a signed report.
+    case 'signStart':        return signStart_(data);
+    case 'signPiece':        return signPiece_(data);
+    case 'signFinish':       return signFinish_(data);
+    case 'startAmend':       return startAmend_(data);
+    case 'cancelAmend':      return cancelAmend_(data);
+    case 'getReport':        return getReport_(data);
     case 'saveEquipment':    return saveEquipment_(data);
   }
   return { status: 'error', message: 'Unknown action' };
@@ -509,7 +516,8 @@ var DEFAULT_RECORDS_FOLDER_NAME = 'Mortlake Garage Records';
 var DETAILS_FILE = 'details.json';
 var INDEX_FILE = 'records-index.json';
 var EQUIPMENT_FILE = 'equipment.json';
-var SUBFOLDERS = { qc: 'QC paperwork', cert: 'Calibration certificates', dvsa: 'DVSA files', removed: 'Removed' };
+var SUBFOLDERS = { qc: 'QC paperwork', cert: 'Calibration certificates', dvsa: 'DVSA files', removed: 'Removed',
+                   signed: 'Signed reports', uploading: 'Uploading (temporary)' };
 var DVSA_INPUTS = {
   fileLogDate: { label: 'Test log (by date)', base: 'test-log-by-date' },
   fileLogDuration: { label: 'Test log (by duration)', base: 'test-log-by-duration' },
@@ -932,7 +940,15 @@ function describeChecklistChange_(before, after) {
     return ((before.state || {})[k] || '') !== ((after.state || {})[k] || '') ||
            ((before.notes || {})[k] || '') !== ((after.notes || {})[k] || '');
   });
-  return 'Checklist: ' + changed.length + ' answer' + (changed.length === 1 ? '' : 's') + ' changed';
+  // Each change is spelled out (question 3.5: YES → NO), so an amended report
+  // can list exactly what changed since it was signed.
+  function show(v) { return v ? String(v).toUpperCase() : 'not answered'; }
+  var parts = changed.sort().map(function (k) {
+    var n = k.split('-').map(function (x) { return (parseInt(x, 10) || 0) + 1; }).join('.');
+    var a = (before.state || {})[k] || '', b = (after.state || {})[k] || '';
+    return a !== b ? 'question ' + n + ': ' + show(a) + ' → ' + show(b) : 'question ' + n + ': note changed';
+  });
+  return 'Checklist: ' + (parts.length > 6 ? parts.length + ' answers changed' : parts.join('; '));
 }
 
 /* Files one of the three DVSA exports, replacing any earlier one for the same
@@ -1480,4 +1496,332 @@ function migrateLegacy_(data) {
     if (!already) props.setProperty('RECORDS_MIGRATED', nowIso_());
     return { status: 'success', alreadyMigrated: already, monthsUpdated: Object.keys(touched).sort() };
   });
+}
+
+/* ═══════════════ Stage B: signing off and amending (v21) ═══════════════
+ * SPEC.md sections 6 and 7.3–7.5. The page makes the report PDF and sends it
+ * here in pieces (a 20MB file is too big for one request). Nothing is ever
+ * half-signed: the month only becomes "signed" after the whole PDF has been
+ * joined, saved and checked against the size that was sent. A signed PDF is
+ * never changed or deleted by anything here.
+ *
+ *   signStart   checks the month is ready, notes what it looks like, and
+ *               hands back an upload id (plus the month's details, so the
+ *               PDF is built from exactly what is filed)
+ *   signPiece   stores one piece in "Uploading (temporary)"
+ *   signFinish  joins the pieces, files the PDF, then — only if the month
+ *               hasn't changed since signStart — marks it signed. Safe to send
+ *               twice: a finished upload is recognised.
+ *   startAmend  needs a reason; keeps a copy of the month as signed
+ *               (details-vN.json) and unlocks it
+ *   cancelAmend puts the month back exactly as it was signed
+ *   getReport   a signed PDF, in pieces */
+
+var UPLOAD_PREFIX = 'UPL_';
+var REPORT_PIECE_CHARS = 4000000;      // base64 characters per piece sent back (about 3MB)
+var MAX_REPORT_BYTES = 60 * 1024 * 1024;
+
+function signedFolder_(month) {
+  return folderAt_('s_' + month + '_signed', function () { return monthFolder_(month, true); }, SUBFOLDERS.signed, true);
+}
+function uploadingFolder_(month) {
+  return folderAt_('s_' + month + '_uploading', function () { return monthFolder_(month, true); }, SUBFOLDERS.uploading, true);
+}
+
+/* What the back office itself insists on before anything is signed. The page
+   checks more (each vehicle's full set, a note on every NO), but these are
+   the things that must never be wrong, whatever the page says. */
+function serverSignBlockers_(d) {
+  var out = [];
+  Object.keys(DVSA_INPUTS).forEach(function (id) {
+    if (!d.dvsaFiles[id]) out.push(DVSA_INPUTS[id].label + ' is not filed');
+  });
+  if (!d.qcPages.length) out.push('No QC paperwork is filed');
+  var unread = d.qcPages.concat(d.certPages).filter(function (p) { return p.status !== 'read'; }).length;
+  if (unread) out.push(unread + ' page' + (unread === 1 ? ' has' : 's have') + ' not been read');
+  return out;
+}
+
+// A fingerprint of everything that goes into the report, so a change made
+// while the PDF was being built and sent is noticed instead of filed.
+function monthStamp_(d) {
+  return sha256Hex_(JSON.stringify({
+    q: d.qcPages.map(function (p) { return p.id + ':' + p.status; }),
+    c: d.certPages.map(function (p) { return p.id + ':' + p.status; }),
+    f: Object.keys(d.dvsaFiles).sort().map(function (k) { return k + ':' + d.dvsaFiles[k].fileId; }),
+    r: d.revisions
+  })).slice(0, 24);
+}
+
+function readUpload_(id) {
+  if (!/^[a-f0-9]{32}$/.test(String(id || ''))) throw appError_('error', 'That upload is not recognised.');
+  var raw = prop_(UPLOAD_PREFIX + id);
+  return raw ? JSON.parse(raw) : null;
+}
+
+function signStart_(data) {
+  var month = checkMonth_(data.month);
+  var mode = data.mode === 'amend' ? 'amend' : 'sign';
+  var bytes = parseInt(data.bytes, 10), pieces = parseInt(data.pieces, 10);
+  var signedBy = String(data.signedBy || '').replace(/\s+/g, ' ').trim();
+  if (data.confirm !== true) throw appError_('error', 'Tick the box to confirm the record is complete and accurate.');
+  if (signedBy.length < 3 || signedBy.length > 80) throw appError_('error', 'Type your full name to sign off.');
+  if (!(bytes > 0 && bytes <= MAX_REPORT_BYTES)) throw appError_('error', 'The report is an unexpected size.');
+  if (!(pieces >= 1 && pieces <= 100)) throw appError_('error', 'The report is an unexpected size.');
+  return withLock_(function () {
+    flushPages_(month);
+    memo_ = {};
+    var ctx = openMonth_(month, false);
+    if (!ctx) throw appError_('missing', 'Nothing is filed for ' + formatMonthName_(month) + ' yet.');
+    var d = ctx.details;
+    if (d.status === 'signed') throw appError_('locked', formatMonthName_(month) + ' is already signed off.');
+    if (mode === 'sign' && d.status !== 'draft') throw appError_('error', formatMonthName_(month) + ' is being amended: use Sign off amendment.');
+    if (mode === 'amend' && d.status !== 'amending') throw appError_('error', formatMonthName_(month) + ' is not being amended.');
+    var blockers = serverSignBlockers_(d);
+    if (blockers.length) throw appError_('error', 'Not ready to sign off: ' + blockers.join('; ') + '.');
+    // A new sign-off replaces any earlier unfinished one for this month, and
+    // uploads abandoned more than a day ago are forgotten.
+    var all = allProps_(true);
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf(UPLOAD_PREFIX) !== 0) return;
+      try {
+        var u = JSON.parse(all[k]);
+        if (u.month === month || Date.now() - new Date(u.startedAt).getTime() > 86400000) dropProp_(k);
+      } catch (e) { dropProp_(k); }
+    });
+    var id = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '').slice(0, 32);
+    var version = (d.signedVersion || 0) + 1;
+    putProp_(UPLOAD_PREFIX + id, JSON.stringify({
+      month: month, mode: mode, bytes: bytes, pieces: pieces, signedBy: signedBy,
+      stamp: monthStamp_(d), version: version, startedAt: nowIso_()
+    }));
+    return { status: 'success', uploadId: id, version: version, details: publicDetails_(d) };
+  });
+}
+
+function pieceName_(id, i) { return id + '-' + ('00' + i).slice(-3) + '.b64'; }
+
+function signPiece_(data) {
+  var up = readUpload_(data.uploadId);
+  if (!up) throw appError_('missing', 'That upload has expired. Press Sign off again.');
+  var i = parseInt(data.index, 10);
+  if (!(i >= 0 && i < up.pieces)) throw appError_('error', 'Unexpected piece of the report.');
+  var text = String(data.data || '');
+  if (!/^[A-Za-z0-9+/=]*$/.test(text) || !text) throw appError_('error', 'A piece of the report arrived damaged.');
+  var folder = uploadingFolder_(up.month);
+  var existing = childFile_(folder, pieceName_(data.uploadId, i));
+  if (existing) existing.setContent(text); else folder.createFile(pieceName_(data.uploadId, i), text, 'text/plain');
+  return { status: 'success', index: i };
+}
+
+function signFinish_(data) {
+  var id = data.uploadId;
+  var up = readUpload_(id);
+  var month = checkMonth_(data.month);
+  function alreadyFiled() {
+    var ctx = openMonth_(month, false);
+    var v = ctx && (ctx.details.versions || []).filter(function (x) { return x.uploadId === id; })[0];
+    return v ? { status: 'success', version: publicVersion_(v), details: publicDetails_(ctx.details) } : null;
+  }
+  if (!up) {
+    var done = alreadyFiled();
+    if (done) return done;
+    throw appError_('missing', 'That upload has expired. Press Sign off again.');
+  }
+  if (up.month !== month) throw appError_('error', 'That upload belongs to another month.');
+
+  // 1. Join the pieces and check the result, outside the lock (slow).
+  var folder = uploadingFolder_(month);
+  var pieceFiles = [], text = '';
+  for (var i = 0; i < up.pieces; i++) {
+    var f = childFile_(folder, pieceName_(id, i));
+    if (!f) throw appError_('missing', 'Part of the report did not arrive. Press Sign off again.');
+    pieceFiles.push(f);
+    text += f.getBlob().getDataAsString();
+  }
+  var bytes = Utilities.base64Decode(text);
+  text = null;
+  if (bytes.length !== up.bytes || bytes[0] !== 37 || bytes[1] !== 80 || bytes[2] !== 68 || bytes[3] !== 70) {
+    throw appError_('error', 'The report arrived damaged (' + bytes.length + ' of ' + up.bytes + ' bytes). Nothing was signed. Press Sign off again.');
+  }
+  var date = nowIso_().slice(0, 10);
+  var name = 'Mortlake DVSA report – ' + formatMonthName_(month) + ' – v' + up.version + ' – ' +
+             (up.mode === 'amend' ? 'amended ' : 'signed ') + date + '.pdf';
+  var pdf = signedFolder_(month).createFile(Utilities.newBlob(bytes, 'application/pdf', name));
+  bytes = null;
+  if (pdf.getSize() !== up.bytes) {
+    pdf.setTrashed(true);
+    throw appError_('error', 'The report could not be saved completely. Nothing was signed. Press Sign off again.');
+  }
+
+  // 2. Only now is the month marked as signed — and only if nothing changed.
+  var out;
+  try {
+    out = withLock_(function () {
+      flushPages_(month);
+      memo_ = {};
+      var ctx = openMonth_(month, false);
+      var d = ctx.details;
+      var dup = (d.versions || []).filter(function (x) { return x.uploadId === id; })[0];
+      if (dup) return { duplicate: true, version: dup, details: d };
+      var expected = up.mode === 'amend' ? 'amending' : 'draft';
+      if (d.status !== expected) throw appError_('conflict', formatMonthName_(month) + ' changed while it was being signed off. Nothing was signed.');
+      if (monthStamp_(d) !== up.stamp) throw appError_('conflict', 'Something in ' + formatMonthName_(month) + ' changed while the report was being made, so it was not signed. Press Sign off again.');
+      var reason = up.mode === 'amend' && d.amendment ? d.amendment.reason : null;
+      var v = {
+        version: up.version, fileId: pdf.getId(), fileName: name, size: up.bytes, signedAt: nowIso_(),
+        signedBy: up.signedBy, kind: up.mode, reason: reason, uploadId: id
+      };
+      d.versions = (d.versions || []).concat([v]);
+      d.signedVersion = up.version;
+      d.status = 'signed';
+      var eq = readEquipment_();
+      d.calibrationSnapshot = eq ? eq.list : null;
+      d.amendment = null;
+      addHistory_(d, up.mode === 'amend'
+        ? 'Amendment signed off as version ' + up.version + ' by ' + up.signedBy + '. Reason: ' + reason
+        : 'Signed off as version ' + up.version + ' by ' + up.signedBy);
+      saveMonth_(ctx);
+      return { version: v, details: d };
+    });
+  } catch (e) {
+    try { pdf.setTrashed(true); } catch (e2) {}   // never part of the records
+    throw e;
+  }
+  if (out.duplicate) { try { pdf.setTrashed(true); } catch (e) {} }
+
+  // 3. Tidy the pieces away (they were never part of the records), along
+  //    with any left by earlier attempts that didn't finish.
+  dropProp_(UPLOAD_PREFIX + id);
+  try {
+    var it = folder.getFiles();
+    while (it.hasNext()) {
+      var pf = it.next();
+      var owner = String(pf.getName()).slice(0, 32);
+      if (owner === id || !prop_(UPLOAD_PREFIX + owner)) pf.setTrashed(true);
+    }
+  } catch (e) { logError_('signFinish', 'Could not tidy the upload pieces: ' + e.message); }
+  return { status: 'success', version: publicVersion_(out.version), details: publicDetails_(out.details) };
+}
+
+function publicVersion_(v) {
+  return { version: v.version, fileName: v.fileName, size: v.size, signedAt: v.signedAt,
+           signedBy: v.signedBy, kind: v.kind, reason: v.reason || null };
+}
+
+function startAmend_(data) {
+  var month = checkMonth_(data.month);
+  var reason = String(data.reason || '').replace(/\s+/g, ' ').trim();
+  if (data.confirm !== true) throw appError_('error', 'Tick the box to confirm you are amending this month.');
+  if (reason.length < 10) throw appError_('error', 'Give a reason for the amendment (a few words at least).');
+  if (reason.length > 500) reason = reason.slice(0, 500);
+  return withLock_(function () {
+    flushPages_(month);
+    memo_ = {};
+    var ctx = openMonth_(month, false);
+    if (!ctx) throw appError_('missing', 'Nothing is filed for ' + formatMonthName_(month) + '.');
+    var d = ctx.details;
+    if (d.status === 'amending') throw appError_('error', formatMonthName_(month) + ' is already being amended.');
+    if (d.status !== 'signed') throw appError_('error', formatMonthName_(month) + ' has not been signed off, so there is nothing to amend.');
+    var v = d.signedVersion;
+    // The month exactly as signed, kept so the amendment can be cancelled.
+    writeJsonAt_('snap_' + month + '_' + v, ctx.folder, 'details-v' + v + '.json', d);
+    d.status = 'amending';
+    d.amendment = { reason: reason, startedAt: nowIso_(), fromVersion: v };
+    addHistory_(d, 'Amendment started (from version ' + v + '). Reason: ' + reason);
+    saveMonth_(ctx);
+    return { status: 'success', details: publicDetails_(d) };
+  });
+}
+
+function cancelAmend_(data) {
+  var month = checkMonth_(data.month);
+  var moves = withLock_(function () {
+    flushPages_(month);
+    memo_ = {};
+    var ctx = openMonth_(month, false);
+    if (!ctx || ctx.details.status !== 'amending') throw appError_('error', formatMonthName_(month) + ' is not being amended.');
+    var d = ctx.details;
+    var v = d.amendment.fromVersion;
+    var snap = readJsonAt_('snap_' + month + '_' + v, ctx.folder, 'details-v' + v + '.json');
+    if (!snap) throw appError_('missing', 'The copy of ' + formatMonthName_(month) + ' as signed is missing, so the amendment cannot be cancelled.');
+
+    function filesOf(x) {
+      var list = [];
+      x.qcPages.concat(x.certPages).forEach(function (p) { list.push({ fileId: p.fileId, kind: p.kind, name: p.fileName, page: p }); });
+      Object.keys(x.dvsaFiles).forEach(function (k) {
+        var e = x.dvsaFiles[k];
+        var ext = (String(e.fileName).match(/\.[A-Za-z0-9]{1,5}$/) || ['.xlsx'])[0].toLowerCase();
+        list.push({ fileId: e.fileId, kind: 'dvsa', name: DVSA_INPUTS[k].base + ext });
+      });
+      return list;
+    }
+    var now = filesOf(d), then = filesOf(snap);
+    var ids = function (l) { var o = {}; l.forEach(function (x) { o[x.fileId] = true; }); return o; };
+    var nowIds = ids(now), thenIds = ids(then);
+    var toRemove = now.filter(function (x) { return !thenIds[x.fileId]; });
+    var toRestore = then.filter(function (x) { return !nowIds[x.fileId]; });
+
+    var back = JSON.parse(JSON.stringify(snap));
+    back.status = 'signed';
+    back.amendment = null;
+    back.versions = d.versions;
+    back.signedVersion = d.signedVersion;
+    back.nextPageNo = Math.max(d.nextPageNo || 1, snap.nextPageNo || 1);
+    // Revision numbers move on, so a save from a screen opened during the
+    // amendment is refused rather than undoing the cancel.
+    back.revisions = { checklist: (d.revisions.checklist || 0) + 1, dvsa: (d.revisions.dvsa || 0) + 1 };
+    back.removedPages = (d.removedPages || []).concat(toRemove.filter(function (x) { return x.page; }).map(function (x) {
+      var p = JSON.parse(JSON.stringify(x.page)); p.removedAt = nowIso_(); return p;
+    }));
+    back.history = d.history.slice();
+    addHistory_(back, 'Amendment cancelled: back to version ' + v + ' exactly as signed');
+
+    // Quick storage is cleared, so details.json is the one true copy again.
+    var all = allProps_(true);
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf('PG_' + month + '_') === 0 || k.indexOf('PGX_' + month + '_') === 0 ||
+          k.indexOf('HB_' + month + '_') === 0) dropProp_(k);
+    });
+    ['PGDIRTY_', 'PGNEXT_', 'PGLIVE_'].forEach(function (k) { dropProp_(k + month); });
+    ctx.details = back;
+    saveMonth_(ctx);
+    return { toRemove: toRemove, toRestore: toRestore, details: back, folder: ctx.folder };
+  });
+
+  // Moving files is Drive work, so it happens after the lock is released.
+  var ctx = { folder: moves.folder, details: { month: month } };
+  moves.toRemove.forEach(function (x) {
+    try { moveToRemoved_(ctx, DriveApp.getFileById(x.fileId)); }
+    catch (e) { logError_('cancelAmend', 'Could not move ' + x.name + ' to Removed: ' + e.message); }
+  });
+  moves.toRestore.forEach(function (x) {
+    try {
+      var f = DriveApp.getFileById(x.fileId);
+      f.setName(x.name);
+      f.moveTo(subFolder_(ctx, x.kind));
+    } catch (e) { logError_('cancelAmend', 'Could not put back ' + x.name + ': ' + e.message); }
+  });
+  return { status: 'success', details: publicDetails_(moves.details) };
+}
+
+function getReport_(data) {
+  var month = checkMonth_(data.month);
+  var ctx = openMonth_(month, false);
+  var versions = ctx ? ctx.details.versions || [] : [];
+  if (!versions.length) throw appError_('missing', formatMonthName_(month) + ' has no signed report.');
+  var want = parseInt(data.version, 10) || versions[versions.length - 1].version;
+  var v = versions.filter(function (x) { return x.version === want; })[0];
+  if (!v) throw appError_('missing', 'Version ' + want + ' of ' + formatMonthName_(month) + ' does not exist.');
+  var file;
+  try { file = DriveApp.getFileById(v.fileId); }
+  catch (e) { throw appError_('missing', 'The signed report is missing from Google Drive: ' + v.fileName); }
+  var all = Utilities.base64Encode(file.getBlob().getBytes());
+  var pieces = Math.max(1, Math.ceil(all.length / REPORT_PIECE_CHARS));
+  var i = parseInt(data.index, 10) || 0;
+  if (i < 0 || i >= pieces) throw appError_('error', 'Unexpected piece of the report.');
+  return {
+    status: 'success', version: publicVersion_(v), pieces: pieces, index: i,
+    data: all.substr(i * REPORT_PIECE_CHARS, REPORT_PIECE_CHARS), url: file.getUrl()
+  };
 }

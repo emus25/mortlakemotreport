@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 20);
+  assert.equal(b.call('getVersion', { password: '' }).version, 21);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 20);
+  assert.equal(r.version, 21);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -470,4 +470,162 @@ test('logging in gives a 30-day pass; the password is never needed again, and gu
   assert.equal(raw({ action: 'listMonths', token: third }).status, 'forbidden');
   assert.equal(raw({ action: 'checkDashboardPassword', password: 'new-password' }).status, 'success');
   assert.equal([...b.props.keys()].filter(k => k.startsWith('TOK_')).length, 1, 'old passes tidied away');
+});
+
+/* ── Stage B: signing off and amending ── */
+
+// A month that is ready to sign: 3 DVSA files and two read QC pages.
+function readyMonth(b, month) {
+  if (b.call('loadEquipment').revision === 0) b.call('saveEquipment', { list: [{ name: 'Roller Brake Tester', serial: '80780205', date: '2027-05-14' }], baseRevision: 0 });
+  ['fileLogDate', 'fileLogDuration', 'fileRating'].forEach((inputId, i) =>
+    assert.equal(b.call('saveDvsaFile', { month, inputId, fileName: inputId + '.xlsx', base64: Buffer.from('xlsx-' + i).toString('base64') }).status, 'success'));
+  b.call('filePage', { month, kind: 'qc', imageBase64: IMG, fingerprint: 'fp-a', sourceName: 'a.jpg', reading: QC_READ });
+  b.call('filePage', { month, kind: 'qc', imageBase64: IMG2, fingerprint: 'fp-b', sourceName: 'b.jpg', reading: QC_READ });
+}
+// A small fake PDF, sent in pieces the way the page does it.
+function fakePdf(text) { return Buffer.from('%PDF-1.4 ' + text + ' ' + 'x'.repeat(5000)); }
+function sign(b, month, pdf, opts) {
+  opts = opts || {};
+  const b64 = pdf.toString('base64');
+  const size = 2000;   // base64 characters per piece (a multiple of 4)
+  const pieces = Math.ceil(b64.length / size);
+  const start = b.call('signStart', { month, mode: opts.mode || 'sign', bytes: pdf.length, pieces, signedBy: 'Paul Testman', confirm: true });
+  if (start.status !== 'success') return start;
+  for (let i = 0; i < pieces; i++) {
+    if (opts.skipPiece === i) continue;
+    assert.equal(b.call('signPiece', { uploadId: start.uploadId, index: i, data: b64.substr(i * size, size) }).status, 'success');
+  }
+  if (opts.beforeFinish) opts.beforeFinish(start);
+  return Object.assign(b.call('signFinish', { month, uploadId: start.uploadId }), { uploadId: start.uploadId, start });
+}
+const signedPdfs = (b, month) => b.drive.list().filter(p => p.startsWith('Mortlake Garage Records/' + month + '/Signed reports/'));
+
+test('signing off files the PDF, locks the month, and is never half-done', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  // Not ready: refused, and says why.
+  b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'a.xlsx', base64: 'eA==' });
+  const early = b.call('signStart', { month, bytes: 100, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+  assert.equal(early.status, 'error');
+  assert.match(early.message, /Test log \(by duration\) is not filed.*No QC paperwork/);
+  readyMonth(b, month);
+  // A name and the tick are required.
+  assert.match(b.call('signStart', { month, bytes: 100, pieces: 1, signedBy: 'P', confirm: true }).message, /full name/);
+  assert.match(b.call('signStart', { month, bytes: 100, pieces: 1, signedBy: 'Paul Testman' }).message, /Tick the box/);
+
+  // A piece goes missing: nothing is signed, nothing is filed.
+  const lost = sign(b, month, fakePdf('lost'), { skipPiece: 1 });
+  assert.equal(lost.status, 'missing');
+  assert.equal(b.call('loadMonth', { month }).details.status, 'draft');
+  assert.deepEqual(signedPdfs(b, month), []);
+  // The size doesn't match what was promised: nothing is signed.
+  const pdf0 = fakePdf('short');
+  const st = b.call('signStart', { month, bytes: pdf0.length + 10, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+  b.call('signPiece', { uploadId: st.uploadId, index: 0, data: pdf0.toString('base64') });
+  assert.match(b.call('signFinish', { month, uploadId: st.uploadId }).message, /damaged/);
+  assert.equal(b.call('loadMonth', { month }).details.status, 'draft');
+  // Something changes while the report is being made: refused, the PDF is not kept.
+  const changed = sign(b, month, fakePdf('changed'), { beforeFinish: () =>
+    b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '0-0': 'yes' }, notes: {} }, baseRevision: 0 }) });
+  assert.equal(changed.status, 'conflict');
+  assert.deepEqual(signedPdfs(b, month), []);
+
+  // The real thing.
+  const pdf = fakePdf('version one');
+  const ok = sign(b, month, pdf);
+  assert.equal(ok.status, 'success');
+  assert.equal(ok.version.version, 1);
+  assert.equal(ok.version.signedBy, 'Paul Testman');
+  const files = signedPdfs(b, month);
+  assert.equal(files.length, 1);
+  assert.match(files[0], /Mortlake DVSA report – September 2026 – v1 – signed \d{4}-\d{2}-\d{2}\.pdf$/);
+  assert.deepEqual(b.drive.readBytes(files[0]), pdf);
+  assert.ok(!b.drive.list().some(p => p.includes('Uploading')), 'the pieces are tidied away');
+  const d = b.call('loadMonth', { month }).details;
+  assert.equal(d.status, 'signed');
+  assert.equal(d.signedVersion, 1);
+  assert.ok(d.calibrationSnapshot, 'calibration dates kept as they were at sign-off');
+  assert.ok(d.history.some(h => /Signed off as version 1 by Paul Testman/.test(h.what)));
+  assert.equal(b.call('listMonths').months[month].status, 'signed');
+  // Sending the finish again is harmless.
+  assert.equal(b.call('signFinish', { month, uploadId: ok.uploadId }).status, 'success');
+  assert.equal(signedPdfs(b, month).length, 1);
+
+  // Locked: every kind of change is refused by the back office itself.
+  assert.equal(b.call('saveMonthFields', { month, field: 'checklist', value: { state: {}, notes: {} }, baseRevision: d.revisions.checklist }).status, 'locked');
+  assert.equal(b.call('saveDvsaFile', { month, inputId: 'fileRating', fileName: 'x.xlsx', base64: 'eA==' }).status, 'locked');
+  assert.equal(b.call('filePage', { month, kind: 'qc', imageBase64: IMG, fingerprint: 'new', reading: QC_READ }).status, 'locked');
+  assert.equal(b.call('removePage', { month, kind: 'qc', id: d.qcPages[0].id }).status, 'locked');
+  assert.equal(b.call('signStart', { month, bytes: 100, pieces: 1, signedBy: 'Paul Testman', confirm: true }).status, 'locked');
+
+  // Opening the report gives back exactly the signed bytes, in pieces.
+  const first = b.call('getReport', { month });
+  assert.equal(first.version.version, 1);
+  let all = first.data;
+  for (let i = 1; i < first.pieces; i++) all += b.call('getReport', { month, version: 1, index: i }).data;
+  assert.deepEqual(Buffer.from(all, 'base64'), pdf);
+});
+
+test('amending needs a reason, files v2 next to an untouched v1, and cancelling puts everything back', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  readyMonth(b, month);
+  const v1pdf = fakePdf('version one');
+  assert.equal(sign(b, month, v1pdf).status, 'success');
+  const v1Path = signedPdfs(b, month)[0];
+  const asSigned = b.call('loadMonth', { month }).details;
+
+  // A reason is required.
+  assert.match(b.call('startAmend', { month, confirm: true, reason: 'oops' }).message, /reason/);
+  assert.match(b.call('startAmend', { month, reason: 'Missing inspection sheet for AB12CDE' }).message, /Tick the box/);
+
+  // --- Amendment 1: cancelled. ---
+  let r = b.call('startAmend', { month, confirm: true, reason: 'Missing inspection sheet for AB12CDE' });
+  assert.equal(r.status, 'success');
+  assert.equal(r.details.status, 'amending');
+  assert.ok(b.drive.list().includes('Mortlake Garage Records/2026-09/details-v1.json'));
+  // Change everything: replace a DVSA file, remove a page, add a page, change the checklist.
+  b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'corrected.xlsx', base64: Buffer.from('xlsx-new').toString('base64') });
+  b.call('removePage', { month, kind: 'qc', id: asSigned.qcPages[0].id });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p3').toString('base64'), fingerprint: 'fp-c', sourceName: 'c.jpg', reading: QC_READ });
+  b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '2-3': 'no' }, notes: { '2-3': 'x' } }, baseRevision: asSigned.revisions.checklist });
+  r = b.call('cancelAmend', { month });
+  assert.equal(r.status, 'success');
+  const back = b.call('loadMonth', { month }).details;
+  assert.equal(back.status, 'signed');
+  assert.deepEqual(back.qcPages.map(p => p.id), asSigned.qcPages.map(p => p.id), 'pages exactly as signed');
+  assert.deepEqual(back.dvsaFiles, asSigned.dvsaFiles, 'DVSA files exactly as signed');
+  assert.deepEqual(back.checklist, asSigned.checklist, 'checklist exactly as signed');
+  assert.deepEqual(b.drive.readBytes('Mortlake Garage Records/2026-09/DVSA files/test-log-by-date.xlsx'), Buffer.from('xlsx-0'), 'the original file is back');
+  assert.ok(b.drive.list().includes('Mortlake Garage Records/2026-09/QC paperwork/page-001.jpg'), 'the removed page is back');
+  assert.ok(!b.drive.list().includes('Mortlake Garage Records/2026-09/QC paperwork/page-003.jpg'), 'the added page went to Removed');
+  assert.ok(b.drive.list().some(p => /Removed\/removed .* page-003\.jpg$/.test(p)));
+  assert.ok(back.history.some(h => /Amendment cancelled/.test(h.what)));
+  assert.equal(b.call('saveMonthFields', { month, field: 'checklist', value: { state: {}, notes: {} }, baseRevision: back.revisions.checklist }).status, 'locked');
+
+  // --- Amendment 2: signed off as v2. ---
+  b.call('startAmend', { month, confirm: true, reason: 'Corrected test log export' });
+  b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'corrected.xlsx', base64: Buffer.from('xlsx-new').toString('base64') });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p4').toString('base64'), fingerprint: 'fp-d', sourceName: 'd.jpg', reading: QC_READ });
+  const cur = b.call('loadMonth', { month }).details;
+  b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '0-0': 'yes' }, notes: {} }, baseRevision: cur.revisions.checklist });
+  // Plain "Sign off" is refused while amending; it has to be "Sign off amendment".
+  assert.equal(sign(b, month, fakePdf('wrong mode')).status, 'error');
+  const v2pdf = fakePdf('version two');
+  const v2 = sign(b, month, v2pdf, { mode: 'amend' });
+  assert.equal(v2.status, 'success');
+  assert.equal(v2.version.version, 2);
+  assert.equal(v2.version.reason, 'Corrected test log export');
+  const files = signedPdfs(b, month);
+  assert.equal(files.length, 2);
+  assert.ok(files.some(p => /– v2 – amended /.test(p)));
+  assert.deepEqual(b.drive.readBytes(v1Path), v1pdf, 'v1 is untouched, byte for byte');
+  const d = b.call('loadMonth', { month }).details;
+  assert.equal(d.status, 'signed');
+  assert.equal(d.signedVersion, 2);
+  assert.equal(d.versions.length, 2);
+  assert.ok(d.history.some(h => /question 1\.1: not answered → YES/.test(h.what)), 'checklist changes are spelled out');
+  // Open report shows the latest by default; v1 can still be opened.
+  assert.equal(b.call('getReport', { month }).version.version, 2);
+  assert.equal(b.call('getReport', { month, version: 1 }).version.version, 1);
 });
