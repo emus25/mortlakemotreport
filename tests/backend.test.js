@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 23);
+  assert.equal(b.call('getVersion', { password: '' }).version, 24);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 23);
+  assert.equal(r.version, 24);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -641,4 +641,30 @@ test('amending needs a reason, files v2 next to an untouched v1, and cancelling 
   // Open report shows the latest by default; v1 can still be opened.
   assert.equal(b.call('getReport', { month }).version.version, 2);
   assert.equal(b.call('getReport', { month, version: 1 }).version.version, 1);
+});
+
+test('opening a month is quick: no rewriting on every open, yet nothing is missing (v24)', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  readyMonth(b, month);
+  b.call('loadMonth', { month });                    // first open brings details.json up to date
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p9').toString('base64'), fingerprint: 'fp-9', sourceName: 'late.jpg', reading: QC_READ });
+  const before = b.drive.readText('Mortlake Garage Records/2026-09/details.json');
+  const writes = b.drive.calls.n;
+  const r = b.call('loadMonth', { month });
+  assert.equal(b.drive.readText('Mortlake Garage Records/2026-09/details.json'), before, 'not rewritten on this open');
+  assert.ok(b.drive.calls.n - writes <= 3, 'only a read or two, took ' + (b.drive.calls.n - writes));
+  assert.equal(r.details.qcPages.length, 3, 'the newest page is there');
+  assert.ok(r.details.history.some(h => /late\.jpg/.test(h.what)), 'and its history line');
+  // Signing off still writes everything into details.json first; the size can come at the end.
+  const pdf = fakePdf('sizes at the end');
+  const b64 = pdf.toString('base64');
+  const st = b.call('signStart', { month, signedBy: 'Paul Testman', confirm: true });
+  assert.equal(st.status, 'success');
+  assert.equal(st.details.qcPages.length, 3);
+  assert.ok(JSON.parse(b.drive.readText('Mortlake Garage Records/2026-09/details.json')).qcPages.length === 3, 'details.json up to date before signing');
+  for (let i = 0; i * 3000 < b64.length; i++) b.call('signPiece', { uploadId: st.uploadId, index: i, data: b64.substr(i * 3000, 3000) });
+  const fin = b.call('signFinish', { month, uploadId: st.uploadId, bytes: pdf.length, pieces: Math.ceil(b64.length / 3000) });
+  assert.equal(fin.status, 'success');
+  assert.equal(fin.version.version, 1);
 });

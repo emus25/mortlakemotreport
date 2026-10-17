@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 23;
+var BACKEND_VERSION = 24;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -881,10 +881,18 @@ function listMonths_() {
   return { status: 'success', months: readIndex_().months };
 }
 
+/* Opening a month used to rewrite its details.json every time anything had
+   changed, which made opening take 8 seconds (v24, 17 Oct 2026). Now the
+   page list and any new history lines are read straight from quick storage,
+   and details.json is brought up to date only if it is more than
+   FLUSH_EVERY_MS behind — and always before signing off or amending. */
+var FLUSH_EVERY_MS = 30 * 60 * 1000;
+
 function loadMonth_(month) {
   checkMonth_(month);
-  // Opening a month brings its Drive record up to date with quick storage.
-  if (pagesLive_(month) && allProps_()['PGDIRTY_' + month]) {
+  var all = allProps_();
+  var dirty = all['PGDIRTY_' + month];
+  if (pagesLive_(month) && dirty && Date.now() - new Date(all['PGFLUSHED_' + month] || 0).getTime() > FLUSH_EVERY_MS) {
     withLock_(function () { flushPages_(month); });
     memo_ = {};
   }
@@ -895,8 +903,18 @@ function loadMonth_(month) {
     var live = readLivePages_(month);
     d.qcPages = live.qc;
     d.certPages = live.cert;
+    d.history = d.history.concat(liveHistory_(month));
   }
   return { status: 'success', exists: true, details: publicDetails_(d) };
+}
+
+// History lines still waiting in quick storage, oldest first.
+function liveHistory_(month) {
+  var all = allProps_(), pre = 'HB_' + month + '_', out = [];
+  Object.keys(all).sort().forEach(function (k) {
+    if (k.indexOf(pre) === 0) { try { out.push(JSON.parse(all[k])); } catch (e) {} }
+  });
+  return out;
 }
 
 /* Saves one part of a month that Paul edits by hand (only the checklist so
@@ -1149,6 +1167,7 @@ function flushPages_(month) {
     });
     saveMonth_(ctx);
     dropProp_('PGDIRTY_' + month);
+    putProp_('PGFLUSHED_' + month, nowIso_());
   }
   var settled = live.qc.concat(live.cert).every(function (p) { return p.status === 'read' || p.status === 'error'; });
   var newest = 0;
@@ -1570,12 +1589,14 @@ function readUpload_(id) {
 function signStart_(data) {
   var month = checkMonth_(data.month);
   var mode = data.mode === 'amend' ? 'amend' : 'sign';
-  var bytes = parseInt(data.bytes, 10), pieces = parseInt(data.pieces, 10);
+  // Since v24 the page may start before the PDF is made (it is built from
+  // what this returns) and give the size when it finishes.
+  var bytes = data.bytes == null ? null : parseInt(data.bytes, 10);
+  var pieces = data.pieces == null ? null : parseInt(data.pieces, 10);
   var signedBy = String(data.signedBy || '').replace(/\s+/g, ' ').trim();
   if (data.confirm !== true) throw appError_('error', 'Tick the box to confirm the record is complete and accurate.');
   if (signedBy.length < 3 || signedBy.length > 80) throw appError_('error', 'Type your full name to sign off.');
-  if (!(bytes > 0 && bytes <= MAX_REPORT_BYTES)) throw appError_('error', 'The report is an unexpected size.');
-  if (!(pieces >= 1 && pieces <= 100)) throw appError_('error', 'The report is an unexpected size.');
+  checkReportSize_(bytes, pieces, true);
   return withLock_(function () {
     flushPages_(month);
     memo_ = {};
@@ -1611,13 +1632,19 @@ function signStart_(data) {
   });
 }
 
+function checkReportSize_(bytes, pieces, optional) {
+  if (optional && bytes == null && pieces == null) return;
+  if (!(bytes > 0 && bytes <= MAX_REPORT_BYTES)) throw appError_('error', 'The report is an unexpected size.');
+  if (!(pieces >= 1 && pieces <= 100)) throw appError_('error', 'The report is an unexpected size.');
+}
+
 function pieceName_(id, i) { return id + '-' + ('00' + i).slice(-3) + '.b64'; }
 
 function signPiece_(data) {
   var up = readUpload_(data.uploadId);
   if (!up) throw appError_('missing', 'That upload has expired. Press Sign off again.');
   var i = parseInt(data.index, 10);
-  if (!(i >= 0 && i < up.pieces)) throw appError_('error', 'Unexpected piece of the report.');
+  if (!(i >= 0 && i < (up.pieces || 100))) throw appError_('error', 'Unexpected piece of the report.');
   var text = String(data.data || '');
   if (!/^[A-Za-z0-9+/=]*$/.test(text) || !text) throw appError_('error', 'A piece of the report arrived damaged.');
   var folder = uploadingFolder_(up.month);
@@ -1641,6 +1668,11 @@ function signFinish_(data) {
     throw appError_('missing', 'That upload has expired. Press Sign off again.');
   }
   if (up.month !== month) throw appError_('error', 'That upload belongs to another month.');
+  if (up.bytes == null) {
+    up.bytes = parseInt(data.bytes, 10);
+    up.pieces = parseInt(data.pieces, 10);
+    checkReportSize_(up.bytes, up.pieces, false);
+  }
 
   // 1. Join the pieces and check the result, outside the lock (slow).
   var folder = uploadingFolder_(month);
@@ -1682,7 +1714,7 @@ function signFinish_(data) {
       var reason = up.mode === 'amend' && d.amendment ? d.amendment.reason : null;
       var v = {
         version: up.version, fileId: pdf.getId(), fileName: name, size: up.bytes, signedAt: nowIso_(),
-        signedBy: up.signedBy, kind: up.mode, reason: reason, uploadId: id,
+        signedBy: up.signedBy, kind: up.mode, reason: reason, uploadId: id, url: pdf.getUrl(),
         pieceIds: pieceFiles.map(function (f) { return f.getId(); })
       };
       d.versions = (d.versions || []).concat([v]);
@@ -1726,7 +1758,7 @@ function signFinish_(data) {
 
 function publicVersion_(v) {
   return { version: v.version, fileName: v.fileName, size: v.size, signedAt: v.signedAt,
-           signedBy: v.signedBy, kind: v.kind, reason: v.reason || null };
+           signedBy: v.signedBy, kind: v.kind, reason: v.reason || null, url: v.url || null };
 }
 
 function startAmend_(data) {

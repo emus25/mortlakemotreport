@@ -150,7 +150,19 @@ one Google Apps Script file.
   a banner (`renderMonthState_`) and `body.month-locked`; Amend / Cancel
   amendment / Open report (`openSignedReport`, a PDF viewer overlay) work from
   it. `renderReminder_` nags from the 10th about last month if unsigned.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (23 on this branch; the live page expects 20) must
+- **Speed (17 Oct 2026):** the browser keeps copies of filed files in
+  IndexedDB (`cacheGet_`/`cachePut_`, database `mortlake_files`, `_TEST` for
+  the test copy, emptied by Log out): DVSA files by Drive id, page images by
+  month + page id, signed PDFs by month + version (`report:…`, stored at
+  sign-off), all things that never change. A month is shown at once from
+  this computer's last copy (`month:…`, refreshed by `rememberMonth_` when
+  all is saved and on page close), read-only with "Checking with Google…"
+  (`monthChecking_`, `body.month-checking`, blocks Preview/Sign off) until
+  Google's copy arrives; it is redrawn only if `viewStamp_` differs. Reading
+  scans runs 5 at a time (`READ_CONCURRENCY`); filing stays 3. Sign-off
+  starts with `signStart` (no separate check) and sends pieces 6 at a time;
+  the report viewer fetches pieces in parallel with retries.
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (24 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -267,7 +279,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 30 back-office checks + 14 real-browser checks
+npm test               # 31 back-office checks + 16 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

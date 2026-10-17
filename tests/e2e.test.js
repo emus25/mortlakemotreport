@@ -69,7 +69,7 @@ async function newComputer(srv) {
 async function waitReady(page) {
   await page.waitForFunction(() => {
     const o = document.getElementById('monthOverlay');
-    return recordsReady_ && o && o.hidden && !hasPendingSaves_();
+    return recordsReady_ && o && o.hidden && !hasPendingSaves_() && !monthChecking_;
   }, null, { timeout: 15000 });
 }
 
@@ -649,6 +649,65 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await p.waitForFunction(() => monthStatus_() === 'signed' && savedPages_.qc.length === 4, null, { timeout: 20000 });
     assert.equal(details(srv, '2026-09').qcPages.length, 4);
     assert.equal(signed().length, 2, 'no new version');
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});
+
+test('the browser keeps copies of filed files, so nothing is fetched twice; Log out empties it', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.setInputFiles('#fileLogDate', LOG_SEP);
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
+    await waitSaved(p);
+    // Reopening on the same computer: the DVSA files and page images come from the browser.
+    srv.log.length = 0;
+    await p.reload();
+    await waitReady(p);
+    await p.evaluate(() => switchTab('report'));
+    await p.waitForFunction(() => !dvsaLoading_ && Object.keys(TEST_LOGS).length === 1 && TEST_QUALITY && TEST_QUALITY.site);
+    await p.evaluate(() => ensureEvidence_());
+    assert.equal(srv.log.filter(a => a === 'getDvsaFile' || a === 'getPageImage').length, 0, 'nothing fetched again: ' + srv.log.join(','));
+    assert.match(await p.textContent('#statusRating'), /Filed in Google Drive/);
+    // The test copy keeps its own; Log out empties this computer's copy.
+    const dbs = await p.evaluate(async () => (await indexedDB.databases()).map(d => d.name));
+    assert.ok(dbs.includes('mortlake_files'), dbs.join(','));
+    assert.ok(await p.evaluate(async () => !!(await cacheGet_('page:2026-09:' + savedPages_.qc[0].id))));
+    await p.click('#logoutBtn');
+    await p.waitForFunction(() => { const a = document.getElementById('appRoot'); return a && a.style.display === 'none'; });
+    assert.equal(await p.evaluate(async () => await cacheGet_('page:2026-09:qc-1')), null, 'emptied on Log out');
+  } finally { srv.server.close(); }
+});
+
+test('a month shows at once from this computer, locked until Google confirms; changes elsewhere still appear', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
+    await p.click('#sortScansBtn');
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
+    await waitSaved(p);
+    // Google is slow to answer the next time the app opens.
+    srv.slow.openSession = 2500;
+    await p.reload();
+    await p.waitForFunction(() => savedPages_.qc.length === 2 && monthChecking_, null, { timeout: 2000 });
+    assert.match(await p.textContent('#syncStatus'), /Checking with Google/);
+    assert.ok(await p.evaluate(() => getComputedStyle(document.querySelector('#view-report .section')).pointerEvents === 'none'), 'locked while checking');
+    assert.match(await p.evaluate(() => reportBlockers_().map(b => b.what).join('|')), /Still checking/);
+    await waitReady(p);
+    assert.equal(await p.evaluate(() => monthChecking_), false);
+    // Another computer adds a page meanwhile: the copy here is out of date, so Google's copy wins.
+    srv.backend.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: Buffer.from('elsewhere').toString('base64'),
+      fingerprint: 'other-computer', sourceName: 'from-the-other-computer.jpg', reading: { registration: 'AB12CDE', document_type: 'emissions_test' } });
+    await p.reload();
+    await p.waitForFunction(() => monthChecking_ && savedPages_.qc.length === 2, null, { timeout: 2000 });
+    await waitReady(p);
+    assert.equal(await p.evaluate(() => savedPages_.qc.length), 3, 'the page added elsewhere appears');
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });

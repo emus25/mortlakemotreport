@@ -43,10 +43,10 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     await p.goto('https://mortlakemotreport.exposureboost.co.uk/test.html');
     await p.fill('#lockPasswordInput', PASSWORD);
     const t = Date.now(); await p.click('#lockSubmitBtn');
-    await p.waitForFunction(() => recordsReady_ && document.getElementById('monthOverlay').hidden, null, { timeout: 120000 });
+    await p.waitForFunction(() => recordsReady_ && document.getElementById('monthOverlay').hidden && !monthChecking_, null, { timeout: 120000 });
     log(name, 'logged in, app ready in ' + ((Date.now() - t) / 1000).toFixed(1) + 's');
     await p.evaluate(m => { const el = document.getElementById('fMonth'); el.value = m; el.dispatchEvent(new Event('change')); switchTab('report'); }, MONTH);
-    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden, MONTH, { timeout: 120000 });
+    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden && !monthChecking_, MONTH, { timeout: 120000 });
     log(name, 'opened ' + MONTH);
     return p;
   }

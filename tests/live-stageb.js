@@ -48,9 +48,9 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     await p.goto('https://mortlakemotreport.exposureboost.co.uk/test.html');
     await p.fill('#lockPasswordInput', PASSWORD);
     await p.click('#lockSubmitBtn');
-    await p.waitForFunction(() => recordsReady_ && document.getElementById('monthOverlay').hidden, null, { timeout: 120000 });
+    await p.waitForFunction(() => recordsReady_ && document.getElementById('monthOverlay').hidden && !monthChecking_, null, { timeout: 120000 });
     await p.evaluate(m => { const el = document.getElementById('fMonth'); el.value = m; el.dispatchEvent(new Event('change')); switchTab('report'); }, MONTH);
-    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden && !dvsaLoading_, MONTH, { timeout: 120000 });
+    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden && !monthChecking_ && !dvsaLoading_, MONTH, { timeout: 120000 });
     log(name, 'opened ' + MONTH);
     return p;
   }
@@ -174,6 +174,19 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     check(d3.versions.length === 2, 'no new version was made');
     check((await fetchVersion(A, 1)).sha === v1.sha && (await fetchVersion(A, 2)).sha === v2.sha, 'both signed PDFs unchanged');
     check(A.errors.length === 0, 'no errors on the page');
+
+    log('A comes back to the app on the same computer');
+    let t0 = Date.now();
+    await A.reload();
+    await A.waitForFunction(() => monthDoc_ && savedPages_.qc.length > 0, null, { timeout: 120000 });
+    const shownIn = (Date.now() - t0) / 1000;
+    await A.waitForFunction(() => recordsReady_ && !monthChecking_ && document.getElementById('monthOverlay').hidden && !dvsaLoading_, null, { timeout: 120000 });
+    check(true, 'the month is on screen in ' + shownIn.toFixed(1) + 's and confirmed with Google in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
+    t0 = Date.now();
+    await A.click('#monthBanner button:text-is("Open report")');
+    await A.waitForSelector('#pdfViewerBody iframe', { timeout: 120000 });
+    check(true, 'the signed report opens on this computer in ' + ((Date.now() - t0) / 1000).toFixed(1) + 's');
+    await A.click('#pdfViewerActions >> text=Back');
 
     const B = await computer('B');
     check(/is signed off\. Version 2/.test(await B.textContent('#monthBanner')), 'another computer sees it signed off, version 2');

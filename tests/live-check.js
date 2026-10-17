@@ -53,7 +53,7 @@ const T0 = Date.now(); const log = (...a) => console.log(((Date.now() - T0) / 10
   }
   async function month(p, m) {
     await p.evaluate(m => { const el = document.getElementById('fMonth'); el.value = m; el.dispatchEvent(new Event('change')); }, m);
-    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden, m, { timeout: 120000 });
+    await p.waitForFunction(m => currentMonth === m && document.getElementById('monthOverlay').hidden && !monthChecking_, m, { timeout: 120000 });
   }
   const saved = (p) => p.waitForFunction(() => !hasPendingSaves_() && document.getElementById('syncStatus').textContent === 'All saved ✓', null, { timeout: 180000 });
 
