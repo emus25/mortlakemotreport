@@ -150,7 +150,7 @@ one Google Apps Script file.
   a banner (`renderMonthState_`) and `body.month-locked`; Amend / Cancel
   amendment / Open report (`openSignedReport`, a PDF viewer overlay) work from
   it. `renderReminder_` nags from the 10th about last month if unsigned.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (22 on this branch; the live page expects 20) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (23 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -186,7 +186,7 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
 | `signStart`, `signPiece`, `signFinish` | yes | **Stage B (v21).** Sign off: checks the month (3 DVSA files, every page read, name, tick), receives the PDF in pieces, joins and size-checks it, files it in `Signed reports/`, and only then marks the month signed — and only if nothing changed since `signStart` (`monthStamp_`). Repeat-safe. |
 | `startAmend`, `cancelAmend` | yes | Amend needs the tick and a reason; keeps `details-vN.json`. Cancel restores pages, DVSA files and checklist exactly as signed (files moved back from / to `Removed/`). |
-| `getReport` | yes | A signed PDF, in pieces (latest version unless `version` given). |
+| `getReport` | yes | A signed PDF, in pieces (latest version unless `version` given). Since v23 it hands back the pieces kept at sign-off (`Signed reports (pieces for the app)/`, ids in `versions[].pieceIds`) instead of converting the PDF, which took over 40s and failed on real Google; missing pieces are remade once. |
 
 - **Secrets:** `DASHBOARD_PASSWORD` and `ANTHROPIC_API_KEY` are kept in
   Script Properties and must never be in `index.html`.

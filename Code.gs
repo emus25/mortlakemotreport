@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 22;
+var BACKEND_VERSION = 23;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -517,7 +517,8 @@ var DETAILS_FILE = 'details.json';
 var INDEX_FILE = 'records-index.json';
 var EQUIPMENT_FILE = 'equipment.json';
 var SUBFOLDERS = { qc: 'QC paperwork', cert: 'Calibration certificates', dvsa: 'DVSA files', removed: 'Removed',
-                   signed: 'Signed reports', uploading: 'Uploading (temporary)' };
+                   signed: 'Signed reports', uploading: 'Uploading (temporary)',
+                   pieces: 'Signed reports (pieces for the app)' };
 var DVSA_INPUTS = {
   fileLogDate: { label: 'Test log (by date)', base: 'test-log-by-date' },
   fileLogDuration: { label: 'Test log (by duration)', base: 'test-log-by-duration' },
@@ -1518,11 +1519,18 @@ function migrateLegacy_(data) {
  *   getReport   a signed PDF, in pieces */
 
 var UPLOAD_PREFIX = 'UPL_';
-var REPORT_PIECE_CHARS = 4000000;      // base64 characters per piece sent back (about 3MB)
+var REPORT_PIECE_CHARS = 2000000;      // base64 characters per piece made for an older report (about 1.5MB)
 var MAX_REPORT_BYTES = 60 * 1024 * 1024;
 
 function signedFolder_(month) {
   return folderAt_('s_' + month + '_signed', function () { return monthFolder_(month, true); }, SUBFOLDERS.signed, true);
+}
+/* Opening a signed report hands back the pieces it was uploaded in, kept
+   here at sign-off, so Google never has to convert a 10MB file on the spot
+   (that took over 40 seconds and failed). The PDF in Signed reports is the
+   record; these are only the app's copy of it, in pieces. */
+function piecesFolder_(month) {
+  return folderAt_('s_' + month + '_pieces', function () { return monthFolder_(month, true); }, SUBFOLDERS.pieces, true);
 }
 function uploadingFolder_(month) {
   return folderAt_('s_' + month + '_uploading', function () { return monthFolder_(month, true); }, SUBFOLDERS.uploading, true);
@@ -1674,7 +1682,8 @@ function signFinish_(data) {
       var reason = up.mode === 'amend' && d.amendment ? d.amendment.reason : null;
       var v = {
         version: up.version, fileId: pdf.getId(), fileName: name, size: up.bytes, signedAt: nowIso_(),
-        signedBy: up.signedBy, kind: up.mode, reason: reason, uploadId: id
+        signedBy: up.signedBy, kind: up.mode, reason: reason, uploadId: id,
+        pieceIds: pieceFiles.map(function (f) { return f.getId(); })
       };
       d.versions = (d.versions || []).concat([v]);
       d.signedVersion = up.version;
@@ -1694,15 +1703,22 @@ function signFinish_(data) {
   }
   if (out.duplicate) { try { pdf.setTrashed(true); } catch (e) {} }
 
-  // 3. Tidy the pieces away (they were never part of the records), along
-  //    with any left by earlier attempts that didn't finish.
+  // 3. Keep this upload's pieces for opening the report later, and tidy
+  //    away any left by earlier attempts that didn't finish.
   dropProp_(UPLOAD_PREFIX + id);
+  if (!out.duplicate) {
+    var keep = piecesFolder_(month);
+    pieceFiles.forEach(function (f, i) {
+      try { f.setName('v' + up.version + '-' + ('00' + i).slice(-3) + '.b64'); f.moveTo(keep); }
+      catch (e) { logError_('signFinish', 'Could not keep piece ' + i + ': ' + e.message); }
+    });
+  }
   try {
     var it = folder.getFiles();
     while (it.hasNext()) {
       var pf = it.next();
       var owner = String(pf.getName()).slice(0, 32);
-      if (owner === id || !prop_(UPLOAD_PREFIX + owner)) pf.setTrashed(true);
+      if ((owner === id && out.duplicate) || (owner !== id && !prop_(UPLOAD_PREFIX + owner))) pf.setTrashed(true);
     }
   } catch (e) { logError_('signFinish', 'Could not tidy the upload pieces: ' + e.message); }
   return { status: 'success', version: publicVersion_(out.version), details: publicDetails_(out.details) };
@@ -1820,12 +1836,34 @@ function getReport_(data) {
   var file;
   try { file = DriveApp.getFileById(v.fileId); }
   catch (e) { throw appError_('missing', 'The signed report is missing from Google Drive: ' + v.fileName); }
-  var all = Utilities.base64Encode(file.getBlob().getBytes());
-  var pieces = Math.max(1, Math.ceil(all.length / REPORT_PIECE_CHARS));
+  var ids = v.pieceIds;
+  if (!ids || !ids.length || !piecesPresent_(ids)) ids = makePieces_(month, v, file);
   var i = parseInt(data.index, 10) || 0;
-  if (i < 0 || i >= pieces) throw appError_('error', 'Unexpected piece of the report.');
+  if (i < 0 || i >= ids.length) throw appError_('error', 'Unexpected piece of the report.');
   return {
-    status: 'success', version: publicVersion_(v), pieces: pieces, index: i,
-    data: all.substr(i * REPORT_PIECE_CHARS, REPORT_PIECE_CHARS), url: file.getUrl()
+    status: 'success', version: publicVersion_(v), pieces: ids.length, index: i,
+    data: DriveApp.getFileById(ids[i]).getBlob().getDataAsString(), url: file.getUrl()
   };
+}
+
+function piecesPresent_(ids) {
+  try { return ids.every(function (id) { return !DriveApp.getFileById(id).isTrashed(); }); }
+  catch (e) { return false; }
+}
+
+// For a report with no pieces kept (or if they were removed by hand), they
+// are made once from the PDF and remembered.
+function makePieces_(month, v, file) {
+  var bytes = file.getBlob().getBytes();
+  var step = REPORT_PIECE_CHARS / 4 * 3, folder = piecesFolder_(month), ids = [];
+  for (var at = 0, n = 0; at < bytes.length; at += step, n++) {
+    var text = Utilities.base64Encode(bytes.slice(at, at + step));
+    ids.push(folder.createFile('v' + v.version + '-' + ('00' + n).slice(-3) + '.b64', text, 'text/plain').getId());
+  }
+  withLock_(function () {
+    var ctx = openMonth_(month, false);
+    (ctx.details.versions || []).forEach(function (x) { if (x.version === v.version) x.pieceIds = ids; });
+    writeJsonAt_('d_' + month, ctx.folder, DETAILS_FILE, ctx.details);
+  });
+  return ids;
 }

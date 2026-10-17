@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 22);
+  assert.equal(b.call('getVersion', { password: '' }).version, 23);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 22);
+  assert.equal(r.version, 23);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -546,7 +546,8 @@ test('signing off files the PDF, locks the month, and is never half-done', () =>
   assert.equal(files.length, 1);
   assert.match(files[0], /Mortlake DVSA report – September 2026 – v1 – signed \d{4}-\d{2}-\d{2}\.pdf$/);
   assert.deepEqual(b.drive.readBytes(files[0]), pdf);
-  assert.ok(!b.drive.list().some(p => p.includes('Uploading')), 'the pieces are tidied away');
+  assert.ok(!b.drive.list().some(p => p.includes('Uploading')), 'nothing left in the upload folder');
+  assert.ok(b.drive.list().some(p => /Signed reports \(pieces for the app\)\/v1-000\.b64$/.test(p)), 'the pieces are kept for opening the report');
   const d = b.call('loadMonth', { month }).details;
   assert.equal(d.status, 'signed');
   assert.equal(d.signedVersion, 1);
@@ -570,6 +571,12 @@ test('signing off files the PDF, locks the month, and is never half-done', () =>
   let all = first.data;
   for (let i = 1; i < first.pieces; i++) all += b.call('getReport', { month, version: 1, index: i }).data;
   assert.deepEqual(Buffer.from(all, 'base64'), pdf);
+  // If the kept pieces are gone, they are made again from the PDF itself.
+  b.drive.list().filter(p => p.includes('pieces for the app')).forEach(p => b.drive.deleteByPath(p));
+  const again = b.call('getReport', { month });
+  let all2 = again.data;
+  for (let i = 1; i < again.pieces; i++) all2 += b.call('getReport', { month, index: i }).data;
+  assert.deepEqual(Buffer.from(all2, 'base64'), pdf);
 });
 
 test('amending needs a reason, files v2 next to an untouched v1, and cancelling puts everything back', () => {

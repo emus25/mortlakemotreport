@@ -65,7 +65,8 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
   }
   // A signed version, fetched through the back office, with its fingerprint.
   async function fetchVersion(p, v) {
-    return p.evaluate(async ({ month, v }) => {
+    const t = Date.now();
+    const out = await p.evaluate(async ({ month, v }) => {
       let parts = [], i = 0, r;
       do { r = await api_('getReport', { month, version: v, index: i }); if (r.status !== 'success') return { error: r.message }; parts.push(r.data); i++; } while (i < r.pieces);
       const bin = atob(parts.join('')); const bytes = new Uint8Array(bin.length);
@@ -77,6 +78,9 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
       await pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
       return { sha: h, size: bytes.length, pages: doc.numPages, page1: c.toDataURL('image/png').split(',')[1], meta: r.version };
     }, { month: MONTH, v });
+    if (out.error) throw new Error('could not fetch version ' + v + ': ' + out.error);
+    log('   fetched version ' + v + ' in ' + ((Date.now() - t) / 1000).toFixed(0) + 's');
+    return out;
   }
   async function signOff(p, label) {
     await p.click('#signOffBtn');

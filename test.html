@@ -3486,7 +3486,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 22;
+  var EXPECTED_BACKEND_VERSION = 23;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -5946,7 +5946,8 @@
     }).map(function (h) { return h.what; });
   }
 
-  var SIGN_PIECE_CHARS = 3000000;   // base64 characters per piece (about 2.2MB), well inside Google's limits
+  var SIGN_PIECE_CHARS = 2000000;   // base64 characters per piece (about 1.5MB), well inside Google's limits;
+                                    // the same pieces are handed back when the report is opened
   var signing_ = false;
 
   function runSignOff_(signedBy) {
