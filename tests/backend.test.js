@@ -673,3 +673,21 @@ test('opening a month is quick: no rewriting on every open, yet nothing is missi
   assert.equal(fin.status, 'success');
   assert.equal(fin.version.version, 1);
 });
+
+test('which way up a page is comes from where its title is, never from "degrees clockwise" (v25)', () => {
+  for (const [top, rotation] of [['top', 0], ['right', 270], ['bottom', 180], ['left', 90]]) {
+    const b = loadBackend(backendReading(Object.assign({}, QC_READ, { document_top: top, rotation: 999 })));
+    assert.equal(b.call('analyzeQcPage', { imageBase64: IMG }).result.rotation, rotation, top);
+  }
+  // Nothing sensible given: left as it is.
+  const b = loadBackend(backendReading(Object.assign({}, QC_READ, { rotation: 45 })));
+  assert.equal(b.call('analyzeQcPage', { imageBase64: IMG }).result.rotation, 0);
+  // The instructions ask for document_top.
+  let asked = '';
+  const c = loadBackend({ claude: (kind, image) => ({ status: 'success', result: QC_READ }) });
+  const orig = c.sandbox.UrlFetchApp.fetch;
+  c.sandbox.UrlFetchApp.fetch = (u, o) => { asked = JSON.parse(o.payload).messages[0].content[1].text; return orig(u, o); };
+  c.call('analyzeQcPage', { imageBase64: IMG });
+  assert.match(asked, /document_top/);
+  assert.doesNotMatch(asked, /CLOCKWISE/);
+});

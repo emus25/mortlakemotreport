@@ -85,7 +85,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     check(/LB22FLC[\s\S]*Complete set/.test(groupText), 'Focus LB22FLC: complete set');
     check(/WR19KXA[\s\S]*Complete set/.test(groupText), 'Golf WR19KXA: complete set (including the sideways sheet)');
     check(/GN71TVZ[\s\S]*Electric/.test(groupText), 'Tesla GN71TVZ: recognised as electric, no emissions test needed');
-    check(pages.some(p => /sideways/.test(p.src) && p.rot && p.rot !== 0), 'sideways sheet: Claude reported it needs turning');
+    check(pages.some(p => /sideways/.test(p.src) && p.rot === 270), 'sideways sheet (title on the right) will be turned the right way: 270° (got ' + (pages.find(p => /sideways/.test(p.src)) || {}).rot + ')');
     check(pages.some(p => /LB22FLC-vt20/.test(p.src) && p.qc), 'handwritten "QC check" note spotted on the Focus certificate');
 
     log('A removes the blank page');

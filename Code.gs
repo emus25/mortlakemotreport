@@ -396,6 +396,26 @@ function readPageWithClaude_(imageBase64, mimeType, instructions) {
 }
 
 
+/* Which way up a page is (v25, 17 Oct 2026). Asking for "degrees to rotate
+   clockwise" gave 90 for a page that needed 270, so the report would have
+   printed it upside down: clockwise is easy to get backwards. Instead Claude
+   says which edge of the image the document's title is nearest to, which is
+   something it can see, and the rotation is worked out here. */
+var DOCUMENT_TOP_FIELD =
+  '"document_top": "top" | "right" | "bottom" | "left" (which edge of the IMAGE the top of the document — its title or ' +
+  'heading — is nearest to. An upright page is "top". A page lying on its side whose title runs down the right-hand edge is "right". ' +
+  'An upside-down page is "bottom"), ';
+var ROTATION_FOR_TOP = { top: 0, right: 270, bottom: 180, left: 90 };
+
+function withRotation_(res) {
+  if (res && res.status === 'success' && res.result) {
+    var top = String(res.result.document_top || '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(ROTATION_FOR_TOP, top)) res.result.rotation = ROTATION_FOR_TOP[top];
+    else if ([0, 90, 180, 270].indexOf(res.result.rotation) === -1) res.result.rotation = 0;
+  }
+  return res;
+}
+
 function analyzeQcPage_(imageBase64, mimeType) {
   var instructions =
     'You are looking at a single scanned page from a UK MOT garage\'s monthly compliance file. ' +
@@ -434,11 +454,10 @@ function analyzeQcPage_(imageBase64, mimeType) {
     // Landscape paperwork fed through a portrait scanner comes out sideways.
     // The printed evidence appendix rotates by this, so it can be read without
     // turning the paper round.
-    '"rotation": 0 | 90 | 180 | 270 (degrees this page must be rotated CLOCKWISE for its text to read normally left-to-right; ' +
-    'use 0 if it is already upright), ' +
+    DOCUMENT_TOP_FIELD +
     '"confidence": "high" | "low" (low if the page is blurry, cropped, or any key field is genuinely hard to read)}';
 
-  return readPageWithClaude_(imageBase64, mimeType, instructions);
+  return withRotation_(readPageWithClaude_(imageBase64, mimeType, instructions));
 }
 
 /**
@@ -469,11 +488,10 @@ function analyzeCalibrationCert_(imageBase64, mimeType) {
     '"calibrated_on": string or null (the date it was calibrated, in the format printed on the page), ' +
     '"next_due": string or null (the date the next calibration is due, in the format printed), ' +
     '"calibrated_by": string or null (the company or engineer who carried out the calibration), ' +
-    '"rotation": 0 | 90 | 180 | 270 (degrees this page must be rotated CLOCKWISE to read normally; ' +
-    '0 if already upright), ' +
+    DOCUMENT_TOP_FIELD +
     '"confidence": "high" | "low" (low if the page is blurry, cropped, or any key field is hard to read)}';
 
-  return readPageWithClaude_(imageBase64, mimeType, instructions);
+  return withRotation_(readPageWithClaude_(imageBase64, mimeType, instructions));
 }
 
 // Exponential backoff with a little jitter, so a burst of pages that all get

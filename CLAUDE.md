@@ -241,6 +241,11 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 - **Claude calls:** they go straight to the Messages API using
   `CLAUDE_MODEL = 'claude-opus-5'` with `max_tokens: 8000` and
   `effort: 'low'`. 429, 500 and 529 errors are retried with backoff.
+  **Which way up (v25):** Claude is asked `document_top` (which edge of the
+  image the document's title is nearest to) and `withRotation_` turns that
+  into the clockwise rotation (`ROTATION_FOR_TOP`); asking for "degrees
+  clockwise" once gave 90 for a page needing 270, i.e. upside down.
+  `tests/live-rotation.js` checks all four turns against real Claude.
   Responses are checked for `refusal`, the text blocks are collected (a
   thinking block can come first), and the JSON is parsed leniently.
 
@@ -279,7 +284,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 31 back-office checks + 16 real-browser checks
+npm test               # 32 back-office checks + 16 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
