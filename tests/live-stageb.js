@@ -68,13 +68,13 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     const t = Date.now();
     const out = await p.evaluate(async ({ month, v }) => {
       let parts = [], i = 0, r;
-      let retries = 0;
-      do {
+      let retries = 0, pieces = 1;
+      while (i < pieces) {
         r = await apiOnce_('getReport', { month, version: v, index: i });
         if (r.noReply && retries < 4) { retries++; continue; }   // the same patience the app has
         if (r.status !== 'success') return { error: r.message };
-        parts.push(r.data); i++;
-      } while (i < r.pieces);
+        pieces = r.pieces; parts.push(r.data); i++;
+      }
       window.__retries = (window.__retries || 0) + retries;
       const bin = atob(parts.join('')); const bytes = new Uint8Array(bin.length);
       for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
