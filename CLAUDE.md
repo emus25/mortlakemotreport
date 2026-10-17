@@ -150,7 +150,7 @@ one Google Apps Script file.
   a banner (`renderMonthState_`) and `body.month-locked`; Amend / Cancel
   amendment / Open report (`openSignedReport`, a PDF viewer overlay) work from
   it. `renderReminder_` nags from the 10th about last month if unsigned.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (21 on this branch; the live page expects 20) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (22 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a

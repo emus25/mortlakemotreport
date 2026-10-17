@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 21;
+var BACKEND_VERSION = 22;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -1589,6 +1589,10 @@ function signStart_(data) {
         if (u.month === month || Date.now() - new Date(u.startedAt).getTime() > 86400000) dropProp_(k);
       } catch (e) { dropProp_(k); }
     });
+    // The pieces arrive several at once. If the folder for them didn't exist
+    // yet, each would make its own and the pieces would end up scattered, so
+    // it is made (and remembered) here, before any piece is sent.
+    uploadingFolder_(month);
     var id = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '').slice(0, 32);
     var version = (d.signedVersion || 0) + 1;
     putProp_(UPLOAD_PREFIX + id, JSON.stringify({

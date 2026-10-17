@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 21);
+  assert.equal(b.call('getVersion', { password: '' }).version, 22);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 21);
+  assert.equal(r.version, 22);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -529,6 +529,12 @@ test('signing off files the PDF, locks the month, and is never half-done', () =>
     b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '0-0': 'yes' }, notes: {} }, baseRevision: 0 }) });
   assert.equal(changed.status, 'conflict');
   assert.deepEqual(signedPdfs(b, month), []);
+
+  // The folder for the pieces exists before any piece is sent, so pieces
+  // arriving at the same moment can't each make their own.
+  const st2 = b.call('signStart', { month, bytes: 100, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+  assert.ok(b.props.get('ID_s_' + month + '_uploading'), 'upload folder made at the start');
+  assert.equal(st2.status, 'success');
 
   // The real thing.
   const pdf = fakePdf('version one');
