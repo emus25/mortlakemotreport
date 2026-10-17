@@ -220,6 +220,48 @@
     background: var(--danger-bg); padding: 14px 16px; margin-bottom: 16px;
   }
   .blockers-head { font-size: 13px; font-weight: 700; color: var(--danger); margin-bottom: 8px; }
+  /* Stage B: required marks, dialogs, banners, the locked view. */
+  .req { color: var(--danger); font-weight: 700; }
+  .optional { font-weight: 400; color: var(--text-tertiary); font-size: .8em; }
+  .check-action.needs-note textarea { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+  .readiness-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sign-btn.is-blocked { opacity: .5; }
+  .sign-btn[hidden] { display: none; }
+  .mo-box.dialog-box { max-width: 520px; text-align: left; gap: 14px; }
+  .dialog-box h3 { margin: 0; font-size: 18px; }
+  .dialog-summary { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .dialog-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .dialog-check input { width: 18px; height: 18px; margin-top: 1px; flex: none; }
+  .dialog-field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+  .dialog-field input, .dialog-field textarea { font: inherit; font-weight: 400; font-size: 14px; padding: 9px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); width: 100%; box-sizing: border-box; }
+  .dialog-note { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+  .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .dialog-actions:empty { display: none; }
+  .sp-title { font-size: 15px; font-weight: 600; text-align: center; }
+  #signProgress .tyre { width: 72px; height: 72px; margin: 0 auto; }
+  #signProgress .mo-note { text-align: center; }
+  .month-banner, .reminder-bar { margin: 12px 24px 0; padding: 12px 16px; border-radius: var(--radius-md); font-size: 14px;
+    display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
+  .month-banner[hidden], .reminder-bar[hidden] { display: none; }
+  .month-banner.signed { background: #ecf7ef; border: 1px solid #b9e0c4; color: #1f5f34; }
+  .month-banner.amending { background: #fff7ed; border: 1px solid #f3c48b; color: #8a4b0f; }
+  .month-banner .mb-text { flex: 1 1 320px; line-height: 1.45; }
+  .month-banner .mb-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .month-banner .mb-older { font-size: 12px; width: 100%; }
+  .month-banner .mb-older button { background: none; border: 0; padding: 0 4px; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
+  .reminder-bar { background: var(--warning-bg); color: var(--warning); border: 1px solid #f0d58a; font-weight: 600; }
+  .reminder-bar .rb-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; }
+  body.month-locked #view-report .section, body.month-locked #checklistContainer,
+  body.month-locked #view-checklist .checklist-summary { pointer-events: none; opacity: .55; }
+  .pdf-viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: #525659; }
+  .pdf-viewer-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+  .pdf-viewer-body .pv-wait { color: #fff; text-align: center; display: grid; gap: 10px; justify-items: center; }
+  .pdf-viewer-body .pv-wait .tyre { width: 72px; height: 72px; }
+  @media (max-width: 600px) { .month-banner, .reminder-bar { margin: 10px 16px 0; } }
+  /* On a phone the header has no room; Preview and Sign off are in the Report readiness box. */
+  @media (max-width: 700px) { .appbar-actions #generateBtn, .appbar-actions #signOffBtn { display: none !important; } }
+  @media (max-width: 700px) { .appnav { flex-basis: 100%; order: 3; overflow-x: auto; } }
   .blockers-list { list-style: none; margin: 0; padding: 0; }
   .blockers-list li {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -823,6 +865,12 @@
      (see rotateImageBase64_), so no transform is needed — CSS rotation is
      unreliable across print engines and fights the page box. */
   .pr-doc .pr-pagebreak { page-break-before: always; break-before: page; }
+  .pr-doc .pr-signed { font-weight: bold; opacity: 1; }
+  .pr-doc .pr-amend-box { border: 2px solid #b45309; background: #fff7ed; border-radius: 6px; padding: 10px 12px;
+    margin: 0 0 12px; font-size: 11px; line-height: 1.45; }
+  .pr-doc .pr-amend-box ul { margin: 4px 0 0 18px; padding: 0; }
+  .pr-doc .pr-amend-title { font-size: 13px; font-weight: bold; color: #9a3412; margin-bottom: 4px; }
+  .pr-doc .pr-history td:first-child { white-space: nowrap; width: 1%; }
 
   /* The print copy stays hidden on screen; the preview copy is the one people
      look at. Only the print copy goes to paper, so the preview's own chrome
@@ -939,10 +987,15 @@
         <label for="fMonth">Reporting month</label>
         <input type="month" id="fMonth">
       </div>
-      <button class="btn btn-primary" id="generateBtn" onclick="handleGenerate()">Generate Report</button>
+      <button class="btn btn-secondary" id="generateBtn" onclick="handleGenerate()">Preview report</button>
+      <button class="btn btn-primary sign-btn" id="signOffBtn" onclick="startSignOff()" hidden>Sign off</button>
       <button type="button" class="logout-btn" id="logoutBtn" onclick="logOut()" title="Log this computer out">Log out</button>
     </div>
   </header>
+
+  <!-- Stage B: reminders, and what state this month is in (signed / amending). -->
+  <div class="reminder-bar" id="reminderBar" hidden></div>
+  <div class="month-banner" id="monthBanner" hidden></div>
 
   <div class="page">
 
@@ -1170,7 +1223,10 @@
             <div class="rl" id="readyQcLine"></div>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="handleGenerate()">Generate Report</button>
+        <div class="readiness-actions">
+          <button class="btn btn-secondary" onclick="handleGenerate()">Preview report</button>
+          <button class="btn btn-primary sign-btn" id="signOffBtn2" onclick="startSignOff()" hidden>Sign off</button>
+        </div>
       </div>
 
       <div class="blockers" id="reportBlockers" style="display:none"></div>
@@ -1179,13 +1235,13 @@
 
       <!-- DVSA data -->
       <div class="section">
-        <div class="section-head"><h2>DVSA data</h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
+        <div class="section-head"><h2>DVSA data <span class="req" title="Required">*</span></h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
         <div class="upload-grid">
 
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by date</div><div class="upload-card-sub">Date sequence · .csv or .xlsx</div></div>
+              <div><div class="upload-card-title">Test log — by date <span class="req" title="Required">*</span></div><div class="upload-card-sub">Date sequence · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileLogDate">Upload file</label>
@@ -1198,7 +1254,7 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by duration</div><div class="upload-card-sub">Time on the ramp · .csv or .xlsx</div></div>
+              <div><div class="upload-card-title">Test log — by duration <span class="req" title="Required">*</span></div><div class="upload-card-sub">Time on the ramp · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileLogDuration">Upload file</label>
@@ -1211,7 +1267,7 @@
           <div class="card upload-card">
             <div class="upload-card-top">
               <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test Quality Information</div><div class="upload-card-sub">Site vs national · .csv or .xlsx</div></div>
+              <div><div class="upload-card-title">Test Quality Information <span class="req" title="Required">*</span></div><div class="upload-card-sub">Site vs national · .csv or .xlsx</div></div>
             </div>
             <div class="upload-actions">
               <label class="btn btn-secondary btn-sm" for="fileRating">Upload file</label>
@@ -1226,7 +1282,7 @@
 
       <!-- QC paperwork -->
       <div class="section">
-        <div class="section-head"><h2>QC paperwork</h2><span class="section-desc">Upload the MOT paperwork for vehicles quality-controlled this month</span></div>
+        <div class="section-head"><h2>QC paperwork <span class="req" title="Required">*</span></h2><span class="section-desc">Upload the MOT paperwork for vehicles quality-controlled this month. Each vehicle needs its VT20, inspection sheet and emissions test (not for electric cars).</span></div>
         <div class="card panel">
           <label class="dropzone" for="fileQcScans">
             <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
@@ -1256,7 +1312,7 @@
 
       <!-- Calibration certificates -->
       <div class="section">
-        <div class="section-head"><h2>Calibration certificates</h2><span class="section-desc">Upload certificates for the equipment calibrated this month</span></div>
+        <div class="section-head"><h2>Calibration certificates <span class="optional">(optional)</span></h2><span class="section-desc">Upload certificates for the equipment calibrated this month</span></div>
         <div class="card panel">
           <label class="dropzone" for="fileCalCerts">
             <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
@@ -1288,7 +1344,7 @@
     <!-- ═══════════════ CHECKLIST ═══════════════ -->
     <section class="view" id="view-checklist" role="tabpanel" aria-labelledby="tab-checklist">
       <div class="view-head">
-        <h1>Monthly compliance checklist</h1>
+        <h1>Monthly compliance checklist <span class="req" title="Required">*</span></h1>
         <div class="view-month" id="checklistMonthLabel"></div>
         <div class="view-desc">Digitised from Mortlake's paper template, aligned to DVSA's current site assessment criteria.</div>
       </div>
@@ -1320,6 +1376,58 @@
     </section>
 
   </div>
+</div>
+
+<!-- ══════════ Stage B: sign off, amend, open report ══════════ -->
+<div class="month-overlay" id="signDialog" hidden>
+  <div class="mo-box dialog-box" role="dialog" aria-modal="true" aria-labelledby="signTitle">
+    <h3 id="signTitle">Sign off</h3>
+    <div class="dialog-summary" id="signSummary"></div>
+    <label class="dialog-check"><input type="checkbox" id="signConfirm"> <span id="signConfirmText"></span> <span class="req">*</span></label>
+    <label class="dialog-field"><span>Your full name <span class="req">*</span></span>
+      <input type="text" id="signName" autocomplete="name" placeholder="As it should appear on the report"></label>
+    <div class="dialog-note" id="signNote"></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeDialog_('signDialog')">Cancel</button>
+      <button type="button" class="btn btn-primary" id="signGo" disabled onclick="confirmSignOff()">Sign off and file</button>
+    </div>
+  </div>
+</div>
+
+<div class="month-overlay" id="amendDialog" hidden>
+  <div class="mo-box dialog-box" role="dialog" aria-modal="true" aria-labelledby="amendTitle">
+    <h3 id="amendTitle">Amend</h3>
+    <label class="dialog-check"><input type="checkbox" id="amendConfirm"> <span id="amendConfirmText"></span> <span class="req">*</span></label>
+    <label class="dialog-field"><span>Reason for the amendment <span class="req">*</span> <span class="optional">(a few words at least)</span></span>
+      <textarea id="amendReason" rows="3" placeholder="For example: missing inspection sheet for AB12CDE; corrected test log export"></textarea></label>
+    <div class="dialog-note">The month unlocks so you can change anything. The signed version stays exactly as it is, and stays the official report until you sign off the amendment. You can cancel the amendment at any time.</div>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeDialog_('amendDialog')">Cancel</button>
+      <button type="button" class="btn btn-primary" id="amendGo" disabled onclick="confirmAmend()">Start amendment</button>
+    </div>
+  </div>
+</div>
+
+<div class="month-overlay" id="signProgress" hidden>
+  <div class="mo-box dialog-box" role="status" aria-live="polite">
+    <span data-tyre="signProgress"></span>
+    <div class="sp-title" id="signProgressText"></div>
+    <div class="mo-note" id="signProgressSub"></div>
+    <div class="dialog-actions" id="signProgressActions"></div>
+  </div>
+</div>
+
+<div id="pdfViewer" class="preview-overlay" style="display:none" role="dialog" aria-modal="true" aria-label="Signed report">
+  <div class="preview-bar">
+    <div class="preview-titles">
+      <div class="preview-title" id="pdfViewerTitle">Signed report</div>
+      <div class="preview-month" id="pdfViewerSub"></div>
+    </div>
+    <div class="preview-actions" id="pdfViewerActions">
+      <button type="button" class="btn btn-secondary" onclick="closeReportViewer()">Back</button>
+    </div>
+  </div>
+  <div class="pdf-viewer-body" id="pdfViewerBody"></div>
 </div>
 
 <!-- On-screen preview of the finished report, shown before any print dialog so
@@ -1595,7 +1703,7 @@
      back office is being updated) shouldn't stop Paul opening the app.
      Saves are not repeated here: they have their own Retry. */
   var READ_ONLY_ACTIONS_ = { openSession: 1, loadMonth: 1, getDvsaFile: 1, getPageImage: 1, listMonths: 1, loadEquipment: 1,
-                            getPage: 1, filePage: 1 };   // filePage is safe to repeat: a filed page is recognised
+                            getPage: 1, filePage: 1, getReport: 1 };   // filePage is safe to repeat: a filed page is recognised
   var READ_RETRY_DELAY_MS = 2000;
 
   function api_(action, payload) {
@@ -1787,6 +1895,7 @@
      each folder. A full breakdown already in the cache is kept. */
   function applyRecordsIndex_(months) {
     recordsIndex_ = months;
+    renderReminder_();
     if (!store.testQuality) store.testQuality = {};
     Object.keys(months).forEach(function (m) {
       var tq = months[m].testQuality;
@@ -1941,6 +2050,7 @@
     store.months[currentMonth] = { state: checklistState, notes: checklistNotes };
     saveStore();
     if (SCRIPT_URL) scheduleChecklistSave_(); else setChecklistSaveNote_('saved');
+    updateSignButton_();
   }
 
   function persistCalibration() {
@@ -2096,6 +2206,7 @@
      and the report can't be made until they have. */
   function openMonth_(month, preloaded) {
     var token = ++openToken_;
+    monthDoc_ = null;
     resetMonthWorkspace_();
     dvsaLoading_ = 0;
     if (!SCRIPT_URL) {
@@ -2135,6 +2246,7 @@
       renderPageResults_('cert');
       hideMonthOverlay_();
       renderSaveIndicator_();
+      renderMonthState_();
 
       var ids = Object.keys(d.dvsaFiles || {}).filter(function (inputId) {
         return DVSA_INPUTS.some(function (x) { return x.input === inputId; });
@@ -2280,6 +2392,7 @@
       .forEach(function (id) { var el = document.getElementById(id); if (el) el.innerHTML = ''; });
     hideReportBlockers_();
     refreshStatuses();
+    renderMonthState_();
   }
 
   function readUploadedFile_(file) {
@@ -3131,6 +3244,7 @@
   }
 
   function updateReportReadiness() {
+    updateSignButton_();
     var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
     var qcc = scanCounts_('qc');
@@ -3372,7 +3486,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 20;
+  var EXPECTED_BACKEND_VERSION = 23;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -3755,7 +3869,8 @@
 
   // Draws the tyres that are part of the page itself.
   (function () {
-    var opts = { saving: { id: 'tyre', count: true }, qcProgress: { id: 'qcTyre' }, calProgress: { id: 'calTyre' }, overlay: {} };
+    var opts = { saving: { id: 'tyre', count: true }, qcProgress: { id: 'qcTyre' }, calProgress: { id: 'calTyre' }, overlay: {},
+                 signProgress: { id: 'signTyre' } };
     document.querySelectorAll('[data-tyre]').forEach(function (el) {
       el.outerHTML = tyreSvg_(opts[el.getAttribute('data-tyre')]);
     });
@@ -4343,7 +4458,7 @@
               '<button type="button" class="check-pill no" data-val="no">No</button>' +
             '</div>' +
           '</div>' +
-          '<div class="check-action"><label>Action required</label><textarea placeholder="What needs fixing, and by when?"></textarea></div>';
+          '<div class="check-action"><label>Action required <span class="req" title="Required">*</span></label><textarea placeholder="What needs fixing, and by when?"></textarea></div>';
 
         var yesBtn = item.querySelector('.check-pill.yes');
         var noBtn = item.querySelector('.check-pill.no');
@@ -4355,6 +4470,7 @@
           yesBtn.classList.toggle('active', v === 'yes');
           noBtn.classList.toggle('active', v === 'no');
           noteWrap.classList.toggle('show', v === 'no');
+          noteWrap.classList.toggle('needs-note', v === 'no' && !(checklistNotes[key] || '').trim());
           item.classList.toggle('is-yes', v === 'yes');
           item.classList.toggle('is-no', v === 'no');
           persistChecklistState();
@@ -4362,12 +4478,19 @@
         }
         yesBtn.addEventListener('click', function () { setVal('yes'); });
         noBtn.addEventListener('click', function () { setVal('no'); });
-        noteInput.addEventListener('input', function () { checklistNotes[key] = noteInput.value; persistChecklistState(); });
+        noteInput.addEventListener('input', function () {
+          checklistNotes[key] = noteInput.value;
+          noteWrap.classList.toggle('needs-note', checklistState[key] === 'no' && !noteInput.value.trim());
+          persistChecklistState();
+        });
 
         // Restore any previously saved answer / note for this item.
         var saved = checklistState[key];
         if (saved === 'yes') { yesBtn.classList.add('active'); item.classList.add('is-yes'); }
-        else if (saved === 'no') { noBtn.classList.add('active'); noteWrap.classList.add('show'); item.classList.add('is-no'); }
+        else if (saved === 'no') {
+          noBtn.classList.add('active'); noteWrap.classList.add('show'); item.classList.add('is-no');
+          if (!(checklistNotes[key] || '').trim()) noteWrap.classList.add('needs-note');
+        }
         if (checklistNotes[key]) { noteInput.value = checklistNotes[key]; }
 
         body.appendChild(item);
@@ -4815,7 +4938,12 @@
     { input: 'fileRating', label: 'Test Quality Information' }
   ];
 
-  function buildReportHTML() {
+  /* `sign` (stage B) is given only when the report is being signed off:
+       { version, signedBy, signedAt, amendment: { reason, previous, changes }, history }.
+     It puts who signed and when on page 1, the amendment box on an amended
+     report, and the month's history on the last page. Without it, this is
+     the preview, exactly as before. */
+  function buildReportHTML(sign) {
     // The report is dated by the period its data covers, not the day it was
     // generated: September's report made on 11 October is September's report.
     // When it was made is kept as a small secondary note.
@@ -4827,6 +4955,9 @@
     var now = new Date();
     var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
       ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var signedLine = sign
+      ? 'Signed off by ' + sign.signedBy + ' on ' + fmtLongDate_(sign.signedAt) + ' · Version ' + sign.version
+      : '';
 
     // Checklist tally
     var total = 0, done = 0, flagged = 0;
@@ -5127,7 +5258,9 @@
         '<div class="pr-sum-tiles">' + tiles + '</div>' +
         actionBlock +
         '<div class="pr-sum-foot">' + escapeHtml_(evidenceLine) +
-          '<span class="pr-sum-sign">Signed &nbsp;__________________________ &nbsp; Date &nbsp;____________</span>' +
+          (sign
+            ? '<span class="pr-sum-sign pr-signed">' + escapeHtml_(signedLine) + '</span>'
+            : '<span class="pr-sum-sign">Signed &nbsp;__________________________ &nbsp; Date &nbsp;____________</span>') +
         '</div>' +
       '</div><div class="pr-pagebreak"></div>';
     })();
@@ -5250,9 +5383,11 @@
         '</div>' +
         '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>' +
           (coverage ? escapeHtml_(coverage) + '<br>' : '') +
-          '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span></div>' +
+          (sign ? '<span class="pr-generated pr-signed">' + escapeHtml_(signedLine) + '</span>'
+                : '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span>') + '</div>' +
       '</div>' +
 
+      amendmentBox_(sign) +
       summaryBlock +
 
       // The standing banner lives on the summary page now; repeating it here
@@ -5282,11 +5417,769 @@
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
         dvsaRows + '</tbody></table>' +
 
-      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. Generated ' + escapeHtml_(generated) + '.</div>' +
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. ' +
+        escapeHtml_(sign ? signedLine : 'Generated ' + generated) + '.</div>' +
 
       exportsBlock +
       evidenceBlock +
-      certBlock;
+      certBlock +
+      historyBlock_(sign);
+  }
+
+  /* ══════════ Making the report PDF (stage B) ══════════
+     The app makes the signed PDF itself, so Paul never has to save a file and
+     drop it back in (decided 12 Oct 2026). The report is laid out in a hidden
+     page of its own, cut into A4 pages ONLY between rows, paragraphs and
+     sections (never through the middle of a table row), and each page is
+     photographed (html2canvas) into the PDF (jsPDF). Long tables repeat
+     their headings at the top of each new page. The scanned pages are put in
+     as they are, not redrawn, so they stay sharp. Every page carries
+     "Mortlake Station Garage · September 2026 · v1 · page X of Y". */
+  var PDF_PAGE = { w: 210, h: 297, margin: 12, foot: 8 };   // millimetres
+  var PDF_WIDTH_PX = 720;                                   // the report's width on screen
+  var PDF_PX_PER_MM = PDF_WIDTH_PX / (PDF_PAGE.w - 2 * PDF_PAGE.margin);
+  var PDF_PAGE_PX = Math.floor((PDF_PAGE.h - 2 * PDF_PAGE.margin - PDF_PAGE.foot) * PDF_PX_PER_MM);
+  var PDF_WINDOW_PX = 6000;                                 // how much is photographed at once
+
+  var loadedScripts_ = {};
+  function loadScript_(src) {
+    if (!loadedScripts_[src]) {
+      loadedScripts_[src] = new Promise(function (resolve, reject) {
+        var el = document.createElement('script');
+        el.src = src;
+        el.onload = resolve;
+        el.onerror = function () { delete loadedScripts_[src]; reject(new Error('Could not load ' + src)); };
+        document.head.appendChild(el);
+      });
+    }
+    return loadedScripts_[src];
+  }
+  // Only loaded when a report is signed, so opening the app stays quick.
+  function pdfLibs_() {
+    return Promise.all([loadScript_('assets/lib/html2canvas.min.js'), loadScript_('assets/lib/jspdf.umd.min.js')]);
+  }
+
+  // jsPDF's built-in font knows the usual Western characters only.
+  function pdfText_(t) {
+    return String(t || '').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+      .replace(/→/g, '->').replace(/[^\x20-\x7E -ÿ]/g, '');
+  }
+
+  /* Lays the report out in a hidden frame holding nothing but the report and
+     its styles, so photographing it doesn't copy the whole app each time. */
+  function reportFrame_(html) {
+    return new Promise(function (resolve) {
+      var frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + (PDF_WIDTH_PX + 40) + 'px;height:1200px;border:0;visibility:hidden';
+      document.body.appendChild(frame);
+      var doc = frame.contentDocument;
+      var styles = Array.prototype.map.call(document.querySelectorAll('style'), function (st) { return st.outerHTML; }).join('');
+      doc.open();
+      doc.write('<!doctype html><html><head><meta charset="utf-8"><base href="' + document.baseURI + '">' + styles +
+        '<style>html,body{margin:0;background:#fff}.pdf-mode .pr-cl-cols{column-count:1}' +
+        '.pdf-mode{width:' + PDF_WIDTH_PX + 'px;padding:0}</style></head><body>' +
+        '<div class="pr-doc pdf-mode" id="pdfReport">' + html + '</div></body></html>');
+      doc.close();
+      var imgs = Array.prototype.slice.call(doc.images);
+      Promise.all(imgs.map(function (im) {
+        return im.complete ? null : new Promise(function (r) { im.onload = im.onerror = r; });
+      })).then(function () { resolve({ frame: frame, root: doc.getElementById('pdfReport') }); });
+    });
+  }
+
+  /* Splits the report into what goes on which page. Returns a list of items:
+     { kind: 'html', from, to, head } — a slice of the laid-out report (pixels
+       from its top), with `head` the column headings to repeat, if any
+     { kind: 'evidence', el, prefix } — a scanned page, placed directly */
+  function planPdfPages_(root) {
+    var top0 = root.getBoundingClientRect().top;
+    function box(el) {
+      var r = el.getBoundingClientRect();
+      return { top: r.top - top0, bottom: r.bottom - top0 };
+    }
+    // Things a page may not be cut through: table rows, pictures, and any
+    // block with no smaller blocks inside it (a paragraph, a tile, a heading).
+    var atoms = [], tables = [];
+    function walk(el) {
+      var tag = el.tagName;
+      var cs = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (cs.display === 'none') return;
+      if (tag === 'TABLE') {
+        var head = el.tHead;
+        var t = box(el);
+        if (head) { var h = box(head); t.headTop = h.top; t.headBottom = h.bottom; }
+        tables.push(t);
+      }
+      if (tag === 'TR' || tag === 'IMG' || tag === 'svg' || tag === 'SVG' || tag === 'CANVAS') { atoms.push(box(el)); return; }
+      var blockKids = Array.prototype.filter.call(el.children, function (c) {
+        return !/^inline/.test(el.ownerDocument.defaultView.getComputedStyle(c).display);
+      });
+      if (!blockKids.length) {
+        var b = box(el);
+        if (b.bottom > b.top) atoms.push(b);
+        // A heading stays with what follows it.
+        if (/^H[1-4]$/.test(tag) || el.classList.contains('pr-cl-cat')) b.keepWithNext = true;
+        return;
+      }
+      blockKids.forEach(walk);
+    }
+
+    var items = [], section = [];
+    function closeSection() {
+      if (!section.length) return;
+      var first = box(section[0]), last = box(section[section.length - 1]);
+      items.push({ kind: 'section', els: section.slice(), from: Math.floor(first.top), to: Math.ceil(last.bottom) });
+      section = [];
+    }
+    Array.prototype.forEach.call(root.children, function (el) {
+      if (el.classList.contains('pr-pagebreak')) { closeSection(); return; }
+      if (el.classList.contains('pr-evidence-page')) { closeSection(); items.push({ kind: 'evidence', el: el }); return; }
+      if (el.classList.contains('pr-checklist-sheet')) { closeSection(); section.push(el); closeSection(); return; }
+      section.push(el);
+    });
+    closeSection();
+
+    var out = [];
+    items.forEach(function (it, idx) {
+      if (it.kind === 'evidence') {
+        // A short heading just before the scans ("Appendix — QC paperwork")
+        // goes on the first scan's page rather than a page of its own.
+        var prev = out[out.length - 1];
+        if (prev && prev.kind === 'html' && prev.short) { out.pop(); it.prefix = prev; }
+        out.push(it);
+        return;
+      }
+      atoms = []; tables = [];
+      it.els.forEach(walk);
+      atoms.sort(function (a, b) { return a.top - b.top; });
+      for (var i = 0; i < atoms.length - 1; i++) {
+        if (atoms[i].keepWithNext) atoms[i].bottom = Math.max(atoms[i].bottom, atoms[i + 1].bottom);
+      }
+      function clean(y) {
+        for (var k = 0; k < atoms.length; k++) {
+          if (atoms[k].top >= y) break;
+          if (atoms[k].bottom > y + 0.5 && atoms[k].top < y - 0.5) return false;
+        }
+        return true;
+      }
+      function cutBetween(start, limit) {
+        // The lowest clean place on the page, not less than half way down.
+        var cands = [];
+        atoms.forEach(function (a) {
+          [a.top, a.bottom].forEach(function (y) { if (y > start + (limit - start) * 0.5 && y <= limit) cands.push(y); });
+        });
+        cands.sort(function (a, b) { return b - a; });
+        for (var c = 0; c < cands.length; c++) if (clean(cands[c])) return Math.floor(cands[c]);
+        return limit;   // one thing taller than a page: no choice but to cut it
+      }
+      var y = it.from, startCount = out.length;
+      while (y < it.to - 2) {
+        var head = null;
+        tables.forEach(function (t) {
+          if (t.headBottom != null && y >= t.headBottom - 0.5 && y < t.bottom - 1) head = t;
+        });
+        var room = PDF_PAGE_PX - (head ? head.headBottom - head.headTop : 0);
+        var limit = Math.min(y + room, it.to);
+        var cut = limit >= it.to ? it.to : cutBetween(y, limit);
+        if (cut <= y) cut = limit;
+        out.push({ kind: 'html', from: y, to: cut, head: head });
+        y = cut;
+      }
+      if (out.length - startCount === 1 && it.to - it.from < 260) out[out.length - 1].short = true;
+    });
+    return out;
+  }
+
+  function makeReportPdf_(sign, onProgress) {
+    var progress = onProgress || function () {};
+    return pdfLibs_().then(function () {
+      return reportFrame_(buildReportHTML(sign));
+    }).then(function (f) {
+      var root = f.root;
+      var plan = planPdfPages_(root);
+      var jsPDF = window.jspdf.jsPDF;
+      var pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      var M = PDF_PAGE.margin, CW = PDF_PAGE.w - 2 * M, CH = PDF_PAGE.h - 2 * M - PDF_PAGE.foot;
+      var pageNo = 0;
+      function newPage() { if (pageNo) pdf.addPage(); pageNo++; }
+
+      var shots = {};   // photographed stretches of the report, by start
+      function shoot(from, to) {
+        return window.html2canvas(root, { x: 0, y: from, width: PDF_WIDTH_PX, height: Math.max(1, to - from), scale: 2,
+                                         backgroundColor: '#ffffff', logging: false, windowWidth: PDF_WIDTH_PX + 40 });
+      }
+      // Photographs the report in long stretches and cuts pages out of them.
+      function canvasFor(from, to) {
+        var key = Object.keys(shots).filter(function (k) { return shots[k].from <= from && shots[k].to >= to; })[0];
+        if (key) return Promise.resolve(shots[key]);
+        var end = from + PDF_WINDOW_PX;
+        plan.forEach(function (p) { if (p.kind === 'html' && p.from >= from && p.to <= from + PDF_WINDOW_PX) end = Math.max(to, p.to); });
+        end = Math.max(end, to);
+        return shoot(from, end).then(function (c) { shots = {}; shots[from] = { from: from, to: end, canvas: c }; return shots[from]; });
+      }
+      function slice(shot, from, to) {
+        var c = document.createElement('canvas');
+        c.width = shot.canvas.width;
+        c.height = Math.max(1, Math.round((to - from) * 2));
+        c.getContext('2d').drawImage(shot.canvas, 0, Math.round((from - shot.from) * 2), c.width, c.height, 0, 0, c.width, c.height);
+        return c;
+      }
+      var headShots = [];
+      function headCanvas(t) {
+        var hit = headShots.filter(function (h) { return h.t === t; })[0];
+        if (hit) return Promise.resolve(hit.c);
+        return shoot(t.headTop, t.headBottom).then(function (c) { headShots.push({ t: t, c: c }); return c; });
+      }
+      function addHtmlPage(p, yMm) {
+        return (p.head ? headCanvas(p.head) : Promise.resolve(null)).then(function (hc) {
+          return canvasFor(p.from, p.to).then(function (shot) {
+            var y = yMm == null ? M : yMm;
+            if (hc) {
+              pdf.addImage(hc.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, CW, hc.height / 2 / PDF_PX_PER_MM);
+              y += hc.height / 2 / PDF_PX_PER_MM;
+            }
+            var c = slice(shot, p.from, p.to);
+            pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, CW, (p.to - p.from) / PDF_PX_PER_MM);
+            return y + (p.to - p.from) / PDF_PX_PER_MM;
+          });
+        });
+      }
+      function addEvidence(p) {
+        newPage();
+        var start = p.prefix ? addHtmlPage(p.prefix) : Promise.resolve(M);
+        return start.then(function (y) {
+          if (p.prefix) y += 3;
+          var head = p.el.querySelector('.pr-evidence-head'), meta = p.el.querySelector('.pr-evidence-meta');
+          pdf.setTextColor(26, 26, 26); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+          pdf.text(pdfText_(head ? head.textContent : ''), M, y + 4);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(102, 102, 102);
+          var metaLines = pdf.splitTextToSize(pdfText_(meta ? meta.textContent : ''), CW);
+          pdf.text(metaLines, M, y + 9);
+          y += 11 + metaLines.length * 3.5;
+          var img = p.el.querySelector('img');
+          if (img && img.naturalWidth) {
+            var src = img.getAttribute('src');
+            var fmt = /^data:image\/png/.test(src) ? 'PNG' : 'JPEG';
+            var maxH = M + CH - y;
+            var k = Math.min(CW / img.naturalWidth, maxH / img.naturalHeight);
+            pdf.addImage(src.split(',')[1], fmt, M + (CW - img.naturalWidth * k) / 2, y, img.naturalWidth * k, img.naturalHeight * k);
+          }
+        });
+      }
+
+      var total = plan.length, done = 0;
+      return plan.reduce(function (chain, p) {
+        return chain.then(function () {
+          progress('Making page ' + (done + 1) + ' of ' + total + '…', done / total);
+          var step = p.kind === 'evidence' ? addEvidence(p) : (newPage(), addHtmlPage(p));
+          return step.then(function () { done++; });
+        });
+      }, Promise.resolve()).then(function () {
+        // Every page: the month, the version and "page X of Y".
+        var n = pdf.getNumberOfPages();
+        var label = 'Mortlake Station Garage  ·  ' + formatMonth(dataMonth_() || currentMonth) +
+                    (sign ? '  ·  v' + sign.version : '  ·  preview, not signed');
+        for (var i = 1; i <= n; i++) {
+          pdf.setPage(i);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(120, 120, 120);
+          pdf.text(pdfText_(label), M, PDF_PAGE.h - M + 2);
+          pdf.text('page ' + i + ' of ' + n, PDF_PAGE.w - M, PDF_PAGE.h - M + 2, { align: 'right' });
+        }
+        var bytes = new Uint8Array(pdf.output('arraybuffer'));
+        f.frame.remove();
+        progress('Report made: ' + n + ' pages', 1);
+        return { bytes: bytes, pages: n };
+      }, function (err) { f.frame.remove(); throw err; });
+    });
+  }
+
+  function bytesToBase64_(bytes) {
+    var out = '', CHUNK = 0x8000;
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(out);
+  }
+
+  /* ══════════ Stage B: signing off, amending, opening a signed report ══════════
+     SPEC.md sections 6–7. The back office is the real lock: a signed month
+     refuses every change there, whatever this page does. */
+  function monthStatus_() { return (monthDoc_ && monthDoc_.status) || 'draft'; }
+
+  var DOC_NAMES_ = { vt20_certificate: 'VT20 certificate', inspection_sheet: 'inspection sheet', emissions_test: 'emissions test' };
+
+  // Each QC vehicle's set, from what Claude read: which documents are missing,
+  // and which pages have no readable registration at all.
+  function qcVehicleCheck_() {
+    var groups = {}, unidentified = [];
+    qcSortResults.forEach(function (item) {
+      if (!item.response || item.response.status !== 'success') return;
+      var a = item.response.result || {};
+      var reg = normalizeReg_(a.registration);
+      if (!looksLikeRealPlate_(reg)) { unidentified.push(item.label); return; }
+      (groups[reg] = groups[reg] || []).push(a);
+    });
+    var incomplete = Object.keys(groups).sort().map(function (reg) {
+      var found = groups[reg].map(function (p) { return p.document_type; });
+      var missing = expectedDocsFor_(groups[reg]).filter(function (t) { return found.indexOf(t) === -1; });
+      return { reg: reg, missing: missing.map(function (t) { return DOC_NAMES_[t] || t.replace(/_/g, ' '); }) };
+    }).filter(function (v) { return v.missing.length; });
+    return { incomplete: incomplete, unidentified: unidentified };
+  }
+
+  /* Everything that must be right before a month can be signed off (agreed
+     17 Oct 2026: nothing may be signed with anything missing). It starts from
+     what the preview needs, then adds the stricter rules. */
+  function signOffBlockers_() {
+    if (monthStatus_() === 'signed') return [{ what: formatMonth(currentMonth) + ' is already signed off', where: 'report' }];
+    var missing = reportBlockers_();
+    var q = qcVehicleCheck_();
+    q.incomplete.forEach(function (v) {
+      missing.push({ what: 'QC vehicle ' + v.reg + ' is missing its ' + v.missing.join(' and ') + ' — add the page', where: 'report' });
+    });
+    q.unidentified.forEach(function (label) {
+      missing.push({ what: 'QC page "' + label + '" has no readable registration — remove it or scan it again', where: 'report' });
+    });
+    var certBad = savedPages_.cert.filter(function (p) { return !p.provisional && p.status !== 'read'; }).length;
+    if (certBad) {
+      missing.push({ what: certBad + ' calibration certificate' + (certBad === 1 ? '' : 's') +
+                           ' could not be read — retry or remove ' + (certBad === 1 ? 'it' : 'them'), where: 'report' });
+    }
+    var noNote = 0;
+    Object.keys(checklistState).forEach(function (k) {
+      if (checklistState[k] === 'no' && !(checklistNotes[k] || '').trim()) noNote++;
+    });
+    if (noNote) {
+      missing.push({ what: noNote + ' checklist answer' + (noNote === 1 ? '' : 's') + ' marked NO ' +
+                           (noNote === 1 ? 'needs a note' : 'need a note') + ' saying what needs fixing', where: 'checklist' });
+    }
+    return missing;
+  }
+
+  function updateSignButton_() {
+    var st = monthStatus_();
+    var show = !!SCRIPT_URL && recordsReady_ && !!monthDoc_ && st !== 'signed';
+    var blocked = show && signOffBlockers_().length > 0;
+    ['signOffBtn', 'signOffBtn2'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (!b) return;
+      b.hidden = !show;
+      b.textContent = st === 'amending' ? 'Sign off amendment' : 'Sign off';
+      b.classList.toggle('is-blocked', blocked);
+      b.title = blocked ? 'Some things are still missing — click to see what' : '';
+    });
+  }
+
+  function latestVersion_() {
+    var v = (monthDoc_ && monthDoc_.versions) || [];
+    return v.length ? v[v.length - 1] : null;
+  }
+
+  // The banner under the header, the locked view, and the sign-off buttons.
+  function renderMonthState_() {
+    var st = monthStatus_();
+    document.body.classList.toggle('month-locked', st === 'signed');
+    var el = document.getElementById('monthBanner');
+    if (el) {
+      var name = formatMonth(currentMonth), v = latestVersion_();
+      if (st === 'signed' && v) {
+        var older = monthDoc_.versions.slice(0, -1).reverse();
+        el.className = 'month-banner signed';
+        el.innerHTML = '<div class="mb-text"><strong>' + escapeHtml_(name) + ' is signed off.</strong> Version ' + v.version +
+            ', ' + escapeHtml_(fmtLongDate_(v.signedAt)) + ' by ' + escapeHtml_(v.signedBy) +
+            '. Nothing can be changed without an amendment.</div>' +
+          '<div class="mb-actions"><button type="button" class="btn btn-primary" onclick="openSignedReport()">Open report</button>' +
+          '<button type="button" class="btn btn-secondary" onclick="startAmend()">Amend</button></div>' +
+          (older.length ? '<div class="mb-older">Older versions, kept as signed: ' + older.map(function (o) {
+            return '<button type="button" onclick="openSignedReport(' + o.version + ')">version ' + o.version + ' (' +
+              escapeHtml_(fmtLongDate_(o.signedAt)) + ')</button>';
+          }).join(' ') + '</div>' : '');
+        el.hidden = false;
+      } else if (st === 'amending' && monthDoc_.amendment) {
+        el.className = 'month-banner amending';
+        el.innerHTML = '<div class="mb-text"><strong>You are amending ' + escapeHtml_(name) + '.</strong> Reason: ' +
+            escapeHtml_(monthDoc_.amendment.reason) + '. Version ' + monthDoc_.amendment.fromVersion +
+            ' stays the official report until you sign off the amendment.</div>' +
+          '<div class="mb-actions"><button type="button" class="btn btn-primary" onclick="startSignOff()">Sign off amendment</button>' +
+          '<button type="button" class="btn btn-secondary" onclick="openSignedReport()">Open version ' + monthDoc_.amendment.fromVersion + '</button>' +
+          '<button type="button" class="btn btn-secondary" onclick="cancelAmendment()">Cancel amendment</button></div>';
+        el.hidden = false;
+      } else {
+        el.hidden = true;
+        el.innerHTML = '';
+      }
+    }
+    updateSignButton_();
+    renderReminder_();
+  }
+
+  /* From the 10th, a month that isn't signed off yet is mentioned at the top,
+     and so is any amendment left open. */
+  function renderReminder_() {
+    var el = document.getElementById('reminderBar');
+    if (!el) return;
+    var now = new Date(), items = [];
+    if (now.getDate() >= 10) {
+      var prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      var pm = prev.getFullYear() + '-' + ('0' + (prev.getMonth() + 1)).slice(-2);
+      var e = recordsIndex_[pm];
+      if ((!e || e.status === 'draft') && pm !== currentMonth) items.push({ month: pm, text: formatMonth(pm) + ' isn’t signed off yet.' });
+    }
+    Object.keys(recordsIndex_).sort().forEach(function (m) {
+      if (recordsIndex_[m].status === 'amending' && m !== currentMonth) {
+        items.push({ month: m, text: formatMonth(m) + ' has an amendment in progress — version ' +
+                                    (recordsIndex_[m].signedVersion || 1) + ' is still the official report.' });
+      }
+    });
+    if (!SCRIPT_URL || !items.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.innerHTML = items.map(function (it) {
+      return '<div class="rb-item"><span>' + escapeHtml_(it.text) + '</span>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-month="' + it.month +
+          '">Open ' + escapeHtml_(formatMonth(it.month)) + '</button></div>';
+    }).join('');
+    el.querySelectorAll('[data-month]').forEach(function (b) {
+      b.addEventListener('click', function () { changeMonth_(b.dataset.month).then(function () { switchTab('report'); }); });
+    });
+    el.hidden = false;
+  }
+
+  function closeDialog_(id) { document.getElementById(id).hidden = true; }
+
+  /* ── Sign off ── */
+  var SIGNER_KEY = 'mortlake_signer_name';
+
+  function startSignOff() {
+    if (!SCRIPT_URL || !monthDoc_) return;
+    flushChecklist_();
+    var missing = signOffBlockers_();
+    if (missing.length) {
+      switchTab('report');
+      showReportBlockers_(missing, 'Not ready to sign off');
+      return;
+    }
+    hideReportBlockers_();
+    var amending = monthStatus_() === 'amending';
+    var name = formatMonth(currentMonth);
+    var q = qcVehicleCheck_(), vehicles = {};
+    qcSortResults.forEach(function (i) {
+      var r = i.response && i.response.result;
+      if (r && looksLikeRealPlate_(normalizeReg_(r.registration))) vehicles[normalizeReg_(r.registration)] = true;
+    });
+    var flagged = Object.keys(checklistState).filter(function (k) { return checklistState[k] === 'no'; }).length;
+    document.getElementById('signTitle').textContent = (amending ? 'Sign off the amendment to ' : 'Sign off ') + name;
+    document.getElementById('signSummary').innerHTML =
+      escapeHtml_((TEST_LOG && TEST_LOG.total ? TEST_LOG.total + ' tests · ' : '') +
+        savedPages_.qc.length + ' QC pages covering ' + Object.keys(vehicles).length +
+        (Object.keys(vehicles).length === 1 ? ' vehicle · ' : ' vehicles · ') +
+        savedPages_.cert.length + ' calibration certificate' + (savedPages_.cert.length === 1 ? '' : 's') +
+        ' · checklist complete, ' + flagged + ' marked NO') +
+      (amending ? '<br>Reason for the amendment: ' + escapeHtml_(monthDoc_.amendment.reason) : '');
+    document.getElementById('signConfirmText').textContent =
+      'I confirm this is a complete and accurate record for ' + name + '.';
+    document.getElementById('signNote').textContent = amending
+      ? 'A full new report (version ' + ((monthDoc_.signedVersion || 0) + 1) + ') will be made with the updated figures and filed in Google Drive next to version ' +
+        monthDoc_.signedVersion + ', which is kept exactly as it is.'
+      : 'The report will be made and filed in Google Drive. After that the month is locked: any change needs an amendment, with a reason.';
+    var box = document.getElementById('signConfirm'), nameEl = document.getElementById('signName');
+    box.checked = false;
+    try { nameEl.value = localStorage.getItem(SIGNER_KEY) || ''; } catch (e) { nameEl.value = ''; }
+    function check() {
+      document.getElementById('signGo').disabled = !(box.checked && nameEl.value.trim().length >= 3);
+    }
+    box.onchange = check; nameEl.oninput = check;
+    check();
+    document.getElementById('signDialog').hidden = false;
+  }
+
+  function confirmSignOff() {
+    var signedBy = document.getElementById('signName').value.replace(/\s+/g, ' ').trim();
+    if (!document.getElementById('signConfirm').checked || signedBy.length < 3) return;
+    try { localStorage.setItem(SIGNER_KEY, signedBy); } catch (e) {}
+    closeDialog_('signDialog');
+    return runSignOff_(signedBy);
+  }
+
+  function showSignProgress_(text, fraction, sub) {
+    document.getElementById('signProgress').hidden = false;
+    document.getElementById('signProgressText').textContent = text;
+    document.getElementById('signProgressSub').textContent = sub || '';
+    document.getElementById('signProgressActions').innerHTML = '';
+    document.querySelector('#signProgress .tyre').classList.remove('still');
+    if (fraction != null) setTyreProgress_('signTyre', fraction);
+  }
+  function endSignProgress_(text, sub, buttons) {
+    showSignProgress_(text, null, sub);
+    var actions = document.getElementById('signProgressActions');
+    actions.innerHTML = '';
+    (buttons || []).concat([{ label: 'Close', cls: 'btn-secondary', run: function () {} }]).forEach(function (b) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'btn ' + (b.cls || 'btn-primary');
+      el.textContent = b.label;
+      el.onclick = function () { document.getElementById('signProgress').hidden = true; b.run(); };
+      actions.appendChild(el);
+    });
+  }
+
+  // What the report is built from must be exactly what is filed.
+  function recordStamp_(d) {
+    return JSON.stringify({
+      q: (d.qcPages || []).map(function (p) { return p.id + ':' + p.status; }),
+      c: (d.certPages || []).map(function (p) { return p.id + ':' + p.status; }),
+      f: Object.keys(d.dvsaFiles || {}).sort().map(function (k) { return k + ':' + d.dvsaFiles[k].fileId; }),
+      r: d.revisions
+    });
+  }
+  function onScreenMatches_(d) {
+    // Same pages, whatever order they finished saving in.
+    var ids = function (l) { return l.filter(function (p) { return !p.provisional; }).map(function (p) { return p.id; }).sort().join(','); };
+    return ids(savedPages_.qc) === ids(d.qcPages || []) && ids(savedPages_.cert) === ids(d.certPages || []) &&
+      ((d.revisions && d.revisions.checklist) || 0) === (checklistRev_[currentMonth] || 0);
+  }
+
+  // The amendment box lists what changed, taken from the history.
+  function changesSince_(d) {
+    var from = new Date(d.amendment.startedAt).getTime();
+    return (d.history || []).filter(function (h) {
+      return new Date(h.at).getTime() >= from && !/^(Read |Could not read |Amendment started)/.test(h.what);
+    }).map(function (h) { return h.what; });
+  }
+
+  var SIGN_PIECE_CHARS = 2000000;   // base64 characters per piece (about 1.5MB), well inside Google's limits;
+                                    // the same pieces are handed back when the report is opened
+  var signing_ = false;
+
+  function runSignOff_(signedBy) {
+    if (signing_) return Promise.resolve();
+    signing_ = true;
+    var month = currentMonth, token = openToken_;
+    var mode = monthStatus_() === 'amending' ? 'amend' : 'sign';
+    var name = formatMonth(month), before, made;
+    savesInFlight_++;
+    renderSaveIndicator_();
+    showSignProgress_('Checking ' + name + '…', 0, 'Don’t leave yet — this takes about half a minute.');
+    function fail(msg, reopen) {
+      endSignProgress_('Not signed off', msg + ' Nothing was signed; ' + name + ' is exactly as it was.');
+      if (reopen && token === openToken_) openMonth_(month);
+    }
+    return api_('loadMonth', { month: month }).then(function (res) {
+      if (res.status !== 'success') throw { msg: res.message || 'Could not check the month with Google.' };
+      before = res.details;
+      if (!onScreenMatches_(before)) throw { msg: name + ' was changed on another computer, so it has been reloaded. Check it and sign off again.', reopen: true };
+      showSignProgress_('Getting the scanned pages…', 0.03);
+      return ensureEvidence_();
+    }).then(function () {
+      var version = (before.signedVersion || 0) + 1, now = new Date();
+      var last = (before.versions || [])[(before.versions || []).length - 1];
+      var line = mode === 'amend'
+        ? 'Amendment signed off as version ' + version + ' by ' + signedBy + '. Reason: ' + before.amendment.reason
+        : 'Signed off as version ' + version + ' by ' + signedBy;
+      var sign = {
+        version: version, signedBy: signedBy, signedAt: now,
+        history: (before.history || []).concat([{ at: now.toISOString(), what: line }]),
+        amendment: mode === 'amend' ? { reason: before.amendment.reason, previous: last, changes: changesSince_(before) } : null
+      };
+      return makeReportPdf_(sign, function (text, f) { showSignProgress_(text, 0.05 + f * 0.55, 'Don’t leave yet — the report is being made.'); });
+    }).then(function (pdf) {
+      made = pdf;
+      var b64 = bytesToBase64_(pdf.bytes);
+      var pieces = Math.max(1, Math.ceil(b64.length / SIGN_PIECE_CHARS));
+      showSignProgress_('Sending the report to Google…', 0.6, (pdf.bytes.length / 1048576).toFixed(1) + 'MB, ' + pdf.pages + ' pages');
+      return api_('signStart', { month: month, mode: mode, bytes: pdf.bytes.length, pieces: pieces, signedBy: signedBy, confirm: true })
+        .then(function (st) {
+          if (st.status !== 'success') throw { msg: st.message || 'Google would not start the sign-off.' };
+          if (recordStamp_(st.details) !== recordStamp_(before)) {
+            throw { msg: 'Something in ' + name + ' changed while the report was being made.', reopen: true };
+          }
+          var sent = 0, list = [];
+          for (var i = 0; i < pieces; i++) list.push(i);
+          function send(i, tries) {
+            return apiOnce_('signPiece', { uploadId: st.uploadId, index: i, data: b64.substr(i * SIGN_PIECE_CHARS, SIGN_PIECE_CHARS) })
+              .then(function (r) {
+                if (r.status === 'success') return;
+                if (tries > 0 && (r.noReply || r.status === 'busy' || r.status === 'error')) return send(i, tries - 1);
+                throw { msg: 'Part of the report could not be sent (' + (r.message || 'no reply') + ').' };
+              });
+          }
+          return runWithConcurrency_(list, function (i) { return send(i, 2); }, function (done) {
+            sent = done;
+            showSignProgress_('Sending the report to Google… ' + sent + ' of ' + pieces, 0.6 + 0.3 * sent / pieces,
+                              (made.bytes.length / 1048576).toFixed(1) + 'MB, ' + made.pages + ' pages');
+          }).then(function () { return finish(st.uploadId, 4); });
+        });
+      // Safe to ask twice: Google recognises an upload it has already filed.
+      function finish(uploadId, tries) {
+        showSignProgress_('Filing and checking the report…', 0.92);
+        return apiOnce_('signFinish', { month: month, uploadId: uploadId }).then(function (r) {
+          if (r.status === 'success') return r;
+          if (tries > 0 && (r.noReply || r.status === 'busy')) {
+            return new Promise(function (w) { setTimeout(w, 5000); }).then(function () { return finish(uploadId, tries - 1); });
+          }
+          throw { msg: r.message || 'Google did not confirm the report was filed.', reopen: r.status === 'conflict' };
+        });
+      }
+    }).then(function (r) {
+      setTyreProgress_('signTyre', 1);
+      if (token === openToken_) {
+        monthDoc_ = r.details;
+        recordsIndex_[month] = Object.assign({}, recordsIndex_[month] || {}, { status: 'signed', signedVersion: r.version.version });
+        renderMonthState_();
+        renderReminder_();
+      }
+      endSignProgress_('Filed. ' + name + ' is signed off.',
+        'Version ' + r.version.version + ', ' + made.pages + ' pages, saved in Google Drive.',
+        [{ label: 'Open report', run: function () { openSignedReport(r.version.version); } }]);
+    }).catch(function (e) {
+      fail((e && (e.msg || e.message)) || 'Something went wrong.', e && e.reopen);
+    }).then(function () {
+      signing_ = false;
+      savesInFlight_--;
+      renderSaveIndicator_();
+    });
+  }
+
+  /* ── Amend ── */
+  function startAmend() {
+    var v = latestVersion_();
+    if (!v) return;
+    var name = formatMonth(currentMonth);
+    document.getElementById('amendTitle').textContent = 'Amend ' + name;
+    document.getElementById('amendConfirmText').textContent =
+      'I am amending ' + name + ' (signed off ' + fmtLongDate_(v.signedAt) + ', version ' + v.version + ').';
+    var box = document.getElementById('amendConfirm'), reason = document.getElementById('amendReason');
+    box.checked = false; reason.value = '';
+    function check() { document.getElementById('amendGo').disabled = !(box.checked && reason.value.trim().length >= 10); }
+    box.onchange = check; reason.oninput = check;
+    check();
+    document.getElementById('amendDialog').hidden = false;
+  }
+
+  function confirmAmend() {
+    var reason = document.getElementById('amendReason').value.trim();
+    if (!document.getElementById('amendConfirm').checked || reason.length < 10) return;
+    closeDialog_('amendDialog');
+    var month = currentMonth;
+    showMonthOverlay_('Unlocking ' + formatMonth(month) + ' for the amendment…');
+    return api_('startAmend', { month: month, confirm: true, reason: reason }).then(function (r) {
+      hideMonthOverlay_();
+      if (r.status !== 'success') { alert(r.message || 'The amendment could not be started.'); return; }
+      if (month !== currentMonth) return;
+      monthDoc_ = r.details;
+      recordsIndex_[month] = Object.assign({}, recordsIndex_[month] || {}, { status: 'amending' });
+      renderMonthState_();
+      renderReminder_();
+    });
+  }
+
+  function cancelAmendment() {
+    var d = monthDoc_;
+    if (!d || !d.amendment) return;
+    if (!confirm('Cancel the amendment to ' + formatMonth(currentMonth) + '?\n\nEverything goes back exactly as it was signed in version ' +
+                 d.amendment.fromVersion + '. Pages added during the amendment are moved to the Removed folder.')) return;
+    var month = currentMonth;
+    flushChecklist_();
+    showMonthOverlay_('Putting ' + formatMonth(month) + ' back as it was signed…');
+    return api_('cancelAmend', { month: month }).then(function (r) {
+      if (r.status !== 'success') { hideMonthOverlay_(); alert(r.message || 'The amendment could not be cancelled.'); return; }
+      recordsIndex_[month] = Object.assign({}, recordsIndex_[month] || {}, { status: 'signed' });
+      renderReminder_();
+      if (month === currentMonth) return openMonth_(month);
+      hideMonthOverlay_();
+    });
+  }
+
+  /* ── Open a signed report ──
+     Fetched through the back office in pieces and shown in the browser's own
+     PDF viewer, so it works on any computer with just the app password. */
+  var viewerUrl_ = null;
+  function openSignedReport(version) {
+    var month = currentMonth;
+    var body = document.getElementById('pdfViewerBody');
+    var actions = document.getElementById('pdfViewerActions');
+    document.getElementById('pdfViewerTitle').textContent = 'Signed report — ' + formatMonth(month);
+    document.getElementById('pdfViewerSub').textContent = '';
+    actions.innerHTML = '<button type="button" class="btn btn-secondary" onclick="closeReportViewer()">Back</button>';
+    body.innerHTML = '<div class="pv-wait">' + tyreSvg_({ id: 'viewerTyre' }) + '<div id="viewerWait">Fetching the report from Google Drive…</div></div>';
+    document.getElementById('pdfViewer').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    var parts = [];
+    // Google now and then stalls on one of these large answers and gives up
+    // after half a minute, so each piece is asked for up to three times.
+    function get(i, tries) {
+      tries = tries == null ? 2 : tries;
+      return apiOnce_('getReport', { month: month, version: version || null, index: i }).then(function (r) {
+        if ((r.noReply || r.status === 'busy') && tries > 0) {
+          var w = document.getElementById('viewerWait');
+          if (w) w.textContent = 'Google is slow — asking again…';
+          return get(i, tries - 1);
+        }
+        if (r.status !== 'success') throw new Error(r.message || 'The report could not be fetched.');
+        parts[i] = r.data;
+        setTyreProgress_('viewerTyre', (i + 1) / r.pieces);
+        var w = document.getElementById('viewerWait');
+        if (w) w.textContent = 'Fetching the report from Google Drive… ' + (i + 1) + ' of ' + r.pieces;
+        return i + 1 < r.pieces ? get(i + 1) : r;
+      });
+    }
+    return get(0).then(function (r) {
+      var bin = atob(parts.join('')), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (viewerUrl_) URL.revokeObjectURL(viewerUrl_);
+      viewerUrl_ = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      var v = r.version;
+      document.getElementById('pdfViewerSub').textContent = 'Version ' + v.version + ' · ' +
+        (v.kind === 'amend' ? 'amended ' : 'signed off ') + fmtLongDate_(v.signedAt) + ' by ' + v.signedBy;
+      actions.innerHTML =
+        '<a class="btn btn-secondary" href="' + viewerUrl_ + '" download="' + escapeHtml_(v.fileName) + '">Download</a>' +
+        '<a class="btn btn-secondary" href="' + escapeHtml_(r.url) + '" target="_blank" rel="noopener">Open in Google Drive</a>' +
+        '<button type="button" class="btn btn-primary" onclick="closeReportViewer()">Back</button>';
+      body.innerHTML = '<iframe title="Signed report" src="' + viewerUrl_ + '"></iframe>';
+    }).catch(function (err) {
+      body.innerHTML = '<div class="pv-wait">' + escapeHtml_(err.message) + '</div>';
+    });
+  }
+
+  function closeReportViewer() {
+    document.getElementById('pdfViewer').style.display = 'none';
+    document.getElementById('pdfViewerBody').innerHTML = '';
+    document.body.style.overflow = '';
+  }
+
+  function fmtLongDate_(d) {
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+
+  // Page 1 of an amended report says plainly that it replaces the earlier one,
+  // why, and what changed (taken from the history, so Paul doesn't write it).
+  function amendmentBox_(sign) {
+    if (!sign || !sign.amendment) return '';
+    var a = sign.amendment;
+    return '<div class="pr-amend-box">' +
+      '<div class="pr-amend-title">Amended report, version ' + sign.version + '</div>' +
+      '<div>This replaces version ' + a.previous.version + ', signed ' + escapeHtml_(fmtLongDate_(a.previous.signedAt)) +
+        '. Amended ' + escapeHtml_(fmtLongDate_(sign.signedAt)) + ' by ' + escapeHtml_(sign.signedBy) + '.</div>' +
+      '<div><strong>Reason:</strong> ' + escapeHtml_(a.reason) + '</div>' +
+      (a.changes.length
+        ? '<div><strong>Changes since version ' + a.previous.version + ':</strong></div><ul>' +
+          a.changes.map(function (c) { return '<li>' + escapeHtml_(c) + '</li>'; }).join('') + '</ul>'
+        : '<div>No pages, files or answers were changed; the report was signed again.</div>') +
+    '</div>';
+  }
+
+  // The last page: every change made to the month, so the record shows how it
+  // was put together.
+  function historyBlock_(sign) {
+    if (!sign || !sign.history || !sign.history.length) return '';
+    return '<div class="pr-pagebreak"></div><h2>History of this record</h2>' +
+      '<div class="pr-note">Every change made to ' + escapeHtml_(formatMonth(currentMonth)) + ' in the app, oldest first.</div>' +
+      '<table class="pr-history"><thead><tr><th>When</th><th>What</th></tr></thead><tbody>' +
+      sign.history.map(function (h) {
+        var d = new Date(h.at);
+        return '<tr><td>' + escapeHtml_(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+                                        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) + '</td>' +
+               '<td>' + escapeHtml_(h.what) + '</td></tr>';
+      }).join('') + '</tbody></table>';
   }
 
   /* Generate now shows the finished report on screen first. Going straight to
@@ -5366,16 +6259,16 @@
     return missing;
   }
 
-  function showReportBlockers_(missing) {
+  function showReportBlockers_(missing, title) {
     var box = document.getElementById('reportBlockers');
     if (!box) return;
     box.innerHTML =
-      '<div class="blockers-head">Not ready to generate &mdash; ' + missing.length +
+      '<div class="blockers-head">' + escapeHtml_(title || 'Not ready to preview') + ' &mdash; ' + missing.length +
         ' thing' + (missing.length === 1 ? '' : 's') + ' still needed</div>' +
       '<ul class="blockers-list">' +
         missing.map(function (m) {
           return '<li><span>' + escapeHtml_(m.what) + '</span>' +
-                 '<button type="button" class="blockers-go" data-go="' + (m.where || 'report') + '">Fix</button></li>';
+                 '<button type="button" class="blockers-go" data-go="' + (m.where || 'report') + '">Go there</button></li>';
         }).join('') +
       '</ul>';
     box.style.display = 'block';
