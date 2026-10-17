@@ -823,6 +823,12 @@
      (see rotateImageBase64_), so no transform is needed — CSS rotation is
      unreliable across print engines and fights the page box. */
   .pr-doc .pr-pagebreak { page-break-before: always; break-before: page; }
+  .pr-doc .pr-signed { font-weight: bold; opacity: 1; }
+  .pr-doc .pr-amend-box { border: 2px solid #b45309; background: #fff7ed; border-radius: 6px; padding: 10px 12px;
+    margin: 0 0 12px; font-size: 11px; line-height: 1.45; }
+  .pr-doc .pr-amend-box ul { margin: 4px 0 0 18px; padding: 0; }
+  .pr-doc .pr-amend-title { font-size: 13px; font-weight: bold; color: #9a3412; margin-bottom: 4px; }
+  .pr-doc .pr-history td:first-child { white-space: nowrap; width: 1%; }
 
   /* The print copy stays hidden on screen; the preview copy is the one people
      look at. Only the print copy goes to paper, so the preview's own chrome
@@ -4815,7 +4821,12 @@
     { input: 'fileRating', label: 'Test Quality Information' }
   ];
 
-  function buildReportHTML() {
+  /* `sign` (stage B) is given only when the report is being signed off:
+       { version, signedBy, signedAt, amendment: { reason, previous, changes }, history }.
+     It puts who signed and when on page 1, the amendment box on an amended
+     report, and the month's history on the last page. Without it, this is
+     the preview, exactly as before. */
+  function buildReportHTML(sign) {
     // The report is dated by the period its data covers, not the day it was
     // generated: September's report made on 11 October is September's report.
     // When it was made is kept as a small secondary note.
@@ -4827,6 +4838,9 @@
     var now = new Date();
     var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
       ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    var signedLine = sign
+      ? 'Signed off by ' + sign.signedBy + ' on ' + fmtLongDate_(sign.signedAt) + ' · Version ' + sign.version
+      : '';
 
     // Checklist tally
     var total = 0, done = 0, flagged = 0;
@@ -5127,7 +5141,9 @@
         '<div class="pr-sum-tiles">' + tiles + '</div>' +
         actionBlock +
         '<div class="pr-sum-foot">' + escapeHtml_(evidenceLine) +
-          '<span class="pr-sum-sign">Signed &nbsp;__________________________ &nbsp; Date &nbsp;____________</span>' +
+          (sign
+            ? '<span class="pr-sum-sign pr-signed">' + escapeHtml_(signedLine) + '</span>'
+            : '<span class="pr-sum-sign">Signed &nbsp;__________________________ &nbsp; Date &nbsp;____________</span>') +
         '</div>' +
       '</div><div class="pr-pagebreak"></div>';
     })();
@@ -5250,9 +5266,11 @@
         '</div>' +
         '<div class="pr-meta"><strong>' + escapeHtml_(monthLabel) + '</strong>' +
           (coverage ? escapeHtml_(coverage) + '<br>' : '') +
-          '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span></div>' +
+          (sign ? '<span class="pr-generated pr-signed">' + escapeHtml_(signedLine) + '</span>'
+                : '<span class="pr-generated">Generated ' + escapeHtml_(generated) + '</span>') + '</div>' +
       '</div>' +
 
+      amendmentBox_(sign) +
       summaryBlock +
 
       // The standing banner lives on the summary page now; repeating it here
@@ -5282,11 +5300,325 @@
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
         dvsaRows + '</tbody></table>' +
 
-      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. Generated ' + escapeHtml_(generated) + '.</div>' +
+      '<div class="pr-foot">Mortlake Station Garage — internal DVSA quality-assurance record for ' + escapeHtml_(monthLabel) + '. ' +
+        escapeHtml_(sign ? signedLine : 'Generated ' + generated) + '.</div>' +
 
       exportsBlock +
       evidenceBlock +
-      certBlock;
+      certBlock +
+      historyBlock_(sign);
+  }
+
+  /* ══════════ Making the report PDF (stage B) ══════════
+     The app makes the signed PDF itself, so Paul never has to save a file and
+     drop it back in (decided 12 Oct 2026). The report is laid out in a hidden
+     page of its own, cut into A4 pages ONLY between rows, paragraphs and
+     sections (never through the middle of a table row), and each page is
+     photographed (html2canvas) into the PDF (jsPDF). Long tables repeat
+     their headings at the top of each new page. The scanned pages are put in
+     as they are, not redrawn, so they stay sharp. Every page carries
+     "Mortlake Station Garage · September 2026 · v1 · page X of Y". */
+  var PDF_PAGE = { w: 210, h: 297, margin: 12, foot: 8 };   // millimetres
+  var PDF_WIDTH_PX = 720;                                   // the report's width on screen
+  var PDF_PX_PER_MM = PDF_WIDTH_PX / (PDF_PAGE.w - 2 * PDF_PAGE.margin);
+  var PDF_PAGE_PX = Math.floor((PDF_PAGE.h - 2 * PDF_PAGE.margin - PDF_PAGE.foot) * PDF_PX_PER_MM);
+  var PDF_WINDOW_PX = 6000;                                 // how much is photographed at once
+
+  var loadedScripts_ = {};
+  function loadScript_(src) {
+    if (!loadedScripts_[src]) {
+      loadedScripts_[src] = new Promise(function (resolve, reject) {
+        var el = document.createElement('script');
+        el.src = src;
+        el.onload = resolve;
+        el.onerror = function () { delete loadedScripts_[src]; reject(new Error('Could not load ' + src)); };
+        document.head.appendChild(el);
+      });
+    }
+    return loadedScripts_[src];
+  }
+  // Only loaded when a report is signed, so opening the app stays quick.
+  function pdfLibs_() {
+    return Promise.all([loadScript_('assets/lib/html2canvas.min.js'), loadScript_('assets/lib/jspdf.umd.min.js')]);
+  }
+
+  // jsPDF's built-in font knows the usual Western characters only.
+  function pdfText_(t) {
+    return String(t || '').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+      .replace(/→/g, '->').replace(/[^\x20-\x7E -ÿ]/g, '');
+  }
+
+  /* Lays the report out in a hidden frame holding nothing but the report and
+     its styles, so photographing it doesn't copy the whole app each time. */
+  function reportFrame_(html) {
+    return new Promise(function (resolve) {
+      var frame = document.createElement('iframe');
+      frame.setAttribute('aria-hidden', 'true');
+      frame.style.cssText = 'position:fixed;left:-20000px;top:0;width:' + (PDF_WIDTH_PX + 40) + 'px;height:1200px;border:0;visibility:hidden';
+      document.body.appendChild(frame);
+      var doc = frame.contentDocument;
+      var styles = Array.prototype.map.call(document.querySelectorAll('style'), function (st) { return st.outerHTML; }).join('');
+      doc.open();
+      doc.write('<!doctype html><html><head><meta charset="utf-8"><base href="' + document.baseURI + '">' + styles +
+        '<style>html,body{margin:0;background:#fff}.pdf-mode .pr-cl-cols{column-count:1}' +
+        '.pdf-mode{width:' + PDF_WIDTH_PX + 'px;padding:0}</style></head><body>' +
+        '<div class="pr-doc pdf-mode" id="pdfReport">' + html + '</div></body></html>');
+      doc.close();
+      var imgs = Array.prototype.slice.call(doc.images);
+      Promise.all(imgs.map(function (im) {
+        return im.complete ? null : new Promise(function (r) { im.onload = im.onerror = r; });
+      })).then(function () { resolve({ frame: frame, root: doc.getElementById('pdfReport') }); });
+    });
+  }
+
+  /* Splits the report into what goes on which page. Returns a list of items:
+     { kind: 'html', from, to, head } — a slice of the laid-out report (pixels
+       from its top), with `head` the column headings to repeat, if any
+     { kind: 'evidence', el, prefix } — a scanned page, placed directly */
+  function planPdfPages_(root) {
+    var top0 = root.getBoundingClientRect().top;
+    function box(el) {
+      var r = el.getBoundingClientRect();
+      return { top: r.top - top0, bottom: r.bottom - top0 };
+    }
+    // Things a page may not be cut through: table rows, pictures, and any
+    // block with no smaller blocks inside it (a paragraph, a tile, a heading).
+    var atoms = [], tables = [];
+    function walk(el) {
+      var tag = el.tagName;
+      var cs = el.ownerDocument.defaultView.getComputedStyle(el);
+      if (cs.display === 'none') return;
+      if (tag === 'TABLE') {
+        var head = el.tHead;
+        var t = box(el);
+        if (head) { var h = box(head); t.headTop = h.top; t.headBottom = h.bottom; }
+        tables.push(t);
+      }
+      if (tag === 'TR' || tag === 'IMG' || tag === 'svg' || tag === 'SVG' || tag === 'CANVAS') { atoms.push(box(el)); return; }
+      var blockKids = Array.prototype.filter.call(el.children, function (c) {
+        return !/^inline/.test(el.ownerDocument.defaultView.getComputedStyle(c).display);
+      });
+      if (!blockKids.length) {
+        var b = box(el);
+        if (b.bottom > b.top) atoms.push(b);
+        // A heading stays with what follows it.
+        if (/^H[1-4]$/.test(tag) || el.classList.contains('pr-cl-cat')) b.keepWithNext = true;
+        return;
+      }
+      blockKids.forEach(walk);
+    }
+
+    var items = [], section = [];
+    function closeSection() {
+      if (!section.length) return;
+      var first = box(section[0]), last = box(section[section.length - 1]);
+      items.push({ kind: 'section', els: section.slice(), from: Math.floor(first.top), to: Math.ceil(last.bottom) });
+      section = [];
+    }
+    Array.prototype.forEach.call(root.children, function (el) {
+      if (el.classList.contains('pr-pagebreak')) { closeSection(); return; }
+      if (el.classList.contains('pr-evidence-page')) { closeSection(); items.push({ kind: 'evidence', el: el }); return; }
+      if (el.classList.contains('pr-checklist-sheet')) { closeSection(); section.push(el); closeSection(); return; }
+      section.push(el);
+    });
+    closeSection();
+
+    var out = [];
+    items.forEach(function (it, idx) {
+      if (it.kind === 'evidence') {
+        // A short heading just before the scans ("Appendix — QC paperwork")
+        // goes on the first scan's page rather than a page of its own.
+        var prev = out[out.length - 1];
+        if (prev && prev.kind === 'html' && prev.short) { out.pop(); it.prefix = prev; }
+        out.push(it);
+        return;
+      }
+      atoms = []; tables = [];
+      it.els.forEach(walk);
+      atoms.sort(function (a, b) { return a.top - b.top; });
+      for (var i = 0; i < atoms.length - 1; i++) {
+        if (atoms[i].keepWithNext) atoms[i].bottom = Math.max(atoms[i].bottom, atoms[i + 1].bottom);
+      }
+      function clean(y) {
+        for (var k = 0; k < atoms.length; k++) {
+          if (atoms[k].top >= y) break;
+          if (atoms[k].bottom > y + 0.5 && atoms[k].top < y - 0.5) return false;
+        }
+        return true;
+      }
+      function cutBetween(start, limit) {
+        // The lowest clean place on the page, not less than half way down.
+        var cands = [];
+        atoms.forEach(function (a) {
+          [a.top, a.bottom].forEach(function (y) { if (y > start + (limit - start) * 0.5 && y <= limit) cands.push(y); });
+        });
+        cands.sort(function (a, b) { return b - a; });
+        for (var c = 0; c < cands.length; c++) if (clean(cands[c])) return Math.floor(cands[c]);
+        return limit;   // one thing taller than a page: no choice but to cut it
+      }
+      var y = it.from, startCount = out.length;
+      while (y < it.to - 2) {
+        var head = null;
+        tables.forEach(function (t) {
+          if (t.headBottom != null && y >= t.headBottom - 0.5 && y < t.bottom - 1) head = t;
+        });
+        var room = PDF_PAGE_PX - (head ? head.headBottom - head.headTop : 0);
+        var limit = Math.min(y + room, it.to);
+        var cut = limit >= it.to ? it.to : cutBetween(y, limit);
+        if (cut <= y) cut = limit;
+        out.push({ kind: 'html', from: y, to: cut, head: head });
+        y = cut;
+      }
+      if (out.length - startCount === 1 && it.to - it.from < 260) out[out.length - 1].short = true;
+    });
+    return out;
+  }
+
+  function makeReportPdf_(sign, onProgress) {
+    var progress = onProgress || function () {};
+    return pdfLibs_().then(function () {
+      return reportFrame_(buildReportHTML(sign));
+    }).then(function (f) {
+      var root = f.root;
+      var plan = planPdfPages_(root);
+      var jsPDF = window.jspdf.jsPDF;
+      var pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      var M = PDF_PAGE.margin, CW = PDF_PAGE.w - 2 * M, CH = PDF_PAGE.h - 2 * M - PDF_PAGE.foot;
+      var pageNo = 0;
+      function newPage() { if (pageNo) pdf.addPage(); pageNo++; }
+
+      var shots = {};   // photographed stretches of the report, by start
+      function shoot(from, to) {
+        return window.html2canvas(root, { x: 0, y: from, width: PDF_WIDTH_PX, height: Math.max(1, to - from), scale: 2,
+                                         backgroundColor: '#ffffff', logging: false, windowWidth: PDF_WIDTH_PX + 40 });
+      }
+      // Photographs the report in long stretches and cuts pages out of them.
+      function canvasFor(from, to) {
+        var key = Object.keys(shots).filter(function (k) { return shots[k].from <= from && shots[k].to >= to; })[0];
+        if (key) return Promise.resolve(shots[key]);
+        var end = from + PDF_WINDOW_PX;
+        plan.forEach(function (p) { if (p.kind === 'html' && p.from >= from && p.to <= from + PDF_WINDOW_PX) end = Math.max(to, p.to); });
+        end = Math.max(end, to);
+        return shoot(from, end).then(function (c) { shots = {}; shots[from] = { from: from, to: end, canvas: c }; return shots[from]; });
+      }
+      function slice(shot, from, to) {
+        var c = document.createElement('canvas');
+        c.width = shot.canvas.width;
+        c.height = Math.max(1, Math.round((to - from) * 2));
+        c.getContext('2d').drawImage(shot.canvas, 0, Math.round((from - shot.from) * 2), c.width, c.height, 0, 0, c.width, c.height);
+        return c;
+      }
+      var headShots = [];
+      function headCanvas(t) {
+        var hit = headShots.filter(function (h) { return h.t === t; })[0];
+        if (hit) return Promise.resolve(hit.c);
+        return shoot(t.headTop, t.headBottom).then(function (c) { headShots.push({ t: t, c: c }); return c; });
+      }
+      function addHtmlPage(p, yMm) {
+        return (p.head ? headCanvas(p.head) : Promise.resolve(null)).then(function (hc) {
+          return canvasFor(p.from, p.to).then(function (shot) {
+            var y = yMm == null ? M : yMm;
+            if (hc) {
+              pdf.addImage(hc.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, CW, hc.height / 2 / PDF_PX_PER_MM);
+              y += hc.height / 2 / PDF_PX_PER_MM;
+            }
+            var c = slice(shot, p.from, p.to);
+            pdf.addImage(c.toDataURL('image/jpeg', 0.9), 'JPEG', M, y, CW, (p.to - p.from) / PDF_PX_PER_MM);
+            return y + (p.to - p.from) / PDF_PX_PER_MM;
+          });
+        });
+      }
+      function addEvidence(p) {
+        newPage();
+        var start = p.prefix ? addHtmlPage(p.prefix) : Promise.resolve(M);
+        return start.then(function (y) {
+          if (p.prefix) y += 3;
+          var head = p.el.querySelector('.pr-evidence-head'), meta = p.el.querySelector('.pr-evidence-meta');
+          pdf.setTextColor(26, 26, 26); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11);
+          pdf.text(pdfText_(head ? head.textContent : ''), M, y + 4);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(102, 102, 102);
+          var metaLines = pdf.splitTextToSize(pdfText_(meta ? meta.textContent : ''), CW);
+          pdf.text(metaLines, M, y + 9);
+          y += 11 + metaLines.length * 3.5;
+          var img = p.el.querySelector('img');
+          if (img && img.naturalWidth) {
+            var src = img.getAttribute('src');
+            var fmt = /^data:image\/png/.test(src) ? 'PNG' : 'JPEG';
+            var maxH = M + CH - y;
+            var k = Math.min(CW / img.naturalWidth, maxH / img.naturalHeight);
+            pdf.addImage(src.split(',')[1], fmt, M + (CW - img.naturalWidth * k) / 2, y, img.naturalWidth * k, img.naturalHeight * k);
+          }
+        });
+      }
+
+      var total = plan.length, done = 0;
+      return plan.reduce(function (chain, p) {
+        return chain.then(function () {
+          progress('Making page ' + (done + 1) + ' of ' + total + '…', done / total);
+          var step = p.kind === 'evidence' ? addEvidence(p) : (newPage(), addHtmlPage(p));
+          return step.then(function () { done++; });
+        });
+      }, Promise.resolve()).then(function () {
+        // Every page: the month, the version and "page X of Y".
+        var n = pdf.getNumberOfPages();
+        var label = 'Mortlake Station Garage  ·  ' + formatMonth(dataMonth_() || currentMonth) +
+                    (sign ? '  ·  v' + sign.version : '  ·  preview, not signed');
+        for (var i = 1; i <= n; i++) {
+          pdf.setPage(i);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(120, 120, 120);
+          pdf.text(pdfText_(label), M, PDF_PAGE.h - M + 2);
+          pdf.text('page ' + i + ' of ' + n, PDF_PAGE.w - M, PDF_PAGE.h - M + 2, { align: 'right' });
+        }
+        var bytes = new Uint8Array(pdf.output('arraybuffer'));
+        f.frame.remove();
+        progress('Report made: ' + n + ' pages', 1);
+        return { bytes: bytes, pages: n };
+      }, function (err) { f.frame.remove(); throw err; });
+    });
+  }
+
+  function bytesToBase64_(bytes) {
+    var out = '', CHUNK = 0x8000;
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(out);
+  }
+
+  function fmtLongDate_(d) {
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+
+  // Page 1 of an amended report says plainly that it replaces the earlier one,
+  // why, and what changed (taken from the history, so Paul doesn't write it).
+  function amendmentBox_(sign) {
+    if (!sign || !sign.amendment) return '';
+    var a = sign.amendment;
+    return '<div class="pr-amend-box">' +
+      '<div class="pr-amend-title">Amended report, version ' + sign.version + '</div>' +
+      '<div>This replaces version ' + a.previous.version + ', signed ' + escapeHtml_(fmtLongDate_(a.previous.signedAt)) +
+        '. Amended ' + escapeHtml_(fmtLongDate_(sign.signedAt)) + ' by ' + escapeHtml_(sign.signedBy) + '.</div>' +
+      '<div><strong>Reason:</strong> ' + escapeHtml_(a.reason) + '</div>' +
+      (a.changes.length
+        ? '<div><strong>Changes since version ' + a.previous.version + ':</strong></div><ul>' +
+          a.changes.map(function (c) { return '<li>' + escapeHtml_(c) + '</li>'; }).join('') + '</ul>'
+        : '<div>No pages, files or answers were changed; the report was signed again.</div>') +
+    '</div>';
+  }
+
+  // The last page: every change made to the month, so the record shows how it
+  // was put together.
+  function historyBlock_(sign) {
+    if (!sign || !sign.history || !sign.history.length) return '';
+    return '<div class="pr-pagebreak"></div><h2>History of this record</h2>' +
+      '<div class="pr-note">Every change made to ' + escapeHtml_(formatMonth(currentMonth)) + ' in the app, oldest first.</div>' +
+      '<table class="pr-history"><thead><tr><th>When</th><th>What</th></tr></thead><tbody>' +
+      sign.history.map(function (h) {
+        var d = new Date(h.at);
+        return '<tr><td>' + escapeHtml_(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
+                                        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) + '</td>' +
+               '<td>' + escapeHtml_(h.what) + '</td></tr>';
+      }).join('') + '</tbody></table>';
   }
 
   /* Generate now shows the finished report on screen first. Going straight to
