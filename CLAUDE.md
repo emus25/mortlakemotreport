@@ -336,9 +336,15 @@ From Ediz, in priority order:
    back office is deployed (its URL is in `test.html`, regenerate with
    `node tools/make-test-copy.js <url>` after every `index.html` change);
    `test.html` needs to be on `main` to be reachable online. **B (sign-off,
-   PDF, amend) built and tested on the pretend Google ✅ (17 Oct 2026, back
-   office v21)**; still to do: deploy v21 to TEST and run the stage B
-   acceptance test against real Google. Then C (the Records screen) → (5) a trial month, then go
+   PDF, amend) built and accepted ✅ (17 Oct 2026, TEST back office v23):
+   `tests/live-stageb.js` passed against real Google on 2026-07 — signed in
+   46s (25 pages, 5.5MB), amended to v2 in 74s with the new figures and the
+   amendment box, v1 unchanged byte for byte, a cancelled amendment left
+   everything as signed, a second computer opened the report in 13s.**
+   Real Google sometimes stalls 20–35s on a 2MB answer, so each report piece
+   is asked for up to 3 times. TEST months 2025-01/02/04/08/12 and 2026-07
+   now hold test data (2025-04, 2025-08, 2025-12, 2026-07 are signed).
+   Then C (the Records screen) → (5) a trial month, then go
    live.
    **Do not merge this branch into `main` before go-live.** The new
    `index.html` needs the v13 back office. The live back office can be
