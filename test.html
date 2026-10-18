@@ -254,6 +254,10 @@
   .reminder-bar .rb-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; }
   body.month-locked #view-report .section, body.month-locked #checklistContainer,
   body.month-locked #view-checklist .checklist-summary { pointer-events: none; opacity: .55; }
+  /* While a month shown from this computer's copy is checked with Google. */
+  body.month-checking #view-report .section, body.month-checking #checklistContainer,
+  body.month-checking #view-checklist .checklist-summary, body.month-checking .sign-btn,
+  body.month-checking #monthBanner .mb-actions { pointer-events: none; opacity: .7; }
   .pdf-viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: #525659; }
   .pdf-viewer-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
   .pdf-viewer-body .pv-wait { color: #fff; text-align: center; display: grid; gap: 10px; justify-items: center; }
@@ -1585,7 +1589,15 @@
     passRefused_ = true;
     forgetPass_();
     try { sessionStorage.setItem('mortlake_pass_ended', '1'); } catch (e) {}
-    location.reload();
+    afterClearing_(function () { location.reload(); });
+  }
+
+  // The browser's copy of filed files goes when this computer is logged out.
+  function afterClearing_(then) {
+    var done = false;
+    function go() { if (!done) { done = true; then(); } }
+    cacheClear_().then(go, go);
+    setTimeout(go, 1500);
   }
 
   function logOut() {
@@ -1594,7 +1606,7 @@
     if (token && SCRIPT_URL) {
       fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify({ action: 'logout', token: token }) }).catch(function () {});
     }
-    location.reload();
+    afterClearing_(function () { location.reload(); });
   }
 
   function submitLockScreen() {
@@ -1788,6 +1800,8 @@
         ' · <button type="button" class="sync-retry" onclick="retryFailedSaves_()">Retry</button>';
       el.style.color = 'var(--danger)';
       el.title = failedSaves_.map(function (f) { return f.label + ': ' + f.message; }).join('\n');
+    } else if (monthChecking_) {
+      el.textContent = 'Checking with Google…';
     } else if (savesInFlight_ || clPending_ || clSaving_ || eqDirty_ || eqSaving_) {
       el.textContent = 'Saving…';
     } else if (!recordsReady_) {
@@ -1795,6 +1809,7 @@
     } else {
       el.textContent = 'All saved ✓';
       el.title = 'Everything is filed in Google Drive';
+      rememberMonth_();
     }
   }
 
@@ -1863,6 +1878,7 @@
     try { sent = !!localStorage.getItem(MOVED_KEY); } catch (e) {}
     var browserLogs = sent ? {} : (store.testLog || {});
     var month = currentMonth;
+    showMonthFromCache_(month);
 
     // One request does everything needed to start (see openSession_ in Code.gs).
     api_('openSession', { month: month, browserTestLog: browserLogs, seedEquipment: store.calibration || [] })
@@ -2204,31 +2220,136 @@
      on start-up. The page is shown as soon as the month's details are in; the
      DVSA files then load behind it, each showing "Loading…" in its own box,
      and the report can't be made until they have. */
+  /* Showing a month at once (17 Oct 2026, for speed): the month as this
+     computer last saw it is shown straight away, read-only, with "Checking
+     with Google…" at the top, while the filed copy is fetched. If Google's
+     copy is the same, the month simply unlocks; if anything changed (on
+     another computer, say), the page is redrawn from Google's copy. Nothing
+     can be changed, previewed or signed until Google has answered. */
+  var monthChecking_ = false;
+  var earlyShown_ = null;   // { month, text, token }: shown from this computer's copy at start-up
+
+  // What the screen shows of a month: if Google's copy matches this, nothing
+  // needs redrawing.
+  function viewStamp_(d) {
+    var pages = function (l) { return (l || []).map(function (p) { return [p.id, p.status, p.reading || null, p.error || null]; }); };
+    return JSON.stringify({
+      s: d.status, v: (d.versions || []).map(function (v) { return v.version; }), a: d.amendment || null,
+      q: pages(d.qcPages), c: pages(d.certPages),
+      f: Object.keys(d.dvsaFiles || {}).sort().map(function (k) { return k + ':' + d.dvsaFiles[k].fileId; }),
+      cl: d.checklist || null, r: d.revisions || null,
+      tq: d.testQuality ? d.testQuality.period : null, tl: d.testLog ? d.testLog.total : null
+    });
+  }
+
+  // Keeps this computer's copy of the open month up to date once everything
+  // is saved, so the next opening shows what was there when Paul left.
+  var remembered_ = null;
+  function rememberMonth_() {
+    if (!monthDoc_ || monthChecking_ || !recordsReady_ || hasPendingSaves_()) return;
+    var d = JSON.parse(JSON.stringify(monthDoc_));
+    if (d.month !== currentMonth) return;
+    d.qcPages = savedPages_.qc.filter(function (p) { return !p.provisional; });
+    d.certPages = savedPages_.cert.filter(function (p) { return !p.provisional; });
+    d.checklist = { state: checklistState, notes: checklistNotes };
+    d.revisions = Object.assign({}, d.revisions, { checklist: checklistRev_[currentMonth] || 0 });
+    var stamp = currentMonth + viewStamp_(d);
+    if (stamp === remembered_) return;
+    remembered_ = stamp;
+    cachePut_('month:' + currentMonth, JSON.stringify(d));
+  }
+  window.addEventListener('pagehide', rememberMonth_);
+
+  function setChecking_(on) {
+    monthChecking_ = on;
+    document.body.classList.toggle('month-checking', on);
+    renderSaveIndicator_();
+  }
+
+  // At start-up, while openSession is on its way.
+  function showMonthFromCache_(month) {
+    if (!SCRIPT_URL) return Promise.resolve();
+    return cacheGet_('month:' + month).then(function (text) {
+      if (!text || recordsReady_ || currentMonth !== month) return;
+      var token = ++openToken_;
+      monthDoc_ = null;
+      resetMonthWorkspace_();
+      dvsaLoading_ = 0;
+      earlyShown_ = { month: month, text: text, token: token };
+      setChecking_(true);
+      hideMonthOverlay_();
+      return applyMonthDetails_(month, JSON.parse(text), token);
+    });
+  }
+
   function openMonth_(month, preloaded) {
+    // Start-up already showed this month from this computer's copy, and
+    // Google's copy is the same: just unlock.
+    var early = earlyShown_;
+    earlyShown_ = null;
+    if (early && preloaded && early.month === month && early.token === openToken_) {
+      cachePut_('month:' + month, JSON.stringify(preloaded.details));
+      if (viewStamp_(preloaded.details) === viewStamp_(JSON.parse(early.text))) {
+        monthDoc_ = preloaded.details;
+        setChecking_(false);
+        hideMonthOverlay_();
+        renderMonthState_();
+        refreshStatuses();
+        return Promise.resolve();
+      }
+    }
+
     var token = ++openToken_;
     monthDoc_ = null;
     resetMonthWorkspace_();
     dvsaLoading_ = 0;
     if (!SCRIPT_URL) {
       monthDoc_ = null;
+      setChecking_(false);
       showSelectedMonth_();
       return Promise.resolve();
     }
-    var get;
+    var get, shownText = null, answered = false;
     if (preloaded) {
       get = Promise.resolve({ status: 'success', exists: preloaded.exists, details: preloaded.details });
     } else {
       showMonthOverlay_('Opening ' + formatMonth(month) + '…');
       get = api_('loadMonth', { month: month });
+      cacheGet_('month:' + month).then(function (text) {
+        if (!text || answered || token !== openToken_) return;
+        shownText = text;
+        setChecking_(true);
+        hideMonthOverlay_();
+        applyMonthDetails_(month, JSON.parse(text), token);
+      });
     }
     return get.then(function (res) {
+      answered = true;
       if (token !== openToken_) return;
       if (res.status !== 'success') {
+        setChecking_(false);
         showMonthOverlay_('Could not open ' + formatMonth(month) + '. ' + (res.message || ''),
                           function () { openMonth_(month); });
         return;
       }
-      var d = res.details;
+      cachePut_('month:' + month, JSON.stringify(res.details));
+      setChecking_(false);
+      if (shownText && viewStamp_(JSON.parse(shownText)) === viewStamp_(res.details)) {
+        monthDoc_ = res.details;
+        renderMonthState_(); refreshStatuses(); return;
+      }
+      if (shownText) {
+        // Something changed since this computer last saw the month: redraw it.
+        token = ++openToken_;
+        resetMonthWorkspace_();
+        dvsaLoading_ = 0;
+      }
+      return applyMonthDetails_(month, res.details, token);
+    });
+  }
+
+  // Puts a month's details on screen and loads its DVSA files behind it.
+  function applyMonthDetails_(month, d, token) {
       monthDoc_ = d;
       checklistRev_[month] = (d.revisions && d.revisions.checklist) || 0;
       store.months[month] = { state: d.checklist.state || {}, notes: d.checklist.notes || {} };
@@ -2258,7 +2379,7 @@
         var el = document.getElementById(slot.status);
         el.className = 'upload-status reading';
         el.innerHTML = ICON_SPIN + '<span>Loading ' + escapeHtml_(d.dvsaFiles[inputId].fileName) + '…</span>';
-        return api_('getDvsaFile', { month: month, inputId: inputId }).then(function (f) {
+        return getDvsaFileCached_(month, inputId, d.dvsaFiles[inputId]).then(function (f) {
           if (token !== openToken_) return;
           dvsaLoading_--;
           // Paul dropped a newer file into this box while it was loading:
@@ -2276,6 +2397,80 @@
       })).then(function () {
         if (token !== openToken_) return;
         refreshStatuses();
+      });
+  }
+
+  /* ── The browser's copy of filed files (17 Oct 2026, for speed) ──
+     Every file the app has fetched from (or sent to) Google Drive is kept in
+     this browser, so the same file is never downloaded twice on Paul's
+     computer. Only things that can never change are kept, each under a name
+     that can never mean anything else: a DVSA file by its Drive id, a scanned
+     page by its month and page number (numbers are never reused), a signed
+     report by its month and version (signed reports are never changed).
+     Google Drive stays the one true record; this is only a quicker way of
+     showing what is already filed. The test copy has its own, and Log out
+     empties it. If the browser won't keep it, the app simply fetches. */
+  var FILE_CACHE_DB = 'mortlake_files' + (IS_TEST_COPY ? '_' + 'TEST' : '');
+  var fileDbP_ = null;
+  function fileDb_() {
+    if (!fileDbP_) {
+      fileDbP_ = new Promise(function (resolve) {
+        try {
+          var req = indexedDB.open(FILE_CACHE_DB, 1);
+          req.onupgradeneeded = function () { req.result.createObjectStore('files'); };
+          req.onsuccess = function () { resolve(req.result); };
+          req.onerror = req.onblocked = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    }
+    return fileDbP_;
+  }
+  function cacheGet_(key) {
+    return fileDb_().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var r = db.transaction('files').objectStore('files').get(key);
+          r.onsuccess = function () { resolve(r.result == null ? null : r.result); };
+          r.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+  function cachePut_(key, value) {
+    return fileDb_().then(function (db) {
+      if (!db) return false;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction('files', 'readwrite');
+          tx.objectStore('files').put(value, key);
+          tx.oncomplete = function () { resolve(true); };
+          tx.onerror = tx.onabort = function () { resolve(false); };
+        } catch (e) { resolve(false); }
+      });
+    });
+  }
+  function cacheClear_() {
+    return fileDb_().then(function (db) {
+      if (!db) return;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction('files', 'readwrite');
+          tx.objectStore('files').clear();
+          tx.oncomplete = tx.onerror = tx.onabort = function () { resolve(); };
+        } catch (e) { resolve(); }
+      });
+    });
+  }
+
+  // A filed DVSA file: from this browser if it has it, otherwise from Google.
+  function getDvsaFileCached_(month, inputId, entry) {
+    var key = entry && entry.fileId ? 'dvsa:' + entry.fileId : null;
+    return (key ? cacheGet_(key) : Promise.resolve(null)).then(function (hit) {
+      if (hit) return { status: 'success', base64: hit, fileName: entry.fileName, mimeType: entry.mimeType, cached: true };
+      return api_('getDvsaFile', { month: month, inputId: inputId }).then(function (f) {
+        if (f.status === 'success' && key) cachePut_(key, f.base64);
+        return f;
       });
     });
   }
@@ -2952,15 +3147,18 @@
       ? { testQuality: (TEST_QUALITY && !TEST_QUALITY.isSample) ? TEST_QUALITY : null }
       : { testLog: (store.testLog || {})[month] || null };
     setDvsaSaveNote_(slot.status, 'saving');
+    var sentB64 = null;
     busyStart_();
     return trackSave_(file.name, function () {
       return fileToBase64_(file).then(function (b64) {
+        sentB64 = b64;
         return api_('saveDvsaFile', { month: month, inputId: inputId, fileName: file.name,
                                       mimeType: file.type, base64: b64, figures: figures });
       });
     }, function () { return saveDvsaFile_(inputId, file); }).then(function (res) {
       busyEnd_();
       if (month !== currentMonth || pickedFiles[inputId][0] !== file) return;
+      if (res.status === 'success' && res.file && res.file.fileId && sentB64) cachePut_('dvsa:' + res.file.fileId, sentB64);
       if (res.status === 'success') {
         if (monthDoc_) monthDoc_.dvsaFiles[inputId] = res.file;
         setDvsaSaveNote_(slot.status, 'saved');
@@ -3336,10 +3534,13 @@
   // Work through them a few at a time instead — slower per burst, but it
   // actually finishes rather than half the pages failing.
   var SCAN_CONCURRENCY = 3;
+  // Reading (Claude only, nothing saved) goes 5 at a time; Claude's own
+  // "slow down" answers are waited out and retried by the back office.
+  var READ_CONCURRENCY = 5;
 
   /* Runs `worker` over `items`, at most SCAN_CONCURRENCY at a time.
      onProgress fires as each one finishes. Results keep their input order. */
-  function runWithConcurrency_(items, worker, onProgress) {
+  function runWithConcurrency_(items, worker, onProgress, limit) {
     var results = new Array(items.length);
     var nextIndex = 0, completed = 0;
 
@@ -3355,7 +3556,7 @@
     }
 
     var runners = [];
-    for (var k = 0; k < Math.min(SCAN_CONCURRENCY, items.length); k++) runners.push(startOne());
+    for (var k = 0; k < Math.min(limit || SCAN_CONCURRENCY, items.length); k++) runners.push(startOne());
     return Promise.all(runners).then(function () { return results; });
   }
 
@@ -3486,7 +3687,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 23;
+  var EXPECTED_BACKEND_VERSION = 25;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -3662,6 +3863,12 @@
   var unsavedPages_ = { qc: [], cert: [] };   // page images that could not be filed, kept for a retry
   var pageImageCache_ = {};                   // 'YYYY-MM:qc-3' -> image as filed, to avoid re-downloading
 
+  // A filed page's image, kept here and in the browser's copy of filed files.
+  function keepPageImage_(month, id, b64) {
+    pageImageCache_[month + ':' + id] = b64;
+    cachePut_('page:' + month + ':' + id, b64);
+  }
+
   var SCAN_UI = {
     qc:   { input: 'fileQcScans',  list: 'listQcScans',  btn: 'sortScansBtn', idle: 'Sort scanned pages',
             status: 'qcSortStatus', progress: 'qc',  action: 'analyzeQcPage' },
@@ -3728,7 +3935,7 @@
         renderSaveIndicator_();
         return runWithConcurrency_(pages, function (pg) {
           return readFirst_(kind, month, pg, token);
-        }, function (done, total) { progress.set(done, total); });
+        }, function (done, total) { progress.set(done, total); }, READ_CONCURRENCY);
       })
       .then(function () {
         progress.finish();
@@ -3792,7 +3999,7 @@
             if (!res.page) return { page: null, message: res.message };
             // An older back office ignores the reading; it is then read there.
             if (res.page.status === 'unread') return fileThenReadPage_(kind, month, pg, token);
-            pageImageCache_[month + ':' + res.page.id] = pg.base64;
+            keepPageImage_(month, res.page.id, pg.base64);
             return { page: res.page };
           });
     return run.catch(function (err) {
@@ -3935,7 +4142,7 @@
                                             fingerprint: pg.fingerprint, sourceName: pg.label })
       .then(function (res) {
         if (res.page) {
-          pageImageCache_[month + ':' + res.page.id] = pg.base64;
+          keepPageImage_(month, res.page.id, pg.base64);
           showFiledPage_(kind, res.page, token);
           return { page: res.page };
         }
@@ -3949,7 +4156,7 @@
                               fingerprint: pg.fingerprint, sourceName: pg.label })
       .then(function (res) {
         if (!res.page) return { page: null, message: res.message };
-        pageImageCache_[month + ':' + res.page.id] = pg.base64;
+        keepPageImage_(month, res.page.id, pg.base64);
         showFiledPage_(kind, res.page, token);
         if (res.page.status === 'read') return { page: res.page };
         return apiOnce_('readPage', { month: month, kind: kind, id: res.page.id }).then(function (r) {
@@ -4194,7 +4401,13 @@
       var key = month + ':' + p.id;
       var get = pageImageCache_[key]
         ? Promise.resolve({ status: 'success', base64: pageImageCache_[key], mimeType: 'image/jpeg' })
-        : api_('getPageImage', { month: month, kind: p.kind, id: p.id });
+        : cacheGet_('page:' + key).then(function (hit) {
+            if (hit) return { status: 'success', base64: hit, mimeType: 'image/jpeg' };
+            return api_('getPageImage', { month: month, kind: p.kind, id: p.id }).then(function (r) {
+              if (r.status === 'success') cachePut_('page:' + key, r.base64);
+              return r;
+            });
+          });
       return get.then(function (img) {
         if (img.status !== 'success') throw new Error((img.message || 'Could not fetch a page') + ' (' + p.label + ')');
         pageImageCache_[key] = img.base64;
@@ -5963,8 +6176,13 @@
       endSignProgress_('Not signed off', msg + ' Nothing was signed; ' + name + ' is exactly as it was.');
       if (reopen && token === openToken_) openMonth_(month);
     }
-    return api_('loadMonth', { month: month }).then(function (res) {
-      if (res.status !== 'success') throw { msg: res.message || 'Could not check the month with Google.' };
+    // One trip both checks the month with Google and reserves the sign-off;
+    // the report is then built from exactly what Google holds (v24).
+    var st;
+    return apiOnce_('signStart', { month: month, mode: mode, signedBy: signedBy, confirm: true }).then(function (res) {
+      if (res.noReply) throw { msg: 'Google didn’t answer.' };
+      if (res.status !== 'success') throw { msg: res.message || 'Google would not start the sign-off.' };
+      st = res;
       before = res.details;
       if (!onScreenMatches_(before)) throw { msg: name + ' was changed on another computer, so it has been reloaded. Check it and sign off again.', reopen: true };
       showSignProgress_('Getting the scanned pages…', 0.03);
@@ -5985,42 +6203,37 @@
       made = pdf;
       var b64 = bytesToBase64_(pdf.bytes);
       var pieces = Math.max(1, Math.ceil(b64.length / SIGN_PIECE_CHARS));
-      showSignProgress_('Sending the report to Google…', 0.6, (pdf.bytes.length / 1048576).toFixed(1) + 'MB, ' + pdf.pages + ' pages');
-      return api_('signStart', { month: month, mode: mode, bytes: pdf.bytes.length, pieces: pieces, signedBy: signedBy, confirm: true })
-        .then(function (st) {
-          if (st.status !== 'success') throw { msg: st.message || 'Google would not start the sign-off.' };
-          if (recordStamp_(st.details) !== recordStamp_(before)) {
-            throw { msg: 'Something in ' + name + ' changed while the report was being made.', reopen: true };
-          }
-          var sent = 0, list = [];
-          for (var i = 0; i < pieces; i++) list.push(i);
-          function send(i, tries) {
-            return apiOnce_('signPiece', { uploadId: st.uploadId, index: i, data: b64.substr(i * SIGN_PIECE_CHARS, SIGN_PIECE_CHARS) })
-              .then(function (r) {
-                if (r.status === 'success') return;
-                if (tries > 0 && (r.noReply || r.status === 'busy' || r.status === 'error')) return send(i, tries - 1);
-                throw { msg: 'Part of the report could not be sent (' + (r.message || 'no reply') + ').' };
-              });
-          }
-          return runWithConcurrency_(list, function (i) { return send(i, 2); }, function (done) {
-            sent = done;
-            showSignProgress_('Sending the report to Google… ' + sent + ' of ' + pieces, 0.6 + 0.3 * sent / pieces,
-                              (made.bytes.length / 1048576).toFixed(1) + 'MB, ' + made.pages + ' pages');
-          }).then(function () { return finish(st.uploadId, 4); });
-        });
+      var size = (pdf.bytes.length / 1048576).toFixed(1) + 'MB, ' + pdf.pages + ' pages';
+      showSignProgress_('Sending the report to Google…', 0.6, size);
+      var list = [];
+      for (var i = 0; i < pieces; i++) list.push(i);
+      function send(i, tries) {
+        return apiOnce_('signPiece', { uploadId: st.uploadId, index: i, data: b64.substr(i * SIGN_PIECE_CHARS, SIGN_PIECE_CHARS) })
+          .then(function (r) {
+            if (r.status === 'success') return;
+            if (tries > 0 && (r.noReply || r.status === 'busy' || r.status === 'error')) return send(i, tries - 1);
+            throw { msg: 'Part of the report could not be sent (' + (r.message || 'no reply') + ').' };
+          });
+      }
+      // All the pieces go at once (up to 6): each is a separate, small request.
+      return runWithConcurrency_(list, function (i) { return send(i, 2); }, function (done) {
+        showSignProgress_('Sending the report to Google… ' + done + ' of ' + pieces, 0.6 + 0.3 * done / pieces, size);
+      }, 6).then(function () { return finish(st.uploadId, pdf.bytes.length, pieces, 4); });
       // Safe to ask twice: Google recognises an upload it has already filed.
-      function finish(uploadId, tries) {
+      function finish(uploadId, bytes, count, tries) {
         showSignProgress_('Filing and checking the report…', 0.92);
-        return apiOnce_('signFinish', { month: month, uploadId: uploadId }).then(function (r) {
+        return apiOnce_('signFinish', { month: month, uploadId: uploadId, bytes: bytes, pieces: count }).then(function (r) {
           if (r.status === 'success') return r;
           if (tries > 0 && (r.noReply || r.status === 'busy')) {
-            return new Promise(function (w) { setTimeout(w, 5000); }).then(function () { return finish(uploadId, tries - 1); });
+            return new Promise(function (w) { setTimeout(w, 5000); }).then(function () { return finish(uploadId, bytes, count, tries - 1); });
           }
           throw { msg: r.message || 'Google did not confirm the report was filed.', reopen: r.status === 'conflict' };
         });
       }
     }).then(function (r) {
       setTyreProgress_('signTyre', 1);
+      // The signed report never changes: keep it, so it opens straight away here.
+      cachePut_('report:' + month + ':v' + r.version.version, { bytes: made.bytes.buffer, meta: r.version, url: r.version.url });
       if (token === openToken_) {
         monthDoc_ = r.details;
         recordsIndex_[month] = Object.assign({}, recordsIndex_[month] || {}, { status: 'signed', signedVersion: r.version.version });
@@ -6095,6 +6308,8 @@
   var viewerUrl_ = null;
   function openSignedReport(version) {
     var month = currentMonth;
+    var versions = (monthDoc_ && monthDoc_.versions) || [];
+    var want = version || (versions.length ? versions[versions.length - 1].version : null);
     var body = document.getElementById('pdfViewerBody');
     var actions = document.getElementById('pdfViewerActions');
     document.getElementById('pdfViewerTitle').textContent = 'Signed report — ' + formatMonth(month);
@@ -6103,40 +6318,80 @@
     body.innerHTML = '<div class="pv-wait">' + tyreSvg_({ id: 'viewerTyre' }) + '<div id="viewerWait">Fetching the report from Google Drive…</div></div>';
     document.getElementById('pdfViewer').style.display = 'flex';
     document.body.style.overflow = 'hidden';
-    var parts = [];
-    // Google now and then stalls on one of these large answers and gives up
-    // after half a minute, so each piece is asked for up to three times.
-    function get(i, tries) {
-      tries = tries == null ? 2 : tries;
-      return apiOnce_('getReport', { month: month, version: version || null, index: i }).then(function (r) {
-        if ((r.noReply || r.status === 'busy') && tries > 0) {
-          var w = document.getElementById('viewerWait');
-          if (w) w.textContent = 'Google is slow — asking again…';
-          return get(i, tries - 1);
-        }
-        if (r.status !== 'success') throw new Error(r.message || 'The report could not be fetched.');
-        parts[i] = r.data;
-        setTyreProgress_('viewerTyre', (i + 1) / r.pieces);
-        var w = document.getElementById('viewerWait');
-        if (w) w.textContent = 'Fetching the report from Google Drive… ' + (i + 1) + ' of ' + r.pieces;
-        return i + 1 < r.pieces ? get(i + 1) : r;
+    function wait(t) { var w = document.getElementById('viewerWait'); if (w) w.textContent = t; }
+
+    function fetchAll() {
+      return fetchSignedReport_(month, want, function (done, total) {
+        setTyreProgress_('viewerTyre', done / total);
+        wait('Fetching the report from Google Drive… ' + Math.round(done / total * 100) + '%');
+      }, function () { wait('Google is slow — asking again…'); }).then(function (rec) {
+        cachePut_('report:' + month + ':v' + rec.meta.version, rec);
+        return rec;
       });
     }
-    return get(0).then(function (r) {
-      var bin = atob(parts.join('')), bytes = new Uint8Array(bin.length);
-      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+    // A signed report never changes, so the browser's copy is used if it has one.
+    var get = want ? cacheGet_('report:' + month + ':v' + want) : Promise.resolve(null);
+    return get.then(function (hit) { return hit || fetchAll(); }).then(function (rec) {
       if (viewerUrl_) URL.revokeObjectURL(viewerUrl_);
-      viewerUrl_ = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-      var v = r.version;
+      viewerUrl_ = URL.createObjectURL(new Blob([rec.bytes], { type: 'application/pdf' }));
+      var v = rec.meta;
       document.getElementById('pdfViewerSub').textContent = 'Version ' + v.version + ' · ' +
         (v.kind === 'amend' ? 'amended ' : 'signed off ') + fmtLongDate_(v.signedAt) + ' by ' + v.signedBy;
+      var url = rec.url || v.url;
       actions.innerHTML =
         '<a class="btn btn-secondary" href="' + viewerUrl_ + '" download="' + escapeHtml_(v.fileName) + '">Download</a>' +
-        '<a class="btn btn-secondary" href="' + escapeHtml_(r.url) + '" target="_blank" rel="noopener">Open in Google Drive</a>' +
+        (url ? '<a class="btn btn-secondary" href="' + escapeHtml_(url) + '" target="_blank" rel="noopener">Open in Google Drive</a>' : '') +
         '<button type="button" class="btn btn-primary" onclick="closeReportViewer()">Back</button>';
       body.innerHTML = '<iframe title="Signed report" src="' + viewerUrl_ + '"></iframe>';
     }).catch(function (err) {
       body.innerHTML = '<div class="pv-wait">' + escapeHtml_(err.message) + '</div>';
+    });
+  }
+
+  /* Fetches a signed report from Google in small bites (v25): Google often
+     stalls on big answers, but half-megabyte ones come back reliably. The
+     first bite says how the report is split up; the rest are fetched four
+     at a time, and any bite that gets no answer is asked for again. */
+  var REPORT_BITE_CHARS = 600000;
+  function fetchSignedReport_(month, version, onProgress, onRetry) {
+    function bite(index, from, tries) {
+      var args = { month: month, version: version || null, index: index, from: from, length: REPORT_BITE_CHARS };
+      return apiOnce_('getReport', args).then(function (r) {
+        if ((r.noReply || r.status === 'busy') && tries > 0) { if (onRetry) onRetry(); return bite(index, from, tries - 1); }
+        if (r.status !== 'success') throw new Error(r.message || 'The report could not be fetched.');
+        return r;
+      });
+    }
+    return bite(0, 0, 3).then(function (first) {
+      var expected = first.pieceLength * first.pieces, done = 0, texts = [];
+      function counted(r) {
+        done += r.data.length;
+        if (onProgress) onProgress(done, Math.max(done, expected));
+        return r;
+      }
+      // One piece, bite after bite.
+      function wholePiece(p) {
+        var chunks = [];
+        function next(from) {
+          var got = (p === 0 && from === 0) ? Promise.resolve(first) : bite(p, from, 3);
+          return got.then(counted).then(function (r) {
+            chunks.push(r.data);
+            var end = from + r.data.length;
+            return end < r.pieceLength ? next(end) : chunks.join('');
+          });
+        }
+        return next(0);
+      }
+      var list = [];
+      for (var q = 0; q < first.pieces; q++) list.push(q);
+      return runWithConcurrency_(list, function (p) {
+        return wholePiece(p).then(function (t) { texts[p] = t; });
+      }, null, 4).then(function () {
+        var bin = atob(texts.join('')), bytes = new Uint8Array(bin.length);
+        for (var k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+        return { bytes: bytes.buffer, meta: first.version, url: first.url };
+      });
     });
   }
 
@@ -6216,6 +6471,9 @@
     // isn't actually in Google Drive.
     if (SCRIPT_URL && hasPendingSaves_()) {
       missing.push({ what: 'Some changes are still saving or were not saved — see the top of the page', where: 'report' });
+    }
+    if (monthChecking_) {
+      missing.push({ what: 'Still checking this month with Google — try again in a moment', where: 'report' });
     }
     if (dvsaLoading_ > 0) {
       missing.push({ what: 'This month’s DVSA files are still loading — try again in a moment', where: 'report' });
