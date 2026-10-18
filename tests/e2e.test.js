@@ -601,12 +601,12 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
 
     // Signed: locked, with the banner and Open report.
     await p.click('#signProgressActions .btn-secondary');
-    assert.match(await p.textContent('#monthBanner'), /September 2026 is signed off\. Version 1, .* by Paul Testman/);
+    assert.match(await p.textContent('#monthBanner'), /September 2026 is signed off\. Signed .* by Paul Testman/);
     assert.ok(await p.evaluate(() => document.body.classList.contains('month-locked')));
     assert.equal(await p.isVisible('#signOffBtn'), false);
     await p.click('#monthBanner button:text-is("Open report")');
     await p.waitForSelector('#pdfViewerBody iframe', { timeout: 20000 });
-    assert.match(await p.textContent('#pdfViewerSub'), /Version 1 · signed off .* by Paul Testman/);
+    assert.match(await p.textContent('#pdfViewerSub'), /^Signed off .* by Paul Testman$/);
     await p.click('#pdfViewerActions >> text=Back');
 
     // Amend: needs the tick and a reason; then the month unlocks.
@@ -632,8 +632,9 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await p.click('#signProgressActions .btn-secondary');
     assert.equal(signed().length, 2);
     assert.deepEqual(srv.backend.drive.readBytes(signed().find(f => / v1 /.test(f))), v1, 'v1 untouched');
-    assert.match(await p.textContent('#monthBanner'), /Version 2/);
-    assert.match(await p.textContent('#monthBanner'), /Older versions, kept as signed: version 1/);
+    assert.match(await p.textContent('#monthBanner'), /is signed off\. Amended /);
+    assert.match(await p.textContent('#monthBanner'), /Earlier reports, kept as signed: original report of /);
+    assert.doesNotMatch(await p.textContent('#monthBanner'), /[Vv]ersion/);
 
     // An amendment that is cancelled leaves the month exactly as signed.
     await p.click('#monthBanner button:text-is("Amend")');
@@ -650,6 +651,14 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     assert.equal(details(srv, '2026-09').qcPages.length, 4);
     assert.equal(signed().length, 2, 'no new version');
     assert.deepEqual(p.errors, []);
+    // No version numbers anywhere on a signed or amended report (Ediz, 18 Oct 2026).
+    const printed = await p.evaluate(() => [
+      buildReportHTML({ version: 1, signedBy: 'Paul Testman', signedAt: new Date(), history: [{ at: new Date().toISOString(), what: 'Signed off by Paul Testman' }] }),
+      buildReportHTML({ version: 2, signedBy: 'Paul Testman', signedAt: new Date(), history: [],
+        amendment: { reason: 'x', previous: { version: 1, signedAt: '2026-10-04T10:00:00Z', signedBy: 'Paul Testman' }, changes: ['Added a page'] } })
+    ].map(h => h.replace(/<[^>]+>/g, ' ')).join(' '));
+    assert.doesNotMatch(printed, /\bv\d\b|[Vv]ersion/);
+    assert.match(printed, /Amended report/);
     // A fresh computer fetches the signed report from Google, in small bites.
     const q = await newComputer(srv);
     await setMonth(q, '2026-09');

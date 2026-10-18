@@ -314,7 +314,12 @@ looks at one. That keeps opening a month quick.
   about 250MB a year, against 15GB of free Google storage.
 - **The first page** says which month it covers, when it was signed and by
   whom, and every page carries "Mortlake Station Garage · September 2026 ·
-  v1 · page X of Y".
+  page X of Y".
+- **No version numbers on the report** (Ediz, 18 Oct 2026: they mean nothing
+  to DVSA). An amended report says "Amended report. This replaces the report
+  signed off on 4 October 2026 by …" on page 1, and "amended 14 Oct 2026"
+  in every page's footer. Only the file names in Google Drive carry v1/v2,
+  so they sort in order.
 - **Long tables** that run over a page repeat their column headings at the
   top of the next page.
 

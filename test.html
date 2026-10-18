@@ -3687,7 +3687,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 25;
+  var EXPECTED_BACKEND_VERSION = 26;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -5168,8 +5168,10 @@
     var now = new Date();
     var generated = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) +
       ' at ' + now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    // No version numbers on the report (Ediz, 18 Oct 2026): they mean nothing
+    // to DVSA. An amended report says so in words instead.
     var signedLine = sign
-      ? 'Signed off by ' + sign.signedBy + ' on ' + fmtLongDate_(sign.signedAt) + ' · Version ' + sign.version
+      ? (sign.amendment ? 'Amended and signed off by ' : 'Signed off by ') + sign.signedBy + ' on ' + fmtLongDate_(sign.signedAt)
       : '';
 
     // Checklist tally
@@ -5892,7 +5894,7 @@
         // Every page: the month, the version and "page X of Y".
         var n = pdf.getNumberOfPages();
         var label = 'Mortlake Station Garage  ·  ' + formatMonth(dataMonth_() || currentMonth) +
-                    (sign ? '  ·  v' + sign.version : '  ·  preview, not signed');
+                    (sign ? (sign.amendment ? '  ·  amended ' + shortDate_(sign.signedAt) : '') : '  ·  preview, not signed');
         for (var i = 1; i <= n; i++) {
           pdf.setPage(i);
           pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(120, 120, 120);
@@ -5999,23 +6001,21 @@
       if (st === 'signed' && v) {
         var older = monthDoc_.versions.slice(0, -1).reverse();
         el.className = 'month-banner signed';
-        el.innerHTML = '<div class="mb-text"><strong>' + escapeHtml_(name) + ' is signed off.</strong> Version ' + v.version +
-            ', ' + escapeHtml_(fmtLongDate_(v.signedAt)) + ' by ' + escapeHtml_(v.signedBy) +
+        el.innerHTML = '<div class="mb-text"><strong>' + escapeHtml_(name) + ' is signed off.</strong> ' +
+            (v.kind === 'amend' ? 'Amended ' : 'Signed ') + escapeHtml_(fmtLongDate_(v.signedAt)) + ' by ' + escapeHtml_(v.signedBy) +
             '. Nothing can be changed without an amendment.</div>' +
           '<div class="mb-actions"><button type="button" class="btn btn-primary" onclick="openSignedReport()">Open report</button>' +
           '<button type="button" class="btn btn-secondary" onclick="startAmend()">Amend</button></div>' +
-          (older.length ? '<div class="mb-older">Older versions, kept as signed: ' + older.map(function (o) {
-            return '<button type="button" onclick="openSignedReport(' + o.version + ')">version ' + o.version + ' (' +
-              escapeHtml_(fmtLongDate_(o.signedAt)) + ')</button>';
+          (older.length ? '<div class="mb-older">Earlier reports, kept as signed: ' + older.map(function (o) {
+            return '<button type="button" onclick="openSignedReport(' + o.version + ')">' + escapeHtml_(reportName_(o)) + '</button>';
           }).join(' ') + '</div>' : '');
         el.hidden = false;
       } else if (st === 'amending' && monthDoc_.amendment) {
         el.className = 'month-banner amending';
         el.innerHTML = '<div class="mb-text"><strong>You are amending ' + escapeHtml_(name) + '.</strong> Reason: ' +
-            escapeHtml_(monthDoc_.amendment.reason) + '. Version ' + monthDoc_.amendment.fromVersion +
-            ' stays the official report until you sign off the amendment.</div>' +
+            escapeHtml_(monthDoc_.amendment.reason) + '. The signed report stays the official one until you sign off the amendment.</div>' +
           '<div class="mb-actions"><button type="button" class="btn btn-primary" onclick="startSignOff()">Sign off amendment</button>' +
-          '<button type="button" class="btn btn-secondary" onclick="openSignedReport()">Open version ' + monthDoc_.amendment.fromVersion + '</button>' +
+          '<button type="button" class="btn btn-secondary" onclick="openSignedReport()">Open signed report</button>' +
           '<button type="button" class="btn btn-secondary" onclick="cancelAmendment()">Cancel amendment</button></div>';
         el.hidden = false;
       } else {
@@ -6041,8 +6041,7 @@
     }
     Object.keys(recordsIndex_).sort().forEach(function (m) {
       if (recordsIndex_[m].status === 'amending' && m !== currentMonth) {
-        items.push({ month: m, text: formatMonth(m) + ' has an amendment in progress — version ' +
-                                    (recordsIndex_[m].signedVersion || 1) + ' is still the official report.' });
+        items.push({ month: m, text: formatMonth(m) + ' has an amendment in progress — the signed report is still the official one.' });
       }
     });
     if (!SCRIPT_URL || !items.length) { el.hidden = true; el.innerHTML = ''; return; }
@@ -6091,8 +6090,7 @@
     document.getElementById('signConfirmText').textContent =
       'I confirm this is a complete and accurate record for ' + name + '.';
     document.getElementById('signNote').textContent = amending
-      ? 'A full new report (version ' + ((monthDoc_.signedVersion || 0) + 1) + ') will be made with the updated figures and filed in Google Drive next to version ' +
-        monthDoc_.signedVersion + ', which is kept exactly as it is.'
+      ? 'A full new report will be made with the updated figures and filed in Google Drive next to the signed one, which is kept exactly as it is.'
       : 'The report will be made and filed in Google Drive. After that the month is locked: any change needs an amendment, with a reason.';
     var box = document.getElementById('signConfirm'), nameEl = document.getElementById('signName');
     box.checked = false;
@@ -6191,8 +6189,8 @@
       var version = (before.signedVersion || 0) + 1, now = new Date();
       var last = (before.versions || [])[(before.versions || []).length - 1];
       var line = mode === 'amend'
-        ? 'Amendment signed off as version ' + version + ' by ' + signedBy + '. Reason: ' + before.amendment.reason
-        : 'Signed off as version ' + version + ' by ' + signedBy;
+        ? 'Amendment signed off by ' + signedBy + '. Reason: ' + before.amendment.reason
+        : 'Signed off by ' + signedBy;
       var sign = {
         version: version, signedBy: signedBy, signedAt: now,
         history: (before.history || []).concat([{ at: now.toISOString(), what: line }]),
@@ -6241,7 +6239,7 @@
         renderReminder_();
       }
       endSignProgress_('Filed. ' + name + ' is signed off.',
-        'Version ' + r.version.version + ', ' + made.pages + ' pages, saved in Google Drive.',
+        made.pages + ' pages, saved in Google Drive.',
         [{ label: 'Open report', run: function () { openSignedReport(r.version.version); } }]);
     }).catch(function (e) {
       fail((e && (e.msg || e.message)) || 'Something went wrong.', e && e.reopen);
@@ -6259,7 +6257,7 @@
     var name = formatMonth(currentMonth);
     document.getElementById('amendTitle').textContent = 'Amend ' + name;
     document.getElementById('amendConfirmText').textContent =
-      'I am amending ' + name + ' (signed off ' + fmtLongDate_(v.signedAt) + ', version ' + v.version + ').';
+      'I am amending ' + name + ' (signed off ' + fmtLongDate_(v.signedAt) + ').';
     var box = document.getElementById('amendConfirm'), reason = document.getElementById('amendReason');
     box.checked = false; reason.value = '';
     function check() { document.getElementById('amendGo').disabled = !(box.checked && reason.value.trim().length >= 10); }
@@ -6288,8 +6286,8 @@
   function cancelAmendment() {
     var d = monthDoc_;
     if (!d || !d.amendment) return;
-    if (!confirm('Cancel the amendment to ' + formatMonth(currentMonth) + '?\n\nEverything goes back exactly as it was signed in version ' +
-                 d.amendment.fromVersion + '. Pages added during the amendment are moved to the Removed folder.')) return;
+    if (!confirm('Cancel the amendment to ' + formatMonth(currentMonth) + '?\n\nEverything goes back exactly as it was when signed off. ' +
+                 'Pages added during the amendment are moved to the Removed folder.')) return;
     var month = currentMonth;
     flushChecklist_();
     showMonthOverlay_('Putting ' + formatMonth(month) + ' back as it was signed…');
@@ -6336,8 +6334,8 @@
       if (viewerUrl_) URL.revokeObjectURL(viewerUrl_);
       viewerUrl_ = URL.createObjectURL(new Blob([rec.bytes], { type: 'application/pdf' }));
       var v = rec.meta;
-      document.getElementById('pdfViewerSub').textContent = 'Version ' + v.version + ' · ' +
-        (v.kind === 'amend' ? 'amended ' : 'signed off ') + fmtLongDate_(v.signedAt) + ' by ' + v.signedBy;
+      document.getElementById('pdfViewerSub').textContent =
+        (v.kind === 'amend' ? 'Amended ' : 'Signed off ') + fmtLongDate_(v.signedAt) + ' by ' + v.signedBy;
       var url = rec.url || v.url;
       actions.innerHTML =
         '<a class="btn btn-secondary" href="' + viewerUrl_ + '" download="' + escapeHtml_(v.fileName) + '">Download</a>' +
@@ -6401,6 +6399,14 @@
     document.body.style.overflow = '';
   }
 
+  function shortDate_(d) {
+    return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
+  // How a signed report is described on screen: by date, never by number.
+  function reportName_(v) {
+    return v.kind === 'amend' ? 'amended report of ' + shortDate_(v.signedAt) : 'original report of ' + shortDate_(v.signedAt);
+  }
+
   function fmtLongDate_(d) {
     return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   }
@@ -6411,12 +6417,13 @@
     if (!sign || !sign.amendment) return '';
     var a = sign.amendment;
     return '<div class="pr-amend-box">' +
-      '<div class="pr-amend-title">Amended report, version ' + sign.version + '</div>' +
-      '<div>This replaces version ' + a.previous.version + ', signed ' + escapeHtml_(fmtLongDate_(a.previous.signedAt)) +
-        '. Amended ' + escapeHtml_(fmtLongDate_(sign.signedAt)) + ' by ' + escapeHtml_(sign.signedBy) + '.</div>' +
+      '<div class="pr-amend-title">Amended report</div>' +
+      '<div>This replaces the report signed off on ' + escapeHtml_(fmtLongDate_(a.previous.signedAt)) +
+        ' by ' + escapeHtml_(a.previous.signedBy) + ', which is kept unchanged. Amended ' +
+        escapeHtml_(fmtLongDate_(sign.signedAt)) + ' by ' + escapeHtml_(sign.signedBy) + '.</div>' +
       '<div><strong>Reason:</strong> ' + escapeHtml_(a.reason) + '</div>' +
       (a.changes.length
-        ? '<div><strong>Changes since version ' + a.previous.version + ':</strong></div><ul>' +
+        ? '<div><strong>Changes since that report:</strong></div><ul>' +
           a.changes.map(function (c) { return '<li>' + escapeHtml_(c) + '</li>'; }).join('') + '</ul>'
         : '<div>No pages, files or answers were changed; the report was signed again.</div>') +
     '</div>';

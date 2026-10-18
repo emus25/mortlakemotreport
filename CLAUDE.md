@@ -162,7 +162,7 @@ one Google Apps Script file.
   scans runs 5 at a time (`READ_CONCURRENCY`); filing stays 3. Sign-off
   starts with `signStart` (no separate check) and sends pieces 6 at a time;
   the report viewer fetches pieces in parallel with retries.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (25 on this branch; the live page expects 20) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (26 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a

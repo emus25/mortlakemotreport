@@ -119,7 +119,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
 
     log('A signs off');
     check(await signOff(A, 'sign-off'), 'filed and signed off');
-    check(/is signed off\. Version 1/.test(await A.textContent('#monthBanner')), 'banner: signed off, version 1');
+    check(/is signed off\. Signed /.test(await A.textContent('#monthBanner')), 'banner: signed off');
     check(await A.evaluate(() => document.body.classList.contains('month-locked')), 'the month is locked on screen');
     if (!(await A.evaluate(() => monthStatus_() === 'signed'))) throw new Error('not signed, so stopping here');
     const locked = await A.evaluate(m => api_('saveMonthFields', { month: m, field: 'checklist', value: { state: {}, notes: {} }, baseRevision: checklistRev_[m] }), MONTH);
@@ -182,7 +182,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     await A.click('#pdfViewerActions >> text=Back');
 
     const B = await computer('B');
-    check(/is signed off\. Version 2/.test(await B.textContent('#monthBanner')), 'another computer sees it signed off, version 2');
+    check(/is signed off\. Amended /.test(await B.textContent('#monthBanner')), 'another computer sees it signed off, amended');
     const t = Date.now();
     await B.click('#monthBanner button:text-is("Open report")');
     await B.waitForSelector('#pdfViewerBody iframe', { timeout: 120000 });

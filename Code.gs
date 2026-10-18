@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 25;
+var BACKEND_VERSION = 26;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -1742,8 +1742,8 @@ function signFinish_(data) {
       d.calibrationSnapshot = eq ? eq.list : null;
       d.amendment = null;
       addHistory_(d, up.mode === 'amend'
-        ? 'Amendment signed off as version ' + up.version + ' by ' + up.signedBy + '. Reason: ' + reason
-        : 'Signed off as version ' + up.version + ' by ' + up.signedBy);
+        ? 'Amendment signed off by ' + up.signedBy + '. Reason: ' + reason
+        : 'Signed off by ' + up.signedBy);
       saveMonth_(ctx);
       return { version: v, details: d };
     });
@@ -1798,7 +1798,7 @@ function startAmend_(data) {
     writeJsonAt_('snap_' + month + '_' + v, ctx.folder, 'details-v' + v + '.json', d);
     d.status = 'amending';
     d.amendment = { reason: reason, startedAt: nowIso_(), fromVersion: v };
-    addHistory_(d, 'Amendment started (from version ' + v + '). Reason: ' + reason);
+    addHistory_(d, 'Amendment started. Reason: ' + reason);
     saveMonth_(ctx);
     return { status: 'success', details: publicDetails_(d) };
   });
@@ -1845,7 +1845,7 @@ function cancelAmend_(data) {
       var p = JSON.parse(JSON.stringify(x.page)); p.removedAt = nowIso_(); return p;
     }));
     back.history = d.history.slice();
-    addHistory_(back, 'Amendment cancelled: back to version ' + v + ' exactly as signed');
+    addHistory_(back, 'Amendment cancelled: back exactly as signed');
 
     // Quick storage is cleared, so details.json is the one true copy again.
     var all = allProps_(true);

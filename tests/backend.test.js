@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 25);
+  assert.equal(b.call('getVersion', { password: '' }).version, 26);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 25);
+  assert.equal(r.version, 26);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -552,7 +552,7 @@ test('signing off files the PDF, locks the month, and is never half-done', () =>
   assert.equal(d.status, 'signed');
   assert.equal(d.signedVersion, 1);
   assert.ok(d.calibrationSnapshot, 'calibration dates kept as they were at sign-off');
-  assert.ok(d.history.some(h => /Signed off as version 1 by Paul Testman/.test(h.what)));
+  assert.ok(d.history.some(h => /^Signed off by Paul Testman$/.test(h.what)));
   assert.equal(b.call('listMonths').months[month].status, 'signed');
   // Sending the finish again is harmless.
   assert.equal(b.call('signFinish', { month, uploadId: ok.uploadId }).status, 'success');
