@@ -6384,7 +6384,7 @@
   }
 
   function recState_(m, e, now) {
-    if (m > monthKey_(now)) return { cls: 'future', text: '' };
+    if (m > monthKey_(now) && !e) return { cls: 'future', text: '' };
     if (!e) return { cls: 'empty', text: 'Not started' };
     var v = (e.versions || [])[(e.versions || []).length - 1];
     if (e.status === 'amending') return { cls: 'amending', text: 'Being amended' };
