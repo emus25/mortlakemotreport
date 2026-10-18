@@ -363,6 +363,26 @@ From Ediz, in priority order:
    now hold test data (2025-04, 2025-08, 2025-12, 2026-07 are signed).
    Then C (the Records screen) → (5) a trial month, then go
    live.
+   **Go-live plan (agreed with Ediz 18 Oct 2026):**
+   1. Deploy this branch's `Code.gs` to the live back office ("Mortlake
+      Garage Backend"), New version.
+   2. **Move the website hosting from GitHub Pages to Cloudflare Pages** on
+      Paul's own domain (e.g. `dvsa.mortlakegarage.co.uk`; test copy at
+      `/test.html`), connected to this repo so pushes to `main` publish
+      automatically. Paul already runs his domains on Cloudflare (his
+      "Systems Guide", 18 Oct 2026). Optionally put his Cloudflare Access
+      (emailed one-time code) in front.
+   3. **Make the GitHub repo private** (Paul's rule: every repo private;
+      no real data, passwords or keys in code). GitHub stays the code store
+      only; Google stays the back office and records. History was checked on
+      18 Oct 2026: no passwords or API keys, only the back-office URLs.
+   4. Merge this branch into `main`; check the new address end to end
+      (`tests/live-check.js` against it) before Paul is told.
+   5. Forward the old address (mortlakemotreport.exposureboost.co.uk) to
+      the new one, so bookmarks keep working. Paul logs in once more.
+   6. Keep the previous version so the switch can be undone.
+   Ediz or Paul does the Cloudflare/GitHub clicks (about 15 minutes); write
+   them click-by-click steps first.
    **Do not merge this branch into `main` before go-live.** The new
    `index.html` needs the v13 back office. The live back office can be
    updated to v13 first without breaking the current page, because the old

@@ -404,6 +404,10 @@ permission to use Drive.
 - **Going live:** after stage C, Paul does one real month on the test copy
   alongside his usual way. If it's right, the live app is switched over. The
   previous version is kept so the switch can be undone.
+- **At go-live the app moves to Paul's own domain** (agreed 18 Oct 2026):
+  the website is hosted on Cloudflare Pages (which Paul already uses), the
+  code repository on GitHub is made private, and the records stay in
+  Paul's Google Drive. The old address forwards to the new one.
 
 ## 15. Decided 17 Oct 2026
 
