@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 26);
+  assert.equal(b.call('getVersion', { password: '' }).version, 27);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 26);
+  assert.equal(r.version, 27);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -718,4 +718,21 @@ test('the month list carries what the Records screen needs, without opening each
   assert.equal(e.versions[1].kind, 'amend');
   assert.equal(e.versions[1].reason, 'A page was missing from the set');
   assert.equal(e.amendment, null);
+});
+
+test('a month listed before v26 gets its sign-off details filled in once', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  readyMonth(b, month);
+  assert.equal(sign(b, month, fakePdf('one')).status, 'success');
+  // As v25 left it: no versions, no folder link.
+  const e = JSON.parse(b.props.get('IDX_' + month));
+  delete e.versions; delete e.folderUrl; delete e.vehicles;
+  b.props.set('IDX_' + month, JSON.stringify(e));
+  const got = b.call('listMonths').months[month];
+  assert.equal(got.versions.length, 1);
+  assert.equal(got.versions[0].signedBy, 'Paul Testman');
+  assert.ok(got.folderUrl);
+  assert.equal(got.vehicles, 1);
+  assert.ok(JSON.parse(b.props.get('IDX_' + month)).versions, 'kept, so it is done only once');
 });

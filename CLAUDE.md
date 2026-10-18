@@ -168,12 +168,13 @@ one Google Apps Script file.
   `recState_`), `renderRecPanel_` (Open report via
   `openSignedReport(version, month)`, Amend via `changeMonth_` +
   `waitForMonth_` + `startAmend`, Continue/Start, Drive folder link),
-  `thingsLeft_` (the quick count from the index). `keepReportsOnThisComputer_`
+  `thingsLeft_` (the quick count from the index). Index lines from before
+  v26 are rebuilt once from details.json by `readIndex_` (v27). `keepReportsOnThisComputer_`
   copies the latest signed report of every month into IndexedDB, one at a
   time while idle, 15s after start-up and whenever Records is opened.
   Since v26 each index entry also has `versions` (date, signer, kind,
   reason), `amendment`, `folderUrl`, `vehicles` and `certUnread`.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (26 on this branch; the live page expects 20) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (27 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -295,7 +296,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 33 back-office checks + 17 real-browser checks
+npm test               # 34 back-office checks + 17 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
@@ -407,6 +408,7 @@ From Ediz, in priority order:
    requests are kept. Go-live order: deploy v13 to the live back office,
    then merge.
    **Status on 13 Oct 2026 (read this first in a new session):**
+   - Stage C check: `TEST_PASSWORD=… MONTH=2026-07 node tests/live-records.js`.
    - The test copy is at https://mortlakemotreport.exposureboost.co.uk/test.html
      (orange TEST banner). Its back office is "Mortlake Garage Backend TEST"
      in Paul's Google account, and its URL is in `test.html`. Ediz has the

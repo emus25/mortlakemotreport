@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 26;
+var BACKEND_VERSION = 27;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -830,6 +830,17 @@ function readIndex_() {
     }
     setProp_('INDEX_MOVED', nowIso_());
   }
+  // Lines written before v26 lack what the Records screen shows (who signed
+  // and when, the folder link). Each is rebuilt once from its details.json.
+  Object.keys(months).forEach(function (m) {
+    if (months[m].versions) return;
+    try {
+      var ctx = openMonth_(m, false);
+      if (!ctx) return;
+      updateIndex_(ctx.details, ctx.folder);
+      months[m] = JSON.parse(prop_(INDEX_PREFIX + m));
+    } catch (e) {}
+  });
   return { schema: RECORDS_SCHEMA, months: months };
 }
 
