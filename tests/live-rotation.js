@@ -9,12 +9,16 @@ const fs = require('fs'), path = require('path');
 const D = process.argv[2], PASSWORD = process.env.TEST_PASSWORD;
 const html = fs.readFileSync(path.join(__dirname, '..', 'test.html'), 'utf8');
 const URL = html.match(/var SCRIPT_URL = '([^']+)'/)[1];
+// curl, because it goes through this computer's proxy (Node's own fetch
+// doesn't). POST with --data and -L, never -X POST (see CLAUDE.md).
+const { execFileSync } = require('child_process');
+const os = require('os');
 async function post(body) {
+  const f = path.join(os.tmpdir(), 'live-rotation-body.json');
+  fs.writeFileSync(f, JSON.stringify(body));
   for (let i = 0; i < 3; i++) {
-    try {
-      const r = await fetch(URL, { method: 'POST', body: JSON.stringify(body), redirect: 'follow' });
-      return JSON.parse(await r.text());
-    } catch (e) { /* ask again */ }
+    try { return JSON.parse(execFileSync('curl', ['-sL', '--max-time', '120', '--data', '@' + f, URL], { maxBuffer: 1 << 26 }).toString()); }
+    catch (e) { /* ask again */ }
   }
   return { status: 'noreply' };
 }
