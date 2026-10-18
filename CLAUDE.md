@@ -162,6 +162,17 @@ one Google Apps Script file.
   scans runs 5 at a time (`READ_CONCURRENCY`); filing stays 3. Sign-off
   starts with `signStart` (no separate check) and sends pieces 6 at a time;
   the report viewer fetches pieces in parallel with retries.
+- **Stage C, Records screen (built 18 Oct 2026, SPEC 7.1):** the
+  `records` tab (second). `showRecords_` draws from `recordsIndex_` and
+  refreshes it with `listMonths`; `renderRecords_` (year buttons, 12 tiles,
+  `recState_`), `renderRecPanel_` (Open report via
+  `openSignedReport(version, month)`, Amend via `changeMonth_` +
+  `waitForMonth_` + `startAmend`, Continue/Start, Drive folder link),
+  `thingsLeft_` (the quick count from the index). `keepReportsOnThisComputer_`
+  copies the latest signed report of every month into IndexedDB, one at a
+  time while idle, 15s after start-up and whenever Records is opened.
+  Since v26 each index entry also has `versions` (date, signer, kind,
+  reason), `amendment`, `folderUrl`, `vehicles` and `certUnread`.
 - **Backend version check:** `EXPECTED_BACKEND_VERSION` (26 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
@@ -284,7 +295,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 32 back-office checks + 16 real-browser checks
+npm test               # 33 back-office checks + 17 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

@@ -166,23 +166,34 @@ new version alongside them. There is no "un-sign".
 
 ## 7. Screens
 
-### 7.1 Records (new tab)
+### 7.1 Records (new tab, built 18 Oct 2026)
 
-- **Year buttons** along the top. The current year is selected.
+- **Where:** the second tab: Dashboard · Records · Monthly Report · Checklist.
+- **Year buttons** along the top. The year being worked on is selected.
+  There is no "download the whole year" button (Ediz, 18 Oct 2026).
 - **12 month tiles,** each showing its status:
-  - Signed off: green, with the date
-  - Amended: purple, with "v2"
-  - Draft: amber, with "N things left"
-  - Not started: greyed out
+  - Signed off: green, "Signed 04 Oct"
+  - Amended: purple, "Amended 14 Oct" (by date, never by number)
+  - Amendment in progress: orange, "Being amended"
+  - Draft: amber, "N things left" (or "Ready to sign off")
+  - Not started: plain, "Not started"
+  - Months still to come: faded, and can't be picked
+  - Signed and draft tiles also show how many vehicles were QC'd.
 - **Clicking a month** shows a short panel:
-  - Signed or amended: "Signed off 04 Oct 2026", the counts ("26 QC pages ·
-    5 vehicles · 1 certificate · checklist complete") and the
-    amendments, plus the buttons **Open report**, **Older versions**, **Amend**
-    and **Open folder in Google Drive**.
-  - Draft: what's still needed, and **Continue**, which goes to the
-    Monthly Report tab for that month.
-- **Speed:** the screen loads from `records-index.json` alone, so it appears
-  in a second or two.
+  - Signed or amended: who signed it and when (and the reason, for an
+    amendment), plus **Open report**, **Amend** (or **Continue
+    amendment**), **Open folder in Google Drive**, and the earlier reports
+    by date ("original report of 04 Oct 2026").
+  - Draft: the list of what's still needed, and **Continue**, which goes
+    to the Monthly Report tab for that month.
+  - Not started: **Start**, which does the same.
+- **Speed:** the screen draws at once from the records index this computer
+  already has, then asks Google for the latest index (one quick request,
+  no month folders opened) and redraws.
+- **Signed reports kept on Paul's computer:** they never change, so the
+  computer quietly fetches a copy of each month's latest signed report,
+  one at a time, newest first, and only while nothing is being saved or
+  signed. Opening one is then instant. Log out empties these copies.
 
 ### 7.2 Monthly Report tab (today's screen, changed)
 

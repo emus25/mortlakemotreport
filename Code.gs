@@ -744,7 +744,19 @@ function saveMonth_(ctx) {
   ctx.details.updatedAt = nowIso_();
   writeJsonAt_('d_' + ctx.details.month, ctx.folder, DETAILS_FILE, ctx.details);
   putProp_('MST_' + ctx.details.month, ctx.details.status);
-  updateIndex_(ctx.details);
+  updateIndex_(ctx.details, ctx.folder);
+}
+
+/* How many vehicles the QC pages cover: distinct registrations that look
+   like real plates (letters and digits, not the VTS number). For the
+   Records screen only; the page does the full check before sign-off. */
+function vehicleCount_(pages) {
+  var regs = {};
+  pages.forEach(function (p) {
+    var r = String((p.reading && p.reading.registration) || '').toUpperCase().replace(/\s+/g, '');
+    if (r.length >= 5 && r.length <= 8 && /[A-Z]/.test(r) && /\d/.test(r) && r !== '22453') regs[r] = true;
+  });
+  return Object.keys(regs).length;
 }
 
 function addHistory_(details, what) {
@@ -821,8 +833,18 @@ function readIndex_() {
   return { schema: RECORDS_SCHEMA, months: months };
 }
 
-function updateIndex_(d) {
+function updateIndex_(d, folder) {
   var pages = pagesLive_(d.month) ? readLivePages_(d.month) : { qc: d.qcPages, cert: d.certPages };
+  var old = {};
+  try { old = JSON.parse(prop_(INDEX_PREFIX + d.month) || '{}'); } catch (e) {}
+  // Stage C (v26): what the Records screen shows for a month, without
+  // opening it: each signed report's date, signer and kind, and where the
+  // month's folder is.
+  var versions = (d.versions || []).map(function (v) {
+    return { version: v.version, signedAt: v.signedAt, signedBy: v.signedBy, kind: v.kind, reason: v.reason || null };
+  });
+  var folderUrl = old.folderUrl || null;
+  if (!folderUrl && folder) { try { folderUrl = folder.getUrl(); } catch (e) {} }
   var answered = Object.keys(d.checklist.state || {}).filter(function (k) { return d.checklist.state[k]; }).length;
   var tq = d.testQuality && d.testQuality.site ? {
     period: d.testQuality.period || null,
@@ -833,9 +855,14 @@ function updateIndex_(d) {
   setProp_(INDEX_PREFIX + d.month, JSON.stringify({
     status: d.status,
     signedVersion: d.signedVersion,
+    versions: versions,
+    amendment: d.amendment ? { reason: d.amendment.reason, startedAt: d.amendment.startedAt } : null,
+    folderUrl: folderUrl,
     qcPages: pages.qc.length,
     qcUnread: pages.qc.filter(function (p) { return p.status !== 'read'; }).length,
+    vehicles: vehicleCount_(pages.qc),
     certPages: pages.cert.length,
+    certUnread: pages.cert.filter(function (p) { return p.status !== 'read'; }).length,
     dvsaFiles: Object.keys(d.dvsaFiles),
     checklistAnswered: answered,
     testQuality: tq,
@@ -1155,7 +1182,9 @@ function updateIndexPages_(month) {
   var live = readLivePages_(month);
   entry.qcPages = live.qc.length;
   entry.qcUnread = live.qc.filter(function (p) { return p.status !== 'read'; }).length;
+  entry.vehicles = vehicleCount_(live.qc);
   entry.certPages = live.cert.length;
+  entry.certUnread = live.cert.filter(function (p) { return p.status !== 'read'; }).length;
   entry.status = entry.status || 'draft';
   entry.updatedAt = nowIso_();
   putProp_(key, JSON.stringify(entry));

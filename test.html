@@ -244,6 +244,32 @@
   .month-banner, .reminder-bar { margin: 12px 24px 0; padding: 12px 16px; border-radius: var(--radius-md); font-size: 14px;
     display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
   .month-banner[hidden], .reminder-bar[hidden] { display: none; }
+  /* ══════════ Records (stage C) ══════════ */
+  .rec-years { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .rec-year { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-strong);
+    background: var(--surface); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .rec-year.active { background: var(--brand-tint); border-color: var(--brand-strong); }
+  .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .rec-tile { text-align: left; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface);
+    padding: 14px; font: inherit; cursor: pointer; min-height: 82px; display: flex; flex-direction: column; gap: 6px; }
+  .rec-tile:hover { border-color: var(--border-strong); }
+  .rec-tile.selected { outline: 2px solid var(--brand-strong); outline-offset: 1px; }
+  .rec-tile .rt-month { font-size: 15px; font-weight: 700; }
+  .rec-tile .rt-state { font-size: 12px; font-weight: 600; }
+  .rec-tile .rt-extra { font-size: 11px; color: var(--text-secondary); }
+  .rec-tile.signed { background: #ecf7ef; border-color: #b9e0c4; } .rec-tile.signed .rt-state { color: #1f5f34; }
+  .rec-tile.amended { background: #f3effb; border-color: #cfc1ec; } .rec-tile.amended .rt-state { color: #5a3e9a; }
+  .rec-tile.amending { background: #fff7ed; border-color: #f3c48b; } .rec-tile.amending .rt-state { color: #8a4b0f; }
+  .rec-tile.draft { background: var(--warning-bg); border-color: #ecd6a6; } .rec-tile.draft .rt-state { color: var(--warning); }
+  .rec-tile.empty .rt-state { color: var(--text-tertiary); }
+  .rec-tile.future { opacity: .45; cursor: default; }
+  .rec-panel { margin-top: 18px; padding: 18px; }
+  .rec-panel h2 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+  .rec-panel .rp-sub { font-size: 13px; color: var(--text-secondary); }
+  .rec-panel ul { margin: 10px 0 0 18px; font-size: 13px; color: var(--text-secondary); }
+  .rec-panel .rp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .rec-panel .rp-older { margin-top: 12px; font-size: 13px; color: var(--text-secondary); }
+  .rec-panel .rp-older button { background: none; border: 0; padding: 0 6px 0 0; font: inherit; color: var(--text); text-decoration: underline; cursor: pointer; }
   .month-banner.signed { background: #ecf7ef; border: 1px solid #b9e0c4; color: #1f5f34; }
   .month-banner.amending { background: #fff7ed; border: 1px solid #f3c48b; color: #8a4b0f; }
   .month-banner .mb-text { flex: 1 1 320px; line-height: 1.45; }
@@ -981,6 +1007,7 @@
 
     <nav class="appnav" role="tablist" aria-label="Primary">
       <button type="button" class="navtab active" id="tab-dashboard" role="tab" aria-selected="true" onclick="switchTab('dashboard')">Dashboard</button>
+      <button type="button" class="navtab" id="tab-records" role="tab" aria-selected="false" onclick="switchTab('records')">Records</button>
       <button type="button" class="navtab" id="tab-report" role="tab" aria-selected="false" onclick="switchTab('report')">Monthly Report</button>
       <button type="button" class="navtab" id="tab-checklist" role="tab" aria-selected="false" onclick="switchTab('checklist')">Checklist</button>
     </nav>
@@ -1211,6 +1238,16 @@
     </section>
 
     <!-- ═══════════════ MONTHLY REPORT ═══════════════ -->
+    <section class="view" id="view-records" role="tabpanel" aria-labelledby="tab-records">
+      <div class="view-head">
+        <h1>Records</h1>
+        <div class="view-desc">Every month, kept in Google Drive. Pick a month to open its signed report, or carry on with it.</div>
+      </div>
+      <div class="rec-years" id="recYears"></div>
+      <div class="rec-grid" id="recGrid"></div>
+      <div class="card rec-panel" id="recPanel" hidden></div>
+    </section>
+
     <section class="view" id="view-report" role="tabpanel" aria-labelledby="tab-report">
       <div class="view-head">
         <h1>Monthly Report</h1>
@@ -1667,7 +1704,7 @@
   }
 
   /* ═══════════════ Tab navigation (show/hide — state preserved) ═══════════════ */
-  var TABS = ['dashboard', 'report', 'checklist'];
+  var TABS = ['dashboard', 'records', 'report', 'checklist'];
   function switchTab(tab) {
     TABS.forEach(function (t) {
       var isActive = t === tab;
@@ -1677,6 +1714,7 @@
       nav.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
     window.scrollTo(0, 0);
+    if (tab === 'records') showRecords_();
   }
 
   function scrollToCalibration() {
@@ -1894,6 +1932,8 @@
         if (!sent) { try { localStorage.setItem(MOVED_KEY, new Date().toISOString()); } catch (e) {} }
         applyRecordsIndex_(res.months || {});
         recordsReady_ = true;
+        // Once the month is up, quietly keep copies of the signed reports.
+        setTimeout(keepReportsOnThisComputer_, 15000);
         return applyEquipment_(res.equipment).then(function () {
           if (month !== currentMonth) return openMonth_(currentMonth);
           return openMonth_(month, res.month);
@@ -6300,13 +6340,196 @@
     });
   }
 
+  /* ═══════════════ Records screen (stage C) ═══════════════
+     Every month at a glance, from the records index (one quick request, no
+     month folders opened). A signed month opens its report; anything else
+     is carried on in the Monthly Report tab. */
+  var recYear_ = null, recPicked_ = null, recRefreshing_ = false;
+
+  function monthKey_(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); }
+
+  function showRecords_() {
+    renderRecords_();
+    // The index on this computer may be a little behind (pages read since
+    // start-up, say), so it is refreshed each time the screen is opened.
+    if (!SCRIPT_URL || !recordsReady_ || recRefreshing_) return;
+    recRefreshing_ = true;
+    apiOnce_('listMonths', {}).then(function (r) {
+      recRefreshing_ = false;
+      if (r.status !== 'success') return;
+      // A sign-off or amendment under way here is newer than what Google sent.
+      if (signing_) r.months[currentMonth] = recordsIndex_[currentMonth];
+      recordsIndex_ = r.months || {};
+      renderReminder_();
+      renderRecords_();
+      keepReportsOnThisComputer_();
+    }, function () { recRefreshing_ = false; });
+  }
+
+  function checklistTotal_() {
+    return CHECKLIST.reduce(function (n, c) { return n + c.items.length; }, 0);
+  }
+
+  // What is still needed before a month can be signed off, from the index.
+  // The Monthly Report tab does the full check; this is the quick count.
+  function thingsLeft_(e) {
+    var list = [], dv = (e.dvsaFiles || []).length;
+    if (dv < 3) list.push((3 - dv) + ' DVSA ' + (3 - dv === 1 ? 'file' : 'files') + ' to upload');
+    if (!e.qcPages) list.push('QC paperwork to scan');
+    else if (e.qcUnread) list.push(e.qcUnread + ' QC ' + (e.qcUnread === 1 ? 'page' : 'pages') + ' not read yet');
+    if (e.certUnread) list.push(e.certUnread + ' certificate ' + (e.certUnread === 1 ? 'page' : 'pages') + ' not read yet');
+    var cl = checklistTotal_() - (e.checklistAnswered || 0);
+    if (cl > 0) list.push(cl + ' checklist ' + (cl === 1 ? 'question' : 'questions') + ' to answer');
+    return list;
+  }
+
+  function recState_(m, e, now) {
+    if (m > monthKey_(now)) return { cls: 'future', text: '' };
+    if (!e) return { cls: 'empty', text: 'Not started' };
+    var v = (e.versions || [])[(e.versions || []).length - 1];
+    if (e.status === 'amending') return { cls: 'amending', text: 'Being amended' };
+    if (e.status === 'signed') {
+      var amended = v && v.kind === 'amend';
+      return { cls: amended ? 'amended' : 'signed', text: v ? (amended ? 'Amended ' : 'Signed ') + shortDay_(v.signedAt) : 'Signed' };
+    }
+    var left = thingsLeft_(e).length;
+    return { cls: 'draft', text: left ? left + (left === 1 ? ' thing left' : ' things left') : 'Ready to sign off' };
+  }
+
+  function shortDay_(d) { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }); }
+
+  function renderRecords_() {
+    var yearsEl = document.getElementById('recYears'), grid = document.getElementById('recGrid');
+    if (!grid) return;
+    var now = new Date(), years = {};
+    years[now.getFullYear()] = true;
+    if (currentMonth) years[+currentMonth.slice(0, 4)] = true;
+    Object.keys(recordsIndex_).forEach(function (m) { years[+m.slice(0, 4)] = true; });
+    var list = Object.keys(years).map(Number).sort(function (a, b) { return b - a; });
+    if (!recYear_ || !years[recYear_]) recYear_ = currentMonth ? +currentMonth.slice(0, 4) : now.getFullYear();
+    yearsEl.innerHTML = list.map(function (y) {
+      return '<button type="button" class="rec-year' + (y === recYear_ ? ' active' : '') + '" data-year="' + y + '">' + y + '</button>';
+    }).join('');
+    yearsEl.querySelectorAll('[data-year]').forEach(function (b) {
+      b.onclick = function () { recYear_ = +b.dataset.year; recPicked_ = null; renderRecords_(); };
+    });
+    var html = '';
+    for (var i = 1; i <= 12; i++) {
+      var m = recYear_ + '-' + ('0' + i).slice(-2), e = recordsIndex_[m], st = recState_(m, e, now);
+      var extra = '';
+      if (e && st.cls !== 'future' && st.cls !== 'empty' && e.vehicles) extra = e.vehicles + (e.vehicles === 1 ? ' vehicle' : ' vehicles') + ' QC’d';
+      html += '<button type="button" class="rec-tile ' + st.cls + (m === recPicked_ ? ' selected' : '') + '" data-month="' + m + '"' +
+        (st.cls === 'future' ? ' disabled' : '') + '>' +
+        '<span class="rt-month">' + escapeHtml_(new Date(recYear_, i - 1, 1).toLocaleDateString('en-GB', { month: 'long' })) + '</span>' +
+        '<span class="rt-state">' + escapeHtml_(st.text) + '</span>' +
+        (extra ? '<span class="rt-extra">' + escapeHtml_(extra) + '</span>' : '') + '</button>';
+    }
+    grid.innerHTML = html;
+    grid.querySelectorAll('[data-month]').forEach(function (b) {
+      b.onclick = function () { recPicked_ = b.dataset.month; renderRecords_(); };
+    });
+    renderRecPanel_();
+  }
+
+  function renderRecPanel_() {
+    var el = document.getElementById('recPanel');
+    var m = recPicked_;
+    if (!m || m.slice(0, 4) !== String(recYear_)) { el.hidden = true; el.innerHTML = ''; return; }
+    var e = recordsIndex_[m], name = formatMonth(m), st = recState_(m, e, new Date());
+    var vs = (e && e.versions) || [], v = vs[vs.length - 1];
+    var h = '<h2>' + escapeHtml_(name) + '</h2>', acts = [];
+    var folder = e && e.folderUrl ? '<a class="btn btn-secondary" href="' + escapeHtml_(e.folderUrl) + '" target="_blank" rel="noopener">Open folder in Google Drive</a>' : '';
+    if ((st.cls === 'signed' || st.cls === 'amended' || st.cls === 'amending') && v) {
+      h += '<div class="rp-sub">' + (v.kind === 'amend' ? 'Amended and signed off ' : 'Signed off ') + escapeHtml_(fmtLongDate_(v.signedAt)) +
+        ' by ' + escapeHtml_(v.signedBy) + (v.kind === 'amend' && v.reason ? '. Reason: ' + escapeHtml_(v.reason) : '') + '.</div>';
+      if (st.cls === 'amending' && e.amendment) {
+        h += '<div class="rp-sub">An amendment is in progress (' + escapeHtml_(e.amendment.reason) + '). The signed report is still the official one.</div>';
+      }
+      acts.push('<button type="button" class="btn btn-primary" data-act="open">Open report</button>');
+      acts.push(st.cls === 'amending'
+        ? '<button type="button" class="btn btn-secondary" data-act="continue">Continue amendment</button>'
+        : '<button type="button" class="btn btn-secondary" data-act="amend">Amend</button>');
+      if (folder) acts.push(folder);
+      var older = vs.slice(0, -1).reverse();
+      if (older.length) h += '<div class="rp-older">Earlier reports, kept as signed: ' + older.map(function (o) {
+        return '<button type="button" data-version="' + o.version + '">' + escapeHtml_(reportName_(o)) + '</button>';
+      }).join(' ') + '</div>';
+    } else if (st.cls === 'draft') {
+      var left = thingsLeft_(e);
+      h += '<div class="rp-sub">' + (left.length ? 'Not signed off yet. Still to do:' : 'Everything is in. Open it to check and sign off.') + '</div>';
+      if (left.length) h += '<ul>' + left.map(function (t) { return '<li>' + escapeHtml_(t) + '</li>'; }).join('') + '</ul>';
+      acts.push('<button type="button" class="btn btn-primary" data-act="continue">Continue ' + escapeHtml_(name) + '</button>');
+      if (folder) acts.push(folder);
+    } else {
+      h += '<div class="rp-sub">Nothing has been filed for this month yet.</div>';
+      acts.push('<button type="button" class="btn btn-primary" data-act="continue">Start ' + escapeHtml_(name) + '</button>');
+    }
+    el.innerHTML = h + '<div class="rp-actions">' + acts.join('') + '</div>';
+    el.hidden = false;
+    el.querySelectorAll('[data-act]').forEach(function (b) {
+      b.onclick = function () {
+        var act = b.dataset.act;
+        if (act === 'open') return openSignedReport(null, m);
+        changeMonth_(m).then(function (moved) {
+          if (!moved) return;
+          switchTab('report');
+          if (act === 'amend') waitForMonth_(m).then(function (ok) { if (ok && monthStatus_() === 'signed') startAmend(); });
+        });
+      };
+    });
+    el.querySelectorAll('[data-version]').forEach(function (b) {
+      b.onclick = function () { openSignedReport(+b.dataset.version, m); };
+    });
+  }
+
+  // Amend needs Google's copy of the month, not this computer's.
+  function waitForMonth_(m) {
+    return new Promise(function (done) {
+      var tries = 0;
+      (function check() {
+        if (currentMonth !== m) return done(false);
+        if (monthDoc_ && monthDoc_.month === m && !monthChecking_) return done(true);
+        if (++tries > 600) return done(false);
+        setTimeout(check, 100);
+      })();
+    });
+  }
+
+  /* Paul's computer keeps a copy of every signed report (they never change),
+     so opening one is instant. Fetched one at a time, only while nothing is
+     being saved or signed, newest first. */
+  var keepingReports_ = false;
+  function keepReportsOnThisComputer_() {
+    if (keepingReports_ || !SCRIPT_URL) return;
+    var want = [];
+    Object.keys(recordsIndex_).sort().reverse().forEach(function (m) {
+      var e = recordsIndex_[m], vs = e.versions || [];
+      if ((e.status === 'signed' || e.status === 'amending') && vs.length) want.push({ month: m, version: vs[vs.length - 1].version });
+    });
+    if (!want.length) return;
+    keepingReports_ = true;
+    (function next(i) {
+      if (i >= want.length) { keepingReports_ = false; return; }
+      var w = want[i], key = 'report:' + w.month + ':v' + w.version;
+      cacheGet_(key).then(function (hit) {
+        if (hit) return next(i + 1);
+        if (signing_ || hasPendingSaves_() || !recordsReady_) {
+          return setTimeout(function () { next(i); }, 20000);
+        }
+        return fetchSignedReport_(w.month, w.version).then(function (rec) {
+          return cachePut_(key, rec);
+        }).catch(function () {}).then(function () { setTimeout(function () { next(i + 1); }, 1000); });
+      });
+    })(0);
+  }
+
   /* ── Open a signed report ──
      Fetched through the back office in pieces and shown in the browser's own
      PDF viewer, so it works on any computer with just the app password. */
   var viewerUrl_ = null;
-  function openSignedReport(version) {
-    var month = currentMonth;
-    var versions = (monthDoc_ && monthDoc_.versions) || [];
+  function openSignedReport(version, month) {
+    month = month || currentMonth;
+    var versions = month === currentMonth ? ((monthDoc_ && monthDoc_.versions) || []) : ((recordsIndex_[month] || {}).versions || []);
     var want = version || (versions.length ? versions[versions.length - 1].version : null);
     var body = document.getElementById('pdfViewerBody');
     var actions = document.getElementById('pdfViewerActions');

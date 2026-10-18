@@ -730,3 +730,60 @@ test('a month shows at once from this computer, locked until Google confirms; ch
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
+
+test('Records: every month at a glance; a signed month opens its report, a draft carries on', async () => {
+  const srv = await start(0, fakeClaude());
+  const b = srv.backend;
+  const reading = { category: 'mot_vehicle_paperwork', document_type: 'vt20_certificate', registration: 'AB12CDE', tester_name: 'T STONE', rotation: 0, confidence: 'high' };
+  const img = fx.png(60, 85, [240, 240, 235]).toString('base64');
+  // July: signed off. August: started, one DVSA file in.
+  ['fileLogDate', 'fileLogDuration', 'fileRating'].forEach((inputId, i) =>
+    b.call('saveDvsaFile', { month: '2026-07', inputId, fileName: inputId + '.xlsx', base64: Buffer.from('x' + i).toString('base64') }));
+  b.call('filePage', { month: '2026-07', kind: 'qc', imageBase64: img, fingerprint: 'fp-1', sourceName: 'a.png', reading });
+  const pdf = Buffer.from('%PDF-1.4 July report ' + 'x'.repeat(4000));
+  const st = b.call('signStart', { month: '2026-07', mode: 'sign', bytes: pdf.length, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+  b.call('signPiece', { uploadId: st.uploadId, index: 0, data: pdf.toString('base64') });
+  assert.equal(b.call('signFinish', { month: '2026-07', uploadId: st.uploadId }).status, 'success');
+  b.call('saveDvsaFile', { month: '2026-08', inputId: 'fileLogDate', fileName: 'a.xlsx', base64: 'eA==' });
+  try {
+    const p = await newComputer(srv);
+    await p.click('#tab-records');
+    await p.waitForSelector('.rec-tile[data-month="2026-07"].signed');
+    assert.match(await p.textContent('.rec-tile[data-month="2026-07"]'), /July.*Signed \d\d \w{3}.*1 vehicle/);
+    assert.match(await p.textContent('.rec-tile[data-month="2026-08"]'), /August.*things left/);
+    assert.match(await p.textContent('.rec-tile[data-month="2026-06"]'), /Not started/);
+    assert.ok(await p.isDisabled('.rec-tile[data-month="2026-12"]'), 'months to come cannot be picked');
+
+    // Paul's computer quietly keeps a copy of the signed report.
+    await p.waitForFunction(async () => !!(await cacheGet_('report:2026-07:v1')), null, { timeout: 15000, polling: 200 });
+
+    // July: Open report shows it straight from this computer.
+    await p.click('.rec-tile[data-month="2026-07"]');
+    assert.match(await p.textContent('#recPanel'), /Signed off .* by Paul Testman/);
+    assert.ok(await p.isVisible('#recPanel >> text=Open folder in Google Drive'));
+    srv.log.length = 0;
+    await p.click('#recPanel >> text=Open report');
+    await p.waitForSelector('#pdfViewerBody iframe', { timeout: 10000 });
+    assert.equal(srv.log.filter(a => a === 'getReport').length, 0, 'opened from this computer');
+    assert.match(await p.textContent('#pdfViewerTitle'), /July 2026/);
+    await p.click('#pdfViewerActions >> text=Back');
+
+    // August: says what is left, and Continue takes Paul to it.
+    await p.click('.rec-tile[data-month="2026-08"]');
+    const left = await p.textContent('#recPanel');
+    assert.match(left, /2 DVSA files to upload/);
+    assert.match(left, /QC paperwork to scan/);
+    assert.match(left, /checklist questions to answer/);
+    await p.click('#recPanel >> text=Continue August 2026');
+    await p.waitForFunction(() => currentMonth === '2026-08' && document.getElementById('view-report').classList.contains('active'));
+    await waitReady(p);
+
+    // Amend from Records opens the month and the amend box.
+    await p.click('#tab-records');
+    await p.click('.rec-tile[data-month="2026-07"]');
+    await p.click('#recPanel >> text=Amend');
+    await p.waitForSelector('#amendDialog:not([hidden])', { timeout: 15000 });
+    assert.equal(await p.evaluate(() => currentMonth), '2026-07');
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});

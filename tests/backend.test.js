@@ -691,3 +691,31 @@ test('which way up a page is comes from where its title is, never from "degrees 
   assert.match(asked, /document_top/);
   assert.doesNotMatch(asked, /CLOCKWISE/);
 });
+
+test('the month list carries what the Records screen needs, without opening each month (v26)', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  readyMonth(b, month);
+  let e = b.call('listMonths').months[month];
+  assert.equal(e.status, 'draft');
+  assert.equal(e.vehicles, 1, 'two pages, one car');
+  assert.equal(e.qcUnread, 0);
+  assert.equal(e.dvsaFiles.length, 3);
+  assert.ok(e.folderUrl, 'link to the month folder');
+  assert.equal(sign(b, month, fakePdf('one')).status, 'success');
+  e = b.call('listMonths').months[month];
+  assert.equal(e.status, 'signed');
+  assert.equal(e.versions.length, 1);
+  assert.equal(e.versions[0].signedBy, 'Paul Testman');
+  assert.equal(e.versions[0].kind, 'sign');
+  b.call('startAmend', { month, confirm: true, reason: 'A page was missing from the set' });
+  e = b.call('listMonths').months[month];
+  assert.equal(e.status, 'amending');
+  assert.equal(e.amendment.reason, 'A page was missing from the set');
+  assert.equal(sign(b, month, fakePdf('two'), { mode: 'amend' }).status, 'success');
+  e = b.call('listMonths').months[month];
+  assert.equal(e.versions.length, 2);
+  assert.equal(e.versions[1].kind, 'amend');
+  assert.equal(e.versions[1].reason, 'A page was missing from the set');
+  assert.equal(e.amendment, null);
+});
