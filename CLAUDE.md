@@ -361,6 +361,13 @@ From Ediz, in priority order:
    Real Google sometimes stalls 20–35s on a 2MB answer, so each report piece
    is asked for up to 3 times. TEST months 2025-01/02/04/08/12 and 2026-07
    now hold test data (2025-04, 2025-08, 2025-12, 2026-07 are signed).
+   **18 Oct 2026, speed work measured on real Google (TEST v25):** sorting 9
+   pages 12s (was 16s); another computer opens a month in 4.9s (was 8s);
+   same computer: month on screen in 0.2s, confirmed in 2.7s; a signed report
+   opens in 0.1s on the computer that signed it, 14–48s elsewhere (was
+   13–55s, and failing on v24); sign-off 41–97s (Google's speed varies a
+   lot); rotation 12/12 right (`tests/live-rotation.js`). TEST months
+   2026-08/09/11/12 now hold test data (09 and 12 signed).
    Then C (the Records screen) → (5) a trial month, then go
    live.
    **Go-live plan (agreed with Ediz 18 Oct 2026):**
