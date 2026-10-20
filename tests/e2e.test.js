@@ -735,11 +735,14 @@ test('Records: every month at a glance; a signed month opens its report, a draft
   const srv = await start(0, fakeClaude());
   const b = srv.backend;
   const reading = { category: 'mot_vehicle_paperwork', document_type: 'vt20_certificate', registration: 'AB12CDE', tester_name: 'T STONE', rotation: 0, confidence: 'high' };
-  const img = fx.png(60, 85, [240, 240, 235]).toString('base64');
   // July: signed off. August: started, one DVSA file in.
   ['fileLogDate', 'fileLogDuration', 'fileRating'].forEach((inputId, i) =>
     b.call('saveDvsaFile', { month: '2026-07', inputId, fileName: inputId + '.xlsx', base64: Buffer.from('x' + i).toString('base64') }));
-  b.call('filePage', { month: '2026-07', kind: 'qc', imageBase64: img, fingerprint: 'fp-1', sourceName: 'a.png', reading });
+  ['vt20_certificate', 'inspection_sheet', 'emissions_test'].forEach((document_type, i) =>
+    b.call('filePage', { month: '2026-07', kind: 'qc', imageBase64: fx.png(60, 85, [240, 240, 230 + i]).toString('base64'), fingerprint: 'fp-' + i, sourceName: i + '.png', reading: Object.assign({}, reading, { document_type }) }));
+  const state = {};
+  b.sandbox.CHECKLIST_SIZES.forEach((n, ci) => { for (let ii = 0; ii < n; ii++) state[ci + '-' + ii] = 'yes'; });
+  b.call('saveMonthFields', { month: '2026-07', field: 'checklist', value: { state, notes: {} }, baseRevision: 0 });
   const pdf = Buffer.from('%PDF-1.4 July report ' + 'x'.repeat(4000));
   const st = b.call('signStart', { month: '2026-07', mode: 'sign', bytes: pdf.length, pieces: 1, signedBy: 'Paul Testman', confirm: true });
   b.call('signPiece', { uploadId: st.uploadId, index: 0, data: pdf.toString('base64') });
@@ -784,6 +787,56 @@ test('Records: every month at a glance; a signed month opens its report, a draft
     await p.click('#recPanel >> text=Amend');
     await p.waitForSelector('#amendDialog:not([hidden])', { timeout: 15000 });
     assert.equal(await p.evaluate(() => currentMonth), '2026-07');
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});
+
+test('the checklist is a job card: one section at a time, moves on by itself, a NO asks for a note', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.click('#tab-checklist');
+    // Every section is listed; only the first one's questions are shown.
+    assert.equal(await p.locator('.jc-item').count(), await p.evaluate(() => CHECKLIST.length));
+    assert.equal(await p.locator('.jc-sec.current').count(), 1);
+    assert.match(await p.textContent('.jc-sec.current h2'), /^1\. VTS site appearance/);
+    assert.match(await p.textContent('#jcMain .jc-next'), /Next: 2\. Customer parking/);
+
+    // Answering every question YES moves on to the next section by itself.
+    for (const b of await p.$$('.jc-sec.current .check-pill.yes')) await b.click();
+    await p.waitForFunction(() => jcCurrent_ === 1);
+    assert.match(await p.textContent('.jc-item[data-cat-index="0"]'), /VTS site appearance/);
+    assert.ok(await p.evaluate(() => document.querySelector('.jc-item[data-cat-index="0"]').classList.contains('complete')));
+
+    // The keyboard: Y answers the next question.
+    await p.keyboard.press('y');
+    assert.equal(await p.evaluate(() => checklistState['1-0']), 'yes');
+    // A NO stays put and asks for a note; the section shows red until it has one.
+    await p.keyboard.press('n');
+    assert.equal(await p.evaluate(() => checklistState['1-1']), 'no');
+    assert.equal(await p.evaluate(() => document.activeElement.tagName), 'TEXTAREA', 'the note box is ready to type in');
+    await p.waitForTimeout(600);
+    assert.equal(await p.evaluate(() => jcCurrent_), 1, 'stays on the section until the note is written');
+    assert.match(await p.textContent('.jc-item[data-cat-index="1"] .jc-count'), /1 NO/);
+    assert.match(await p.textContent('#clFlag'), /1 NO needs a note/);
+    await p.fill('.check-item[data-key="1-1"] textarea', 'Bay lines repainted by 30 Oct');
+    assert.equal(await p.textContent('#clFlag'), '');
+
+    // Any section can be picked from the list; Next skips finished ones.
+    await p.click('.jc-item[data-cat-index="5"]');
+    assert.match(await p.textContent('.jc-sec.current h2'), /^6\. /);
+    await p.click('.jc-item[data-cat-index="0"]');
+    assert.match(await p.textContent('#jcMain .jc-sec.current .jc-next'), /Next: 3\. /);
+    await waitSaved(p);
+    assert.equal(details(srv, '2026-09').checklist.notes['1-1'], 'Bay lines repainted by 30 Oct');
+
+    // "Go there" from the report's list of what's missing opens the first unfinished section.
+    await p.click('#tab-report');
+    await p.click('#generateBtn');
+    await p.click('#reportBlockers .blockers-go[data-go="checklist"]');
+    assert.ok(await p.isVisible('#view-checklist'));
+    assert.match(await p.textContent('.jc-sec.current h2'), /^3\. /);
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });

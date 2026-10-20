@@ -28,7 +28,11 @@ together the DVSA quality-assurance record:
   - **Calibration certificates**: scanned the same way, matched to an
     equipment row by serial number, and used to update the next-due date.
 - **Checklist tab**: the VTS Site Self Assessment, with YES/NO answers saved
-  per month.
+  per month, laid out as a **job card** (20 Oct 2026): the 22 sections down
+  the left (`#jcList`), one section's questions on the right (`#jcMain`,
+  `showSection_`), moving on by itself when a YES finishes a section
+  (`nextUnfinished_`), the note box opened on a NO, Y/N keys, and the tyre
+  filling up (`clTyre`).
 - **Generate report**: builds a printable report (print or save as PDF from
   the browser). Page 1 is a one-page summary, followed by DVSA performance,
   test logs, the checklist, equipment, and appendices of QC paperwork and
@@ -174,7 +178,7 @@ one Google Apps Script file.
   time while idle, 15s after start-up and whenever Records is opened.
   Since v26 each index entry also has `versions` (date, signer, kind,
   reason), `amendment`, `folderUrl`, `vehicles` and `certUnread`.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (27 on this branch; the live page expects 20) must
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (28 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -208,7 +212,7 @@ and replies with JSON `{ status: 'success' | 'fail' | 'forbidden' | 'error', ...
 | `filePage`, `readPage`, `getPage` | yes | **How the page sends scans (v15+):** file a page (a few seconds, safe to repeat), then have it read in a separate request, then check on it if the reading reply was lost. Since v19 `filePage` also takes `reading`/`readError`, so a page Claude already read is filed as read. No single request has to wait for Drive and Claude together, because long requests were being cut off at 30s. |
 | `getPageImage`, `removePage`, `retryPage` | yes | Fetch a filed page; move a page to `Removed/`; read a page again (Retry). |
 | `loadEquipment`, `saveEquipment` | yes | `equipment.json`, with the same revision protection. |
-| `signStart`, `signPiece`, `signFinish` | yes | **Stage B (v21).** Sign off: checks the month (3 DVSA files, every page read, name, tick), receives the PDF in pieces, joins and size-checks it, files it in `Signed reports/`, and only then marks the month signed — and only if nothing changed since `signStart` (`monthStamp_`). Repeat-safe. |
+| `signStart`, `signPiece`, `signFinish` | yes | **Stage B (v21).** Sign off: checks the month (`serverSignBlockers_`: 3 DVSA files, every page read, and since v28 every QC vehicle's full set, every QC page with a registration, every checklist question answered and a note on every NO; `CHECKLIST_SIZES` must match the page's `CHECKLIST`, a test checks it), name, tick, receives the PDF in pieces, joins and size-checks it, files it in `Signed reports/`, and only then marks the month signed — and only if nothing changed since `signStart` (`monthStamp_`). Repeat-safe. |
 | `startAmend`, `cancelAmend` | yes | Amend needs the tick and a reason; keeps `details-vN.json`. Cancel restores pages, DVSA files and checklist exactly as signed (files moved back from / to `Removed/`). |
 | `getReport` | yes | A signed PDF, in pieces (latest version unless `version` given). Since v23 it hands back the pieces kept at sign-off (`Signed reports (pieces for the app)/`, ids in `versions[].pieceIds`) instead of converting the PDF, which took over 40s and failed on real Google; missing pieces are remade once. Since v25 the page asks for small bites (`from`, `length` ≤ 600,000 characters), four pieces at a time (`fetchSignedReport_`): real Google often stalls on 2MB answers but answers 0.5MB ones reliably. |
 
@@ -296,7 +300,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 34 back-office checks + 17 real-browser checks
+npm test               # 35 back-office checks + 18 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

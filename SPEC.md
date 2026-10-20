@@ -195,6 +195,30 @@ new version alongside them. There is no "un-sign".
   one at a time, newest first, and only while nothing is being saved or
   signed. Opening one is then instant. Log out empties these copies.
 
+### 7.1a Checklist tab as a job card (agreed 20 Oct 2026)
+
+- The sections are listed down the left like a workshop job sheet: a green
+  tick when finished, red with "N NO" while a section has a NO, the open one
+  in Mortlake yellow. The open section's questions are on the right.
+- A YES that finishes a section moves on to the next section that still
+  needs something; a NO stays and opens the note box. **Next** always goes
+  to the next unfinished section. Y and N on the keyboard answer the next
+  question.
+- The tyre fills up as questions are answered.
+- On a phone the list sits above the questions.
+- "Go there" from the list of what's missing opens the first unfinished
+  section.
+
+### 7.1b Nothing missing, enforced twice (20 Oct 2026)
+
+Preview and Sign off stay blocked on the page until everything is in (as
+section 6). Since v28 the back office also refuses to sign off if any
+checklist question is unanswered, any NO has no note, any QC vehicle is
+missing a document (an electric car needs no emissions test), any QC page has
+no readable registration, a DVSA file is missing, or a page is unread. So
+even a fault in the page can't produce a signed report with something
+missing.
+
 ### 7.2 Monthly Report tab (today's screen, changed)
 
 - **Choosing a month loads its saved pieces.** It no longer clears the

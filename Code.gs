@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 27;
+var BACKEND_VERSION = 28;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -1613,9 +1613,23 @@ function uploadingFolder_(month) {
   return folderAt_('s_' + month + '_uploading', function () { return monthFolder_(month, true); }, SUBFOLDERS.uploading, true);
 }
 
-/* What the back office itself insists on before anything is signed. The page
-   checks more (each vehicle's full set, a note on every NO), but these are
-   the things that must never be wrong, whatever the page says. */
+/* How many questions each section of the self-assessment has, in order (the
+   page's CHECKLIST). A test checks the two never drift apart. */
+var CHECKLIST_SIZES = [3, 2, 3, 5, 4, 1, 1, 1, 2, 2, 3, 2, 3, 3, 2, 5, 5, 4, 3, 2, 3, 2];
+
+// Every QC vehicle needs these three; an electric car has no emissions test.
+var QC_DOCS = { emissions_test: 'emissions test', vt20_certificate: 'VT20 certificate', inspection_sheet: 'inspection sheet' };
+
+function realPlate_(reg) {
+  var r = String(reg || '').toUpperCase().replace(/\s+/g, '');
+  if (!r || r === '22453' || r.length < 5 || r.length > 8 || !/^[A-Z0-9]+$/.test(r)) return '';
+  return /[A-Z]/.test(r) && /\d/.test(r) ? r : '';
+}
+
+/* What the back office itself insists on before anything is signed (agreed
+   17 Oct 2026, made firm here 20 Oct 2026: nothing may be signed with
+   anything missing). The page checks the same things first and says what is
+   missing; these checks mean even a fault in the page can't get round them. */
 function serverSignBlockers_(d) {
   var out = [];
   Object.keys(DVSA_INPUTS).forEach(function (id) {
@@ -1624,6 +1638,35 @@ function serverSignBlockers_(d) {
   if (!d.qcPages.length) out.push('No QC paperwork is filed');
   var unread = d.qcPages.concat(d.certPages).filter(function (p) { return p.status !== 'read'; }).length;
   if (unread) out.push(unread + ' page' + (unread === 1 ? ' has' : 's have') + ' not been read');
+
+  // Each QC vehicle's full set, and no page without a readable registration.
+  var cars = {}, noReg = 0;
+  d.qcPages.forEach(function (p) {
+    if (p.status !== 'read') return;
+    var r = p.reading || {}, reg = realPlate_(r.registration);
+    if (!reg) { noReg++; return; }
+    var c = cars[reg] = cars[reg] || { docs: {}, ev: false };
+    c.docs[r.document_type] = true;
+    if (r.is_electric === true) c.ev = true;
+  });
+  Object.keys(cars).sort().forEach(function (reg) {
+    var c = cars[reg];
+    var missing = Object.keys(QC_DOCS).filter(function (t) { return !c.docs[t] && !(t === 'emissions_test' && c.ev); });
+    if (missing.length) out.push('QC vehicle ' + reg + ' is missing its ' + missing.map(function (t) { return QC_DOCS[t]; }).join(' and '));
+  });
+  if (noReg) out.push(noReg + ' QC page' + (noReg === 1 ? ' has' : 's have') + ' no readable registration');
+
+  // Every checklist question answered, and a note on every NO.
+  var cl = d.checklist || {}, state = cl.state || {}, notes = cl.notes || {}, blank = 0, noNote = 0;
+  CHECKLIST_SIZES.forEach(function (n, ci) {
+    for (var ii = 0; ii < n; ii++) {
+      var k = ci + '-' + ii;
+      if (state[k] !== 'yes' && state[k] !== 'no') blank++;
+      else if (state[k] === 'no' && !String(notes[k] || '').trim()) noNote++;
+    }
+  });
+  if (blank) out.push(blank + ' checklist question' + (blank === 1 ? ' is' : 's are') + ' not answered');
+  if (noNote) out.push(noNote + ' checklist answer' + (noNote === 1 ? '' : 's') + ' marked NO ' + (noNote === 1 ? 'needs' : 'need') + ' a note');
   return out;
 }
 

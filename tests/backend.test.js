@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 27);
+  assert.equal(b.call('getVersion', { password: '' }).version, 28);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 27);
+  assert.equal(r.version, 28);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -479,9 +479,26 @@ function readyMonth(b, month) {
   if (b.call('loadEquipment').revision === 0) b.call('saveEquipment', { list: [{ name: 'Roller Brake Tester', serial: '80780205', date: '2027-05-14' }], baseRevision: 0 });
   ['fileLogDate', 'fileLogDuration', 'fileRating'].forEach((inputId, i) =>
     assert.equal(b.call('saveDvsaFile', { month, inputId, fileName: inputId + '.xlsx', base64: Buffer.from('xlsx-' + i).toString('base64') }).status, 'success'));
+  // One car's full set: VT20, inspection sheet and emissions test.
   b.call('filePage', { month, kind: 'qc', imageBase64: IMG, fingerprint: 'fp-a', sourceName: 'a.jpg', reading: QC_READ });
-  b.call('filePage', { month, kind: 'qc', imageBase64: IMG2, fingerprint: 'fp-b', sourceName: 'b.jpg', reading: QC_READ });
+  b.call('filePage', { month, kind: 'qc', imageBase64: IMG2, fingerprint: 'fp-b', sourceName: 'b.jpg', reading: Object.assign({}, QC_READ, { document_type: 'inspection_sheet' }) });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('fake-jpeg-page-3').toString('base64'), fingerprint: 'fp-c', sourceName: 'c.jpg', reading: Object.assign({}, QC_READ, { document_type: 'emissions_test' }) });
+  answerChecklist(b, month);
 }
+// Every question answered YES (or as given).
+function answerChecklist(b, month, change) {
+  const state = {}, notes = {};
+  CHECKLIST_SIZES.forEach((n, ci) => { for (let ii = 0; ii < n; ii++) state[ci + '-' + ii] = 'yes'; });
+  if (change) change(state, notes);
+  const rev = b.call('loadMonth', { month }).details.revisions.checklist || 0;
+  assert.equal(b.call('saveMonthFields', { month, field: 'checklist', value: { state, notes }, baseRevision: rev }).status, 'success');
+}
+// The page's own checklist, read straight from index.html.
+const CHECKLIST_SIZES = (() => {
+  const s = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+  const src = s.slice(s.indexOf('var CHECKLIST = [') + 'var CHECKLIST = '.length, s.indexOf('var checklistState'));
+  return eval('(' + src.trim().replace(/;$/, '') + ')').map(c => c.items.length);
+})();
 // A small fake PDF, sent in pieces the way the page does it.
 function fakePdf(text) { return Buffer.from('%PDF-1.4 ' + text + ' ' + 'x'.repeat(5000)); }
 function sign(b, month, pdf, opts) {
@@ -526,7 +543,7 @@ test('signing off files the PDF, locks the month, and is never half-done', () =>
   assert.equal(b.call('loadMonth', { month }).details.status, 'draft');
   // Something changes while the report is being made: refused, the PDF is not kept.
   const changed = sign(b, month, fakePdf('changed'), { beforeFinish: () =>
-    b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '0-0': 'yes' }, notes: {} }, baseRevision: 0 }) });
+    answerChecklist(b, month, (st, notes) => { notes['0-0'] = 'a late remark'; }) });
   assert.equal(changed.status, 'conflict');
   assert.deepEqual(signedPdfs(b, month), []);
 
@@ -605,7 +622,7 @@ test('amending needs a reason, files v2 next to an untouched v1, and cancelling 
   // Change everything: replace a DVSA file, remove a page, add a page, change the checklist.
   b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'corrected.xlsx', base64: Buffer.from('xlsx-new').toString('base64') });
   b.call('removePage', { month, kind: 'qc', id: asSigned.qcPages[0].id });
-  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p3').toString('base64'), fingerprint: 'fp-c', sourceName: 'c.jpg', reading: QC_READ });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p3').toString('base64'), fingerprint: 'fp-z', sourceName: 'z.jpg', reading: QC_READ });
   b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '2-3': 'no' }, notes: { '2-3': 'x' } }, baseRevision: asSigned.revisions.checklist });
   r = b.call('cancelAmend', { month });
   assert.equal(r.status, 'success');
@@ -616,8 +633,8 @@ test('amending needs a reason, files v2 next to an untouched v1, and cancelling 
   assert.deepEqual(back.checklist, asSigned.checklist, 'checklist exactly as signed');
   assert.deepEqual(b.drive.readBytes('Mortlake Garage Records/2026-09/DVSA files/test-log-by-date.xlsx'), Buffer.from('xlsx-0'), 'the original file is back');
   assert.ok(b.drive.list().includes('Mortlake Garage Records/2026-09/QC paperwork/page-001.jpg'), 'the removed page is back');
-  assert.ok(!b.drive.list().includes('Mortlake Garage Records/2026-09/QC paperwork/page-003.jpg'), 'the added page went to Removed');
-  assert.ok(b.drive.list().some(p => /Removed\/removed .* page-003\.jpg$/.test(p)));
+  assert.ok(!b.drive.list().includes('Mortlake Garage Records/2026-09/QC paperwork/page-004.jpg'), 'the added page went to Removed');
+  assert.ok(b.drive.list().some(p => /Removed\/removed .* page-004\.jpg$/.test(p)));
   assert.ok(back.history.some(h => /Amendment cancelled/.test(h.what)));
   assert.equal(b.call('saveMonthFields', { month, field: 'checklist', value: { state: {}, notes: {} }, baseRevision: back.revisions.checklist }).status, 'locked');
 
@@ -625,8 +642,7 @@ test('amending needs a reason, files v2 next to an untouched v1, and cancelling 
   b.call('startAmend', { month, confirm: true, reason: 'Corrected test log export' });
   b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'corrected.xlsx', base64: Buffer.from('xlsx-new').toString('base64') });
   b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p4').toString('base64'), fingerprint: 'fp-d', sourceName: 'd.jpg', reading: QC_READ });
-  const cur = b.call('loadMonth', { month }).details;
-  b.call('saveMonthFields', { month, field: 'checklist', value: { state: { '0-0': 'yes' }, notes: {} }, baseRevision: cur.revisions.checklist });
+  answerChecklist(b, month, (st, notes) => { st['0-0'] = 'no'; notes['0-0'] = 'Forecourt to be swept daily'; });
   // Plain "Sign off" is refused while amending; it has to be "Sign off amendment".
   assert.equal(sign(b, month, fakePdf('wrong mode')).status, 'error');
   const v2pdf = fakePdf('version two');
@@ -642,7 +658,7 @@ test('amending needs a reason, files v2 next to an untouched v1, and cancelling 
   assert.equal(d.status, 'signed');
   assert.equal(d.signedVersion, 2);
   assert.equal(d.versions.length, 2);
-  assert.ok(d.history.some(h => /question 1\.1: not answered → YES/.test(h.what)), 'checklist changes are spelled out');
+  assert.ok(d.history.some(h => /question 1\.1: YES → NO/.test(h.what)), 'checklist changes are spelled out');
   // Open report shows the latest by default; v1 can still be opened.
   assert.equal(b.call('getReport', { month }).version.version, 2);
   assert.equal(b.call('getReport', { month, version: 1 }).version.version, 1);
@@ -659,15 +675,15 @@ test('opening a month is quick: no rewriting on every open, yet nothing is missi
   const r = b.call('loadMonth', { month });
   assert.equal(b.drive.readText('Mortlake Garage Records/2026-09/details.json'), before, 'not rewritten on this open');
   assert.ok(b.drive.calls.n - writes <= 3, 'only a read or two, took ' + (b.drive.calls.n - writes));
-  assert.equal(r.details.qcPages.length, 3, 'the newest page is there');
+  assert.equal(r.details.qcPages.length, 4, 'the newest page is there');
   assert.ok(r.details.history.some(h => /late\.jpg/.test(h.what)), 'and its history line');
   // Signing off still writes everything into details.json first; the size can come at the end.
   const pdf = fakePdf('sizes at the end');
   const b64 = pdf.toString('base64');
   const st = b.call('signStart', { month, signedBy: 'Paul Testman', confirm: true });
   assert.equal(st.status, 'success');
-  assert.equal(st.details.qcPages.length, 3);
-  assert.ok(JSON.parse(b.drive.readText('Mortlake Garage Records/2026-09/details.json')).qcPages.length === 3, 'details.json up to date before signing');
+  assert.equal(st.details.qcPages.length, 4);
+  assert.ok(JSON.parse(b.drive.readText('Mortlake Garage Records/2026-09/details.json')).qcPages.length === 4, 'details.json up to date before signing');
   for (let i = 0; i * 3000 < b64.length; i++) b.call('signPiece', { uploadId: st.uploadId, index: i, data: b64.substr(i * 3000, 3000) });
   const fin = b.call('signFinish', { month, uploadId: st.uploadId, bytes: pdf.length, pieces: Math.ceil(b64.length / 3000) });
   assert.equal(fin.status, 'success');
@@ -735,4 +751,26 @@ test('a month listed before v26 gets its sign-off details filled in once', () =>
   assert.ok(got.folderUrl);
   assert.equal(got.vehicles, 1);
   assert.ok(JSON.parse(b.props.get('IDX_' + month)).versions, 'kept, so it is done only once');
+});
+
+test('the back office refuses to sign off a month with anything missing, whatever the page says (v28)', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  assert.deepEqual(JSON.parse(JSON.stringify(b.sandbox.CHECKLIST_SIZES)), CHECKLIST_SIZES, 'the back office knows the same checklist as the page');
+  readyMonth(b, month);
+  const why = () => sign(b, month, fakePdf('x')).message || '';
+  // A question left blank, and a NO without a note.
+  answerChecklist(b, month, (st) => { delete st['4-1']; st['2-0'] = 'no'; });
+  assert.match(why(), /1 checklist question is not answered; 1 checklist answer marked NO needs a note/);
+  answerChecklist(b, month, (st, notes) => { st['2-0'] = 'no'; notes['2-0'] = 'New sign ordered'; });
+  // A second car with only its VT20, and a page with no registration.
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p4').toString('base64'), fingerprint: 'fp-d', sourceName: 'd.jpg', reading: Object.assign({}, QC_READ, { registration: 'XY65ZZZ' }) });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p5').toString('base64'), fingerprint: 'fp-e', sourceName: 'e.jpg', reading: Object.assign({}, QC_READ, { registration: '22453' }) });
+  assert.match(why(), /QC vehicle XY65ZZZ is missing its emissions test and inspection sheet; 1 QC page has no readable registration/);
+  assert.equal(b.call('loadMonth', { month }).details.status, 'draft');
+  // An electric car needs no emissions test.
+  const pages = b.call('loadMonth', { month }).details.qcPages;
+  b.call('removePage', { month, kind: 'qc', id: pages.find(p => p.fingerprint === 'fp-e').id });
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p6').toString('base64'), fingerprint: 'fp-f', sourceName: 'f.jpg', reading: Object.assign({}, QC_READ, { registration: 'XY65ZZZ', document_type: 'inspection_sheet', is_electric: true }) });
+  assert.equal(sign(b, month, fakePdf('x')).status, 'success');
 });
