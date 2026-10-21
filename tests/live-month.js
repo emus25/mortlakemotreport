@@ -24,7 +24,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][MM - 1];
   const LONG = new Date(YY, MM - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   fs.writeFileSync(D + '/Test log by date.xlsx', fx.testLog(YY, MM, 212));
-  fs.writeFileSync(D + '/Test log by duration.xlsx', fx.testLog(YY, MM, 212));
+  fs.writeFileSync(D + '/Test log by duration.xlsx', fx.testLog(YY, MM, 212, 'duration'));
   fs.writeFileSync(D + '/Test Quality.xlsx', fx.testQuality(MON + '-' + String(YY).slice(2)));
   fs.writeFileSync(D + '/blank-page.png', fx.png(400, 560, [252, 252, 252]));
 
@@ -68,7 +68,6 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     await A.setInputFiles('#fileQcScans', ['LB22FLC-vt20.jpg', 'LB22FLC-inspection.jpg', 'LB22FLC-emissions.jpg', 'WR19KXA-vt20.jpg',
       'WR19KXA-emissions.jpg', 'WR19KXA-inspection-sideways.jpg', 'GN71TVZ-scan.pdf', 'blank-page.png'].map(f => D + '/' + f));
     let t = Date.now();
-    await A.click('#sortScansBtn');
     // Since v19 the readings appear first and the pages are filed behind them.
     await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length >= 9 && document.getElementById('sortScansBtn').textContent !== 'Reading…', null, { timeout: 600000 });
     log('   results on screen in ' + ((Date.now() - t) / 1000).toFixed(0) + 's' +
@@ -98,7 +97,6 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
 
     log('A adds the calibration certificate and presses Read');
     await A.setInputFiles('#fileCalCerts', D + '/calibration-cert-brake-tester.jpg');
-    await A.click('#readCertsBtn');
     await A.waitForFunction(() => savedPages_.cert.length === 1 && !savesInFlight_ && document.getElementById('readCertsBtn').textContent !== 'Reading…', null, { timeout: 300000 });
     const certText = await txt(A, '#calCertResults');
     log('   screen says: ' + certText.replace(/\s+/g, ' ').slice(0, 160));

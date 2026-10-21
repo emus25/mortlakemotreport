@@ -18,15 +18,20 @@ function serial(y, m, d, h) {
 }
 
 /* A test log for the given month: one row per test. */
-function testLog(year, month, count) {
-  const rows = [['Registration', 'Result', 'Make', 'User ID', 'Test Type', 'Test Duration', 'Test Date/Time']];
+/* A DVSA test log, in date order (the "by date" export) or in time-on-the-
+   ramp order (order: 'duration'), as DVSA sorts them. */
+function testLog(year, month, count, order) {
+  const head = ['Registration', 'Result', 'Make', 'User ID', 'Test Type', 'Test Duration', 'Test Date/Time'];
+  const rows = [];
   const testers = ['TSTONE', 'PKHAN', 'RDAVIS'];
   for (let i = 0; i < count; i++) {
     rows.push(['AB' + (10 + (i % 80)) + 'CDE', i % 5 ? 'PASSED' : 'FAILED', ['FORD', 'VW', 'BMW'][i % 3],
                testers[i % 3], i % 9 ? 'Normal Test' : 'Re-Test', (35 + (i * 7) % 30) / 1440,
                serial(year, month, 1 + (i % 28), 9 + (i % 8))]);
   }
-  return xlsxBuffer(rows);
+  const by = order === 'duration' ? 5 : 6;
+  rows.sort((a, b) => a[by] - b[by]);
+  return xlsxBuffer([head].concat(rows));
 }
 
 /* A Test Quality Information export for a period such as "Sep-26". */

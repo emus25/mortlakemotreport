@@ -26,7 +26,7 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][MM - 1];
   const LONG = new Date(YY, MM - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   fs.writeFileSync(D + '/Test log by date.xlsx', fx.testLog(YY, MM, 212));
-  fs.writeFileSync(D + '/Test log by duration.xlsx', fx.testLog(YY, MM, 212));
+  fs.writeFileSync(D + '/Test log by duration.xlsx', fx.testLog(YY, MM, 212, 'duration'));
   fs.writeFileSync(D + '/Test log by date (corrected).xlsx', fx.testLog(YY, MM, 215));
   fs.writeFileSync(D + '/Test Quality.xlsx', fx.testQuality(MON + '-' + String(YY).slice(2)));
   // Two "new" pages: real paperwork with one extra byte, so they count as new scans.
@@ -60,7 +60,6 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     let expected = before;
     for (const f of files) expected += /\.pdf$/.test(f) ? 2 : 1;
     await p.setInputFiles('#fileQcScans', files.map(f => D + '/' + f));
-    await p.click('#sortScansBtn');
     await p.waitForFunction(n => savedPages_.qc.length + unsavedPages_.qc.length === n && !savesInFlight_, expected, { timeout: 600000 });
   }
   // A signed version, fetched through the back office, with its fingerprint.

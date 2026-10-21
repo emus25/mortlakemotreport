@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 28;
+var BACKEND_VERSION = 29;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -435,6 +435,9 @@ function analyzeQcPage_(imageBase64, mimeType) {
     '- "dvsa_test_log": a DVSA VTS test log listing many tests in date or duration order.\n' +
     '- "vts_checklist": a VTS Site Self Assessment checklist, with rows of YES/NO boxes about the premises.\n' +
     '- "equipment_calibration": a table of MOT equipment with serial numbers and calibration due dates.\n' +
+    '- "calibration_certificate": a calibration certificate for ONE piece of garage equipment (brake tester, ' +
+    'headlamp tester, gas analyser, smoke meter, decelerometer...), issued by a calibration engineer, with a serial ' +
+    'number and calibration / next-due dates.\n' +
     '- "admin_tracker": a month-by-month grid ticking off admin tasks (quality control check, site assessment etc).\n' +
     '- "other": anything else.\n\n' +
     'Then reply with ONLY a single JSON object, no other text, in exactly this shape:\n' +

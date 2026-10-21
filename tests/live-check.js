@@ -66,7 +66,6 @@ const T0 = Date.now(); const log = (...a) => console.log(((Date.now() - T0) / 10
                                   /Filed in Google Drive|Not saved/.test(document.getElementById('statusLogDate').textContent), null, { timeout: 120000 });
     log('A DVSA:', await A.textContent('#statusLogDate'), '|', await A.textContent('#statusRating'));
     await A.setInputFiles('#fileQcScans', [files.a, files.b]);
-    await A.click('#sortScansBtn');
     await A.waitForFunction(() => savedPages_.qc.length + unsavedPages_.qc.length === 2 && !savesInFlight_, null, { timeout: 240000 });
     log('A scans:', JSON.stringify(await A.evaluate(() => savedPages_.qc.map(p => [p.sourceName, p.status, p.error]))));
     await A.evaluate(() => { checklistState['0-0'] = 'yes'; checklistState['0-1'] = 'no'; checklistNotes['0-1'] = 'live test note'; persistChecklistState(); });

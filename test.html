@@ -564,6 +564,88 @@
   .qc-how p { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin-top: 8px; }
 
   /* Smart scan — sorted QC page groups */
+  /* ══════════ Monthly Report boxes (21 Oct 2026) ══════════ */
+  .dvsa-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .dvsa-tiles { grid-template-columns: 1fr; } }
+  .dvsa-tile { position: relative; display: flex; align-items: center; gap: 12px; min-height: 76px; padding: 14px 16px;
+    background: var(--surface); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); cursor: pointer;
+    transition: border-color .15s, background .15s, box-shadow .15s; }
+  .dvsa-tile:hover { border-color: var(--brand-strong); }
+  .dvsa-tile input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .dvsa-tile:focus-within { box-shadow: 0 0 0 3px rgba(255,212,0,.35); }
+  .dt-icon { width: 36px; height: 36px; border-radius: 9px; flex: none; display: grid; place-items: center;
+    background: var(--surface-subtle); border: 1px solid var(--border); color: var(--text-tertiary); }
+  .dt-icon::before { content: ""; width: 18px; height: 18px; background: currentColor;
+    -webkit-mask: var(--dt-mask) center / contain no-repeat; mask: var(--dt-mask) center / contain no-repeat; }
+  .dvsa-tile { --dt-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpath d='M17 8l-5-5-5 5'/%3E%3Cpath d='M12 3v12'/%3E%3C/svg%3E"); }
+  .dt-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .dt-title { font-size: 14px; font-weight: 600; }
+  .dvsa-tile .upload-status { margin: 0; align-items: flex-start; }
+  .dvsa-tile .upload-status .us-icon { display: none; }
+  .dvsa-tile .upload-status .us-file { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .dt-act { font-size: 12px; color: var(--text-secondary); text-decoration: underline; white-space: nowrap; flex: none; }
+  .dt-act::before { content: "Choose file"; }
+  /* Filed: green, with a tick that lands like a stamp. */
+  .dvsa-tile:has(.upload-status.uploaded) { border-style: solid; border-color: #b9e0c4; background: #f3faf5; }
+  .dvsa-tile:has(.upload-status.uploaded) .dt-icon { background: var(--success); border-color: var(--success); color: #fff; animation: stamp .35s ease-out; }
+  .dvsa-tile:has(.upload-status.uploaded) { --dt-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
+  .dvsa-tile:has(.upload-status.uploaded) .dt-act::before { content: "Replace"; }
+  /* Wrong file, or couldn't be read: red, not filed. */
+  .dvsa-tile:has(.upload-status.warn) { border-style: solid; border-color: #e2a8a8; background: #fdf3f3; }
+  .dvsa-tile:has(.upload-status.warn) .dt-icon { background: #f6dcdc; border-color: #e2a8a8; color: var(--danger); }
+  .dvsa-tile:has(.upload-status.warn) { --dt-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='M12 5v9M12 19h.01'/%3E%3C/svg%3E"); }
+  .dvsa-tile:has(.upload-status.warn) .upload-status, .dvsa-tile:has(.upload-status.warn) .us-file { color: var(--danger); font-weight: 600; }
+  .dvsa-tile:has(.upload-status.warn) .dt-act::before { content: "Try again"; }
+  .dvsa-tile:has(.upload-status.reading) .dt-icon { --dt-mask: none; }
+  @keyframes stamp { 0% { transform: scale(1.6) rotate(-12deg); opacity: 0; } 70% { transform: scale(.92); opacity: 1; } 100% { transform: none; } }
+  .drop-strip { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 1.5px dashed #d9c76a; background: var(--brand-tint);
+    border-radius: var(--radius-md); cursor: pointer; font-size: 13px; color: var(--text-secondary); transition: box-shadow .15s, background .15s; }
+  .drop-strip svg { width: 20px; height: 20px; flex: none; color: #8a7400; }
+  .drop-strip b { color: var(--text); font-weight: 600; }
+  .drop-strip .ds-text { flex: 1; }
+  .drop-strip .ds-count { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+  .drop-strip input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .drop-strip:hover { background: #fff4bf; }
+  body.dragging-files .drop-strip, body.dragging-files .dvsa-tile { box-shadow: 0 0 0 3px rgba(255,212,0,.35); }
+  .drop-strip.drag-over, .dvsa-tile.drag-over { background: #fff1a8; border-color: var(--brand-strong); box-shadow: 0 0 0 4px rgba(255,212,0,.5); }
+  /* QC cars, each with its number plate. */
+  .qc-cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 10px; }
+  .qc-car { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px; background: var(--surface); }
+  .qc-car.incomplete { border-color: #ecd6a6; background: var(--warning-bg); }
+  .qc-car.arrive { animation: drive-in .55s cubic-bezier(.2,.8,.3,1); }
+  @keyframes drive-in { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .plate { display: inline-flex; align-items: stretch; border: 1.5px solid #1b1b1b; border-radius: 5px; overflow: hidden; background: #f7d117;
+    font: 700 17px/1 "Arial Narrow", "Helvetica Neue Condensed", Arial, sans-serif; letter-spacing: 1.5px; color: #111; }
+  .plate .pl-band { background: #1d4ea3; color: #fff; font-size: 8px; letter-spacing: .5px; padding: 0 3px; display: flex; align-items: flex-end; padding-bottom: 3px; }
+  .plate .pl-reg { padding: 5px 9px 4px; }
+  .qc-car .qc-meta { font-size: 12px; color: var(--text-secondary); margin: 8px 0 7px; }
+  .qc-car .qc-meta .warnish { color: var(--warning); font-weight: 600; }
+  .qc-docs { display: flex; flex-wrap: wrap; gap: 5px; }
+  .qc-doc { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--success-bg); color: var(--success); }
+  .qc-doc.missing { background: var(--surface); color: var(--warning); border: 1px dashed var(--warning); }
+  .qc-doc.neutral { background: var(--surface-subtle); color: var(--text-secondary); }
+  .qc-review { margin-top: 10px; border: 1px solid #ecd6a6; background: var(--warning-bg); border-radius: var(--radius-md); padding: 10px 12px; font-size: 12px; color: var(--warning); }
+  .qc-review b { color: var(--text); }
+  .qc-testers { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 13px; color: var(--text-secondary); }
+  .qc-testers b { color: var(--text); }
+  .qc-testers .ok { color: var(--success); font-weight: 700; }
+  .qc-testers .no { color: var(--warning); font-weight: 600; }
+  /* Equipment lights under the certificates. */
+  .eq-lights { margin-top: 12px; border-top: 1px solid var(--border); }
+  .eq-row { display: grid; grid-template-columns: 14px minmax(160px, 1.3fr) minmax(110px, 1fr) 1.4fr; gap: 10px; align-items: center; padding: 9px 2px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .eq-row:last-child { border-bottom: 0; }
+  .eq-row .eq-dot { width: 11px; height: 11px; border-radius: 50%; }
+  .eq-dot.success { background: #2f9e57; box-shadow: 0 0 6px rgba(47,158,87,.5); }
+  .eq-dot.warning { background: #e0a100; box-shadow: 0 0 6px rgba(224,161,0,.5); }
+  .eq-dot.danger { background: #d64545; box-shadow: 0 0 6px rgba(214,69,69,.5); }
+  .eq-dot.neutral { background: var(--border-strong); }
+  .eq-row .eq-serial { color: var(--text-secondary); font-size: 12px; }
+  .eq-row .eq-due { font-size: 12px; color: var(--text-secondary); }
+  .eq-row .eq-due.danger { color: var(--danger); font-weight: 600; } .eq-row .eq-due.warning { color: var(--warning); font-weight: 600; }
+  .eq-row .eq-new { color: var(--success); font-weight: 600; margin-left: 6px; }
+  @media (max-width: 700px) { .eq-row { grid-template-columns: 14px 1fr; } .eq-row .eq-serial, .eq-row .eq-due { grid-column: 2; } }
+  @media (prefers-reduced-motion: reduce) { .qc-car.arrive, .dvsa-tile .dt-icon { animation: none !important; } }
+  .link-btn { background: none; border: 0; padding: 0; font: inherit; color: var(--text); text-decoration: underline; cursor: pointer; margin-left: 4px; }
   .qc-sort-status { font-size: 12px; color: var(--text-secondary); margin: 10px 0 2px; min-height: 16px; }
   .qc-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-top: 10px; }
   .qc-group.complete { border-color: #bfe0c9; background: #f7fcf8; }
@@ -1308,68 +1390,56 @@
 
       <!-- DVSA data -->
       <div class="section" id="dvsaSection">
-        <div class="section-head"><h2>DVSA data <span class="req" title="Required">*</span></h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
-        <div class="upload-grid">
-
-          <div class="card upload-card">
-            <div class="upload-card-top">
-              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by date <span class="req" title="Required">*</span></div><div class="upload-card-sub">Date sequence · .csv or .xlsx</div></div>
-            </div>
-            <div class="upload-actions">
-              <label class="btn btn-secondary btn-sm" for="fileLogDate">Upload file</label>
-              <input type="file" id="fileLogDate" accept=".csv,.xlsx,.xls">
-            </div>
-            <div class="file-list" id="listLogDate"></div>
-            <div class="upload-status required" id="statusLogDate"></div>
-          </div>
-
-          <div class="card upload-card">
-            <div class="upload-card-top">
-              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test log — by duration <span class="req" title="Required">*</span></div><div class="upload-card-sub">Time on the ramp · .csv or .xlsx</div></div>
-            </div>
-            <div class="upload-actions">
-              <label class="btn btn-secondary btn-sm" for="fileLogDuration">Upload file</label>
-              <input type="file" id="fileLogDuration" accept=".csv,.xlsx,.xls">
-            </div>
-            <div class="file-list" id="listLogDuration"></div>
-            <div class="upload-status required" id="statusLogDuration"></div>
-          </div>
-
-          <div class="card upload-card">
-            <div class="upload-card-top">
-              <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div>
-              <div><div class="upload-card-title">Test Quality Information <span class="req" title="Required">*</span></div><div class="upload-card-sub">Site vs national · .csv or .xlsx</div></div>
-            </div>
-            <div class="upload-actions">
-              <label class="btn btn-secondary btn-sm" for="fileRating">Upload file</label>
-              <input type="file" id="fileRating" accept=".csv,.xlsx,.xls">
-            </div>
-            <div class="file-list" id="listRating"></div>
-            <div class="upload-status required" id="statusRating"></div>
-          </div>
-
+        <div class="section-head"><h2>DVSA exports <span class="req" title="Required">*</span></h2><span class="section-desc">Drop each Excel export on its own box. A file in the wrong box is caught and not filed.</span></div>
+        <!-- One tile per export (Paul, 21 Oct 2026: separate boxes avoid mistakes).
+             The whole tile is the drop target and the button. -->
+        <div class="dvsa-tiles">
+          <label class="dvsa-tile" for="fileLogDate">
+            <span class="dt-icon" aria-hidden="true"></span>
+            <span class="dt-body">
+              <span class="dt-title">Test log by date <span class="req" title="Required">*</span></span>
+              <span class="upload-status required" id="statusLogDate"></span>
+            </span>
+            <span class="dt-act"></span>
+            <input type="file" id="fileLogDate" accept=".csv,.xlsx,.xls">
+          </label>
+          <div class="file-list" id="listLogDate" hidden></div>
+          <label class="dvsa-tile" for="fileLogDuration">
+            <span class="dt-icon" aria-hidden="true"></span>
+            <span class="dt-body">
+              <span class="dt-title">Test log by duration <span class="req" title="Required">*</span></span>
+              <span class="upload-status required" id="statusLogDuration"></span>
+            </span>
+            <span class="dt-act"></span>
+            <input type="file" id="fileLogDuration" accept=".csv,.xlsx,.xls">
+          </label>
+          <div class="file-list" id="listLogDuration" hidden></div>
+          <label class="dvsa-tile" for="fileRating">
+            <span class="dt-icon" aria-hidden="true"></span>
+            <span class="dt-body">
+              <span class="dt-title">Test Quality Information <span class="req" title="Required">*</span></span>
+              <span class="upload-status required" id="statusRating"></span>
+            </span>
+            <span class="dt-act"></span>
+            <input type="file" id="fileRating" accept=".csv,.xlsx,.xls">
+          </label>
+          <div class="file-list" id="listRating" hidden></div>
         </div>
       </div>
 
       <!-- QC paperwork -->
       <div class="section" id="qcSection">
-        <div class="section-head"><h2>QC paperwork <span class="req" title="Required">*</span></h2><span class="section-desc">Upload the MOT paperwork for vehicles quality-controlled this month. Each vehicle needs its VT20, inspection sheet and emissions test (not for electric cars).</span></div>
+        <div class="section-head"><h2>QC paperwork <span class="req" title="Required">*</span></h2><span class="section-desc">VT20, inspection sheet and emissions test for each car QC’d (no emissions test for electric cars)</span></div>
         <div class="card panel">
-          <label class="dropzone" for="fileQcScans">
-            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-            <div class="dz-title">Drag scanned pages here, or click to browse</div>
-            <div class="dz-sub">Any order — pages are matched and checked against the monthly test log</div>
+          <label class="drop-strip" for="fileQcScans">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <span class="ds-text"><b>Drop QC scans here</b>, or click to choose. Any order: each page is read as it goes in.</span>
+            <span class="ds-count" id="qcCount">0 pages filed</span>
             <input type="file" id="fileQcScans" multiple accept=".pdf,image/*">
           </label>
-          <div class="qc-count" id="qcCount">0 pages uploaded</div>
           <div class="file-list" id="listQcScans"></div>
-          <details class="qc-how">
-            <summary>How it works</summary>
-            <p>Scan in the paperwork for whichever vehicles you QC'd this month, in any order. The system reads the registration off each page, groups the full set together, and cross-checks it against the test log — so there's no need to note down separately which ones were QC'd.</p>
-          </details>
-          <button type="button" class="btn btn-secondary btn-sm" id="sortScansBtn" style="margin-top:14px" disabled onclick="runSmartScan()">Sort scanned pages</button>
+          <!-- Only shown if pages are waiting and couldn't start by themselves (e.g. still loading). -->
+          <button type="button" class="btn btn-secondary btn-sm" id="sortScansBtn" style="margin-top:10px;display:none" onclick="runSmartScan()">Read waiting pages</button>
           <div class="sort-progress" id="qcProgress">
             <span data-tyre="qcProgress"></span>
             <div class="sort-progress-label">
@@ -1379,27 +1449,23 @@
           </div>
           <div class="qc-sort-status" id="qcSortStatus"></div>
           <div id="qcGroupsContainer"></div>
+          <div class="qc-testers" id="qcTesters" hidden></div>
           <div id="qcPageList"></div>
         </div>
       </div>
 
       <!-- Calibration certificates -->
       <div class="section">
-        <div class="section-head"><h2>Calibration certificates <span class="optional">(optional)</span></h2><span class="section-desc">Upload certificates for the equipment calibrated this month</span></div>
+        <div class="section-head"><h2>Calibration certificates <span class="optional">(optional)</span></h2><span class="section-desc">Only when equipment was calibrated this month. The lights show each item’s due date.</span></div>
         <div class="card panel">
-          <label class="dropzone" for="fileCalCerts">
-            <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
-            <div class="dz-title">Drag certificates here, or click to browse</div>
-            <div class="dz-sub">Any order — each certificate is read and matched to the equipment list</div>
+          <label class="drop-strip" for="fileCalCerts">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <span class="ds-text"><b>Drop calibration certificates here</b>, or click to choose. Each is matched to the equipment by serial number.</span>
+            <span class="ds-count" id="calCertCount">0 pages filed</span>
             <input type="file" id="fileCalCerts" multiple accept=".pdf,image/*">
           </label>
-          <div class="qc-count" id="calCertCount">0 pages uploaded</div>
           <div class="file-list" id="listCalCerts"></div>
-          <details class="qc-how">
-            <summary>How it works</summary>
-            <p>Scan in the calibration certificates as they come back from the engineer. The system reads the equipment, serial number and next-due date off each one, matches it to the equipment list by serial number, and offers to update the due date for you. Every certificate is reproduced at the back of the monthly report as evidence.</p>
-          </details>
-          <button type="button" class="btn btn-secondary btn-sm" id="readCertsBtn" style="margin-top:14px" disabled onclick="runCertScan()">Read certificates</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="readCertsBtn" style="margin-top:10px;display:none" onclick="runCertScan()">Read waiting certificates</button>
           <div class="sort-progress" id="calProgress">
             <span data-tyre="calProgress"></span>
             <div class="sort-progress-label">
@@ -1408,6 +1474,7 @@
             </div>
           </div>
           <div class="qc-sort-status" id="calCertStatus"></div>
+          <div class="eq-lights" id="eqLights"></div>
           <div id="calCertResults"></div>
           <div id="certPageList"></div>
         </div>
@@ -2010,6 +2077,7 @@
       saveStore();
       renderEquipmentRows_(eq.list);
       applyAutoChecklist_();
+      renderEqLights_();
       return Promise.resolve();
     }
     // Nothing filed yet: file the list this browser already has (the real
@@ -2154,6 +2222,7 @@
     saveStore();
     scheduleEquipmentSave_();
     applyAutoChecklist_();
+    renderEqLights_();
   }
   function persistMonth() { store.selectedMonth = currentMonth; saveStore(); }
 
@@ -2744,6 +2813,7 @@
     if (parsed.error) return { ok: false, text: parsed.error };
 
     TEST_QUALITY = parsed;
+    if (qcSortResults.length) setTimeout(renderQcGroups_, 0);   // tester names for the QC cards
 
     // Keep each month's headline figures so the trend builds up over time.
     // Keyed by period, so re-uploading the same month corrects it rather
@@ -2817,7 +2887,8 @@
         type: String(row[col['test type']] || '').trim(),
         result: result,
         minutes: minutes,
-        day: day
+        day: day,
+        stamp: typeof dtRaw === 'number' ? dtRaw : null
       });
     }
     if (!tests.length) return { error: 'No test rows found in that file.' };
@@ -3044,6 +3115,7 @@
     // by-date and by-duration logs. TEST_LOG alone only ever held whichever
     // was uploaded last, so one of the two could never be printed.
     TEST_LOGS[inputId] = parsed;
+    if (qcSortResults.length) setTimeout(renderQcGroups_, 0);   // the cards can now say who tested each car
 
     // Keep only the aggregates. 244 raw test rows would blow the 9KB-per-value
     // limit on Script Properties, and nothing on screen or in the report needs
@@ -3136,6 +3208,24 @@
     var listId = inputId === 'fileQcScans' ? 'listQcScans' : 'listCalCerts';
     renderFileList(inputId, listId, null);
     refreshStatuses();
+    // No "Sort" button to remember: reading starts as soon as pages go in.
+    autoScan_(inputId === 'fileQcScans' ? 'qc' : 'cert');
+  }
+
+  var scanning_ = { qc: false, cert: false }, scanAgain_ = { qc: false, cert: false };
+  function autoScan_(kind) {
+    if (!SCRIPT_URL || !recordsReady_) { refreshStatuses(); return; }   // the "Read waiting pages" button stays
+    if (scanning_[kind]) { scanAgain_[kind] = true; return; }        // more pages while reading: read them next
+    scanning_[kind] = true;
+    refreshStatuses();
+    function done() {
+      scanning_[kind] = false;
+      var more = scanAgain_[kind];
+      scanAgain_[kind] = false;
+      refreshStatuses();
+      if (more && pickedFiles[SCAN_UI[kind].input].length) autoScan_(kind);
+    }
+    runScan_(kind).then(done, done);
   }
 
   function wireFileInput(inputId) {
@@ -3164,6 +3254,17 @@
     return readUploadedFile_(file).then(function (result) {
       if (opts.token && opts.token !== openToken_) return;     // a different month was opened meanwhile
       if (pickedFiles[inputId][0] !== file) return;            // replaced by a newer file meanwhile
+
+      // A file dropped on the wrong box is never filed there.
+      var wrong = !opts.fromSaved && (DVSA_WRONG_BOX_[inputId] || {})[whichDvsa_(result)];
+      if (wrong) {
+        pickedFiles[inputId] = [];
+        renderFileList(inputId, slot.list, slot.status);
+        refreshStatuses();
+        el.className = 'upload-status warn';
+        el.innerHTML = ICON_WARN + '<span class="us-file">' + escapeHtml_(wrong) + ' Not filed.</span>';
+        return;
+      }
 
       if (!opts.fromSaved && SCRIPT_URL) {
         var fm = fileMonth_(inputId, result);
@@ -3194,6 +3295,40 @@
       else if (summary.ok && SCRIPT_URL) return saveDvsaFile_(inputId, file);
     });
   }
+
+  /* Which DVSA export a file is (Paul, 21 Oct 2026: each file has its own box,
+     and a file in the wrong box must be caught). The two test logs have the
+     same columns; they differ only in order, by date/time or by time on the
+     ramp, so that is what is checked. 'log' means a test log whose order
+     isn't clear either way, which is accepted in either box. */
+  function sortedShare_(values) {
+    var v = values.filter(function (x) { return typeof x === 'number'; });
+    if (v.length < 6) return 0;
+    var up = 0, down = 0;
+    for (var i = 1; i < v.length; i++) { if (v[i] >= v[i - 1]) up++; if (v[i] <= v[i - 1]) down++; }
+    return Math.max(up, down) / (v.length - 1);
+  }
+  function whichDvsa_(result) {
+    if (!result || result.kind !== 'spreadsheet' || result.error || !result.rows) return null;
+    var log = parseTestLog_(result.rows);
+    if (!log.error) {
+      var byTime = sortedShare_(log.tests.map(function (t) { return t.stamp; }));
+      var byRamp = sortedShare_(log.tests.map(function (t) { return t.minutes; }));
+      if (byRamp >= 0.95 && byTime < 0.8) return 'duration';
+      if (byTime >= 0.95 && byRamp < 0.8) return 'date';
+      return 'log';
+    }
+    var tq = parseTestQuality_(result.rows);
+    return tq && !tq.error ? 'tq' : null;
+  }
+  var DVSA_WRONG_BOX_ = {
+    fileLogDate: { duration: 'That file is in time-on-the-ramp order: it looks like the test log by duration. Drop it on that box.',
+                   tq: 'That\u2019s the Test Quality file, not a test log. Drop it on the Test Quality box.' },
+    fileLogDuration: { date: 'That file is in date order: it looks like the test log by date. Drop it on that box.',
+                       tq: 'That\u2019s the Test Quality file, not a test log. Drop it on the Test Quality box.' },
+    fileRating: { date: 'That\u2019s a test log, not the Test Quality file.', duration: 'That\u2019s a test log, not the Test Quality file.',
+                  log: 'That\u2019s a test log, not the Test Quality file.' }
+  };
 
   /* Which month a DVSA export covers, as "YYYY-MM", or null if it can't tell. */
   function fileMonth_(inputId, result) {
@@ -3338,8 +3473,7 @@
   // …and each DVSA card, so a file can be dropped straight onto the right one.
   DVSA_INPUTS.forEach(function (d) {
     var label = document.querySelector('label[for="' + d.input + '"]');
-    var card = label && label.closest('.upload-card');
-    makeDroppable_(card || label, d.input);
+    makeDroppable_(label, d.input);
   });
 
   // Dropping anywhere else must not make the browser navigate away and bin
@@ -3537,11 +3671,14 @@
 
     var sortBtn = document.getElementById('sortScansBtn');
     if (sortBtn && sortBtn.textContent !== 'Reading…') sortBtn.disabled = qcc.waiting === 0;
+    if (sortBtn) sortBtn.style.display = (!qcc.waiting || scanning_.qc) ? 'none' : '';
 
     var cc = scanCounts_('cert');
     setText('calCertCount', scanCountText_(cc));
     var certBtn = document.getElementById('readCertsBtn');
     if (certBtn && certBtn.textContent !== 'Reading…') certBtn.disabled = cc.waiting === 0;
+    if (certBtn) certBtn.style.display = (!cc.waiting || scanning_.cert) ? 'none' : '';
+    renderEqLights_();
   }
 
   function refreshStatuses() {
@@ -3763,7 +3900,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 28;
+  var EXPECTED_BACKEND_VERSION = 29;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -4513,9 +4650,15 @@
       }
       var a = res.result;
       var reg = normalizeReg_(a.registration);
+      // A calibration certificate dropped in with the QC scans (v29 knows the difference).
+      if (a.category === 'calibration_certificate') {
+        needsReview.push({ id: item.id, label: item.label,
+          reason: 'this looks like a calibration certificate, not QC paperwork. Remove it here and drop it under Calibration certificates.' });
+        return;
+      }
       if (!looksLikeRealPlate_(reg)) {
         needsReview.push({
-          label: item.label,
+          id: item.id, label: item.label,
           reason: reg ? 'No vehicle registration on this page (read "' + reg + '")'
                       : 'Registration not readable'
         });
@@ -4546,6 +4689,11 @@
           : '');
     }
 
+    // One card per car, with its number plate (Ediz, 21 Oct 2026). A car
+    // seen for the first time drives in.
+    var grid = document.createElement('div');
+    grid.className = 'qc-cars';
+    var fromLog = qcTestLogLookup_();
     regKeys.forEach(function (reg) {
       var g = groups[reg];
       var foundTypes = g.pages.map(function (p) { return p.document_type; });
@@ -4556,29 +4704,115 @@
       var testerList = Object.keys(g.testers);
       var qcFlagged = g.pages.some(function (p) { return p.qc_flag; });
       var model = (g.pages.find(function (p) { return p.make_model; }) || {}).make_model;
+      var date = (g.pages.find(function (p) { return p.test_date; }) || {}).test_date;
+      var logged = fromLog.ready ? fromLog.byReg[reg] : null;
+      var who = logged ? testerLabel_(logged.tester) : (testerList.length ? testerList.join(', ') : 'Tester not read');
 
       var div = document.createElement('div');
-      div.className = 'qc-group ' + (complete ? 'complete' : 'incomplete');
-      div.innerHTML =
-        '<div class="qc-group-head">' +
-          '<span class="qc-group-reg">' + escapeHtml_(reg) + '</span>' +
-          '<span class="badge ' + (complete ? 'success' : 'warning') + '">' + (complete ? 'Complete set' : g.pages.length + ' of ' + expected.length + ' pages') + '</span>' +
-        '</div>' +
-        (model ? '<div class="qc-group-docs">' + escapeHtml_(model) + (isEV ? ' &nbsp;<span class="badge neutral">Electric — no emissions test needed</span>' : '') + '</div>' : '') +
-        '<div class="qc-group-tester">' + (testerList.length ? 'Tester: ' + escapeHtml_(testerList.join(', ')) : 'Tester not read') +
-          (qcFlagged ? ' &nbsp;<span class="badge brand">Marked QC test</span>' : '') + '</div>' +
-        '<div class="qc-group-docs">Pages found: ' + foundTypes.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' +
-        (missing.length ? '<div class="qc-page-flag">Missing: ' + missing.map(function (t) { return escapeHtml_(t.replace(/_/g, ' ')); }).join(', ') + '</div>' : '');
-      container.appendChild(div);
+      div.className = 'qc-car ' + (complete ? 'complete' : 'incomplete') + (seenCars_[reg] ? '' : ' arrive');
+      seenCars_[reg] = true;
+      div.dataset.reg = reg;
+      var tags = ['vt20_certificate', 'inspection_sheet', 'emissions_test'].filter(function (t) { return expected.indexOf(t) > -1; }).map(function (t) {
+        var have = foundTypes.indexOf(t) > -1;
+        return '<span class="qc-doc' + (have ? '' : ' missing') + '">' + DOC_TAGS_[t] + (have ? ' ✓' : ' missing') + '</span>';
+      }).join('') + (isEV ? '<span class="qc-doc neutral">Electric</span>' : '') +
+        (qcFlagged ? '<span class="qc-doc neutral">Marked QC</span>' : '');
+      div.innerHTML = plateHtml_(reg) +
+        '<div class="qc-meta">' + escapeHtml_(who) + (date ? ' · ' + escapeHtml_(date) : '') +
+          (model ? ' · ' + escapeHtml_(model) : '') +
+          (fromLog.ready && !logged ? ' · <span class="warnish">not in this month’s test log</span>' : '') + '</div>' +
+        '<div class="qc-docs">' + tags + '</div>';
+      grid.appendChild(div);
     });
+    if (regKeys.length) container.appendChild(grid);
 
     if (needsReview.length) {
       var reviewDiv = document.createElement('div');
-      reviewDiv.className = 'qc-group incomplete';
-      reviewDiv.innerHTML = '<div class="qc-group-head"><span class="qc-group-reg">Needs manual check</span></div>' +
-        needsReview.map(function (r) { return '<div class="qc-page-flag">' + escapeHtml_(r.label) + ' — ' + escapeHtml_(r.reason) + '</div>'; }).join('');
+      reviewDiv.className = 'qc-review';
+      reviewDiv.innerHTML = '<b>Needs a look</b>' + needsReview.map(function (r) {
+        return '<div>' + escapeHtml_(r.label) + ': ' + escapeHtml_(r.reason) +
+          (r.id ? ' <button type="button" class="link-btn" data-remove="' + escapeHtml_(r.id) + '">Remove</button>' : '') + '</div>';
+      }).join('');
+      reviewDiv.querySelectorAll('[data-remove]').forEach(function (b) {
+        b.addEventListener('click', function () { removeFiledPage_('qc', b.dataset.remove); });
+      });
       container.appendChild(reviewDiv);
     }
+    renderQcTesters_(groups, fromLog);
+  }
+
+  var DOC_TAGS_ = { vt20_certificate: 'VT20', inspection_sheet: 'Inspection', emissions_test: 'Emissions' };
+  var seenCars_ = {};
+
+  // A UK number plate: yellow, with the blue band.
+  function plateHtml_(reg) {
+    var r = String(reg || '').toUpperCase();
+    // Current-style plates read "AB12 CDE"; anything else is shown as it is.
+    var shown = /^[A-Z]{2}\d{2}[A-Z]{3}$/.test(r) ? r.slice(0, 4) + ' ' + r.slice(4) : r;
+    return '<span class="plate" aria-label="Registration ' + escapeHtml_(r) + '"><span class="pl-band">UK</span><span class="pl-reg">' +
+      escapeHtml_(shown) + '</span></span>';
+  }
+
+  // Who tested each car, from the month's test log (by registration, so
+  // tester names never have to match).
+  function qcTestLogLookup_() {
+    var log = TEST_LOGS.fileLogDate || TEST_LOGS.fileLogDuration;
+    var out = { ready: !!(log && log.tests), byReg: {}, testers: {} };
+    if (!out.ready) return out;
+    log.tests.forEach(function (t) {
+      if (t.tester) out.testers[t.tester] = (out.testers[t.tester] || 0) + 1;
+      if (t.reg && (!out.byReg[t.reg] || (t.stamp || 0) > (out.byReg[t.reg].stamp || 0))) out.byReg[t.reg] = t;
+    });
+    return out;
+  }
+
+  // The Test Quality file gives names for the test log's tester IDs.
+  function testerLabel_(id) {
+    var names = (TEST_QUALITY && TEST_QUALITY.testers) ? TEST_QUALITY.testers : [];
+    var m = names.filter(function (t) { return t.id === id; })[0];
+    return m && m.name ? m.name : id;
+  }
+
+  // "Tested by": each tester in the test log, and how many of their cars were QC'd.
+  function renderQcTesters_(groups, fromLog) {
+    var el = document.getElementById('qcTesters');
+    if (!el) return;
+    var regs = Object.keys(groups);
+    if (!fromLog.ready || !regs.length) { el.hidden = true; el.innerHTML = ''; return; }
+    var cars = {};
+    regs.forEach(function (reg) { var t = fromLog.byReg[reg]; if (t && t.tester) cars[t.tester] = (cars[t.tester] || 0) + 1; });
+    var ids = Object.keys(fromLog.testers).sort(function (a, b) { return fromLog.testers[b] - fromLog.testers[a]; });
+    el.innerHTML = '<b>QC by tester:</b> ' + ids.map(function (id) {
+      var n = cars[id] || 0;
+      return n ? '<span class="ok">✓</span> ' + escapeHtml_(testerLabel_(id)) + ' (' + n + (n === 1 ? ' car' : ' cars') + ')'
+               : '<span class="no">' + escapeHtml_(testerLabel_(id)) + ': no QC car yet</span>';
+    }).join(' · ');
+    el.hidden = false;
+  }
+
+  // The equipment under the certificates: a light for each item and its due
+  // date, so Paul sees at once what a certificate needs to put right.
+  function renderEqLights_() {
+    var el = document.getElementById('eqLights');
+    if (!el) return;
+    var rows = store.calibration || [];
+    var certSerials = {};
+    savedPages_.cert.forEach(function (p) {
+      var r = p.reading || {};
+      if (r.serial_number) certSerials[String(r.serial_number).replace(/\s+/g, '').toUpperCase()] = true;
+    });
+    el.innerHTML = rows.map(function (c) {
+      var st = computeCalStatus(c.date);
+      var due = !c.date ? 'no date set'
+        : st.badge === 'Overdue' ? 'overdue since ' + fmtLongDate_(c.date)
+        : st.badge === 'Due soon' ? 'due ' + fmtLongDate_(c.date) + ' (' + st.text + ')'
+        : 'due ' + fmtLongDate_(c.date);
+      var fresh = c.serial && certSerials[String(c.serial).replace(/\s+/g, '').toUpperCase()];
+      return '<div class="eq-row"><span class="eq-dot ' + st.cls + '"></span><b>' + escapeHtml_(String(c.name || '').split(' — ')[0]) + '</b>' +
+        '<span class="eq-serial">' + (c.serial ? 'serial ' + escapeHtml_(c.serial) : 'no serial') + '</span>' +
+        '<span class="eq-due ' + (st.cls === 'danger' || st.cls === 'warning' ? st.cls : '') + '">' + escapeHtml_(due) +
+          (fresh ? '<span class="eq-new">certificate filed this month</span>' : '') + '</span></div>';
+    }).join('');
   }
 
   /* ═══════════════ VTS self-assessment checklist ═══════════════ */

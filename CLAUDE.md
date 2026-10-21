@@ -190,7 +190,17 @@ one Google Apps Script file.
   parks it at the flag with "Signed off ✓ · Open report". Stops are buttons
   (`roadGo_`). Redrawn via `renderRoad_` from `updateReportReadiness`,
   `updateProgress` and `renderMonthState_`.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (28 on this branch; the live page expects 20) must
+- **Monthly Report boxes (21 Oct 2026, SPEC 7.2a):** DVSA tiles
+  (`.dvsa-tile`, state shown via `:has(.upload-status.…)`); `whichDvsa_`
+  (`sortedShare_` of date/time vs duration) and `DVSA_WRONG_BOX_` refuse a
+  file in the wrong box before filing. Scans read themselves (`autoScan_`,
+  `scanning_`/`scanAgain_`); `#sortScansBtn`/`#readCertsBtn` only show when
+  pages wait. QC cards with `plateHtml_`, testers from the test log by
+  registration (`qcTestLogLookup_`, `testerLabel_`, `renderQcTesters_`),
+  certificates among QC scans flagged (`category: calibration_certificate`,
+  v29). Equipment lights under the certificates (`renderEqLights_`).
+  Test fixtures: `fx.testLog(y, m, n, 'duration')` makes a duration-ordered log.
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (29 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -312,7 +322,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 35 back-office checks + 20 real-browser checks
+npm test               # 35 back-office checks + 21 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

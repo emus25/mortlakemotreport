@@ -240,6 +240,28 @@ never past a stop that isn't finished, and reaches the flag only when
 nothing is missing. Clicking a stop goes there. A signed month shows the car
 at the flag with "Signed off ✓" and Open report.
 
+### 7.2a Monthly Report boxes (agreed 21 Oct 2026)
+
+- **DVSA exports:** one slim tile per export, in Paul's order (he wants each
+  file dropped on its own box to avoid mistakes). Green with the file name
+  and test count once filed; red and **not filed** if the file is the wrong
+  one: the Test Quality file and the test logs can't be confused, and the
+  two test logs are told apart by their order (date/time vs time on the
+  ramp). A log whose order isn't clear is accepted in either box.
+- **QC paperwork:** a one-line drop strip; reading starts as soon as pages
+  go in (no Sort button; a "Read waiting pages" button appears only if
+  reading couldn't start, e.g. while loading). Each car is a card with its
+  number plate, tester and date, and a tag per document (missing ones
+  dashed, card amber). Who tested each car comes from the test log by
+  registration, with names from the Test Quality file; a car not in the
+  month's test log says so. "QC by tester" lists every tester in the test
+  log and flags any with no QC car yet (information only, not a blocker).
+- A page Claude recognises as a calibration certificate among the QC scans
+  (v29 adds the category) is listed under "Needs a look" with Remove.
+- **Calibration certificates:** a one-line drop strip, then each equipment
+  item with a green/amber/red light and its due date ("certificate filed
+  this month" where one was).
+
 ### 7.1b Nothing missing, enforced twice (20 Oct 2026)
 
 Preview and Sign off stay blocked on the page until everything is in (as

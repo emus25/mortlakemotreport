@@ -17,7 +17,7 @@ const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'mortlake-e2e-'));
 function tmpFile(name, buf) { const p = path.join(TMP, name); fs.writeFileSync(p, buf); return p; }
 
 const LOG_SEP = tmpFile('Test log by date Sep 2026.xlsx', fx.testLog(2026, 9, 30));
-const LOG_SEP_DUR = tmpFile('Test log by duration Sep 2026.xlsx', fx.testLog(2026, 9, 30));
+const LOG_SEP_DUR = tmpFile('Test log by duration Sep 2026.xlsx', fx.testLog(2026, 9, 30, 'duration'));
 const TQ_SEP = tmpFile('TQI Sep-26.xlsx', fx.testQuality('Sep-26'));
 const SCAN_A = tmpFile('scan-a.png', fx.png(60, 85, [240, 240, 235]));
 const SCAN_B = tmpFile('scan-b.png', fx.png(60, 85, [230, 236, 240]));
@@ -123,7 +123,6 @@ test('Paul fills in September; everything is filed and comes back on another com
     // 2. Scans: three pages, sorted and filed.
     await a.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B, SCAN_C]);
     assert.match(await a.textContent('#qcCount'), /0 pages filed · 3 waiting to be read/);
-    await a.click('#sortScansBtn');
     await a.waitForFunction(() => savedPages_.qc.length === 3 && savedPages_.qc.every(p => p.status === 'read'));
     assert.match(await a.textContent('#qcSortStatus'), /2 vehicles found across 3 pages/);
     assert.equal(srv.backend.drive.list().filter(f => f.includes('2026-09/QC paperwork/')).length, 3);
@@ -131,14 +130,12 @@ test('Paul fills in September; everything is filed and comes back on another com
     // The same scans again are recognised, not filed or read twice.
     const calls = srv.backend.calls.claude;
     await a.setInputFiles('#fileQcScans', [SCAN_A]);
-    await a.click('#sortScansBtn');
     await a.waitForFunction(() => pickedFiles.fileQcScans.length === 0 && !savesInFlight_);
     assert.equal(srv.backend.calls.claude, calls);
     assert.equal(srv.backend.drive.list().filter(f => f.includes('2026-09/QC paperwork/')).length, 3);
 
     // 3. A calibration certificate.
     await a.setInputFiles('#fileCalCerts', [CERT]);
-    await a.click('#readCertsBtn');
     await a.waitForFunction(() => savedPages_.cert.length === 1 && !savesInFlight_);
     assert.match(await a.textContent('#calCertResults'), /Roller Brake Tester/);
 
@@ -209,7 +206,6 @@ test('a page Claude cannot read is kept and can be retried; a page can be remove
     await setMonth(p, '2026-09');
     fc.state.fail = 1;
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
     assert.equal(await p.evaluate(() => savedPages_.qc.filter(x => x.status === 'error').length), 1);
     assert.match(await p.textContent('#qcPageList'), /Could not read/);
@@ -480,7 +476,6 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     // Page B: neither request reaches Google at all.
     srv.lostReplies.analyzeQcPage = 2;
     await p.setInputFiles('#fileQcScans', [SCAN_A]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
     assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read', 'found out it had been read');
     assert.equal(await p.evaluate(() => unsavedPages_.qc.length), 0);
@@ -488,7 +483,6 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     srv.failures.analyzeQcPage = 2;      // the quick read and the one-trip request never arrive…
     srv.failures.readPage = 2;           // …and neither does reading it, even when asked again
     await p.setInputFiles('#fileQcScans', [SCAN_B]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
     const b = await p.evaluate(() => savedPages_.qc[1].status);
     assert.equal(b, 'unread', 'filed, not read');
@@ -501,7 +495,6 @@ test('a lost reply while a page is being read never makes a filed page look unfi
     srv.failures.analyzeQcPage = 2;
     srv.lostReplies.filePage = 1;
     await p.setInputFiles('#fileQcScans', [SCAN_C]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 3 && !savesInFlight_ && savedPages_.qc.every(x => x.status === 'read'));
     assert.equal(srv.backend.drive.list().filter(f => f.includes('2026-09/QC paperwork/')).length, 3, 'no duplicate files');
   } finally { srv.server.close(); }
@@ -516,7 +509,6 @@ test('a reading request that never reached Google is asked for again', async () 
     srv.failures.analyzeQcPage = 2;      // the quick read and the one-trip request never arrive
     srv.failures.readPage = 1;           // and the first request to read never arrives either
     await p.setInputFiles('#fileQcScans', [SCAN_A]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 1 && !savesInFlight_);
     assert.equal(await p.evaluate(() => savedPages_.qc[0].status), 'read');
   } finally { srv.server.close(); }
@@ -529,7 +521,6 @@ test('pages are read first, then filed in the background with the reading, under
     await setMonth(p, '2026-09');
     srv.slow.filePage = 1500;   // filing is slow, so the panel can be seen
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
-    await p.click('#sortScansBtn');
     // The readings are on screen while the pages are still being filed.
     await p.waitForFunction(() => savedPages_.qc.length === 2 && savedPages_.qc.every(x => x.provisional));
     assert.ok(await p.isVisible('#savingPanel'), 'tyre panel shows');
@@ -561,7 +552,6 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await p.setInputFiles('#fileLogDuration', LOG_SEP_DUR);
     await p.setInputFiles('#fileRating', TQ_SEP);
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
     // Real pages finish saving in any order; the page must not mistake that for a change.
     await p.evaluate(() => savedPages_.qc.reverse());
@@ -585,7 +575,6 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
 
     // Put it right.
     await p.setInputFiles('#fileQcScans', [SCAN_C]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 3 && !savesInFlight_);
     await p.evaluate(() => { checklistNotes['2-0'] = 'New sign ordered, fitted by 30 Sept'; persistChecklistState(); });
     await waitSaved(p);
@@ -628,7 +617,6 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     assert.equal(await p.evaluate(() => document.body.classList.contains('month-locked')), false);
     assert.match(await p.textContent('#signOffBtn'), /Sign off amendment/);
     await p.setInputFiles('#fileQcScans', [SCAN_D]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 4 && !savesInFlight_);
     await waitSaved(p);
     await p.click('#signOffBtn');
@@ -650,7 +638,6 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await p.click('#amendGo');
     await p.waitForFunction(() => monthStatus_() === 'amending');
     await p.setInputFiles('#fileQcScans', [SCAN_E]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 5 && !savesInFlight_);
     await waitSaved(p);
     await p.click('#monthBanner button:text-is("Cancel amendment")');
@@ -687,7 +674,6 @@ test('the browser keeps copies of filed files, so nothing is fetched twice; Log 
     await p.setInputFiles('#fileLogDate', LOG_SEP);
     await p.setInputFiles('#fileRating', TQ_SEP);
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
     await waitSaved(p);
     // Reopening on the same computer: the DVSA files and page images come from the browser.
@@ -715,7 +701,6 @@ test('a month shows at once from this computer, locked until Google confirms; ch
     const p = await newComputer(srv);
     await setMonth(p, '2026-09');
     await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B]);
-    await p.click('#sortScansBtn');
     await p.waitForFunction(() => savedPages_.qc.length === 2 && !savesInFlight_);
     await waitSaved(p);
     // Google is slow to answer the next time the app opens.
@@ -940,6 +925,54 @@ test('the road: the car moves as the month fills in, waits at an unfinished stop
     await setMonth(p, '2026-08');
     await p.waitForFunction(() => roadPos_ === 1);
     assert.match(await p.textContent('.road-finish'), /Signed off ✓\s*Open report/);
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});
+
+test('Monthly Report boxes: a file in the wrong box is not filed; scans read themselves into number-plate cards', async () => {
+  let n = 0;
+  const plan = [['AB10CDE', 'vt20_certificate'], ['AB10CDE', 'inspection_sheet'], ['AB11CDE', 'vt20_certificate'], [null, 'other', 'calibration_certificate']];
+  const srv = await start(0, { claude: () => {
+    const [reg, doc, cat] = plan[n++ % plan.length];
+    return { status: 'success', result: { category: cat || 'mot_vehicle_paperwork', document_type: doc, registration: reg, tester_name: 'T STONE', test_date: '04/09/2026', rotation: 0, confidence: 'high' } };
+  } });
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    // The duration log dropped on the date box: refused, red, nothing filed.
+    await p.setInputFiles('#fileLogDate', LOG_SEP_DUR);
+    await p.waitForFunction(() => /Not filed/.test(document.getElementById('statusLogDate').textContent));
+    assert.match(await p.textContent('#statusLogDate'), /looks like the test log by duration/);
+    assert.ok(await p.evaluate(() => document.getElementById('statusLogDate').classList.contains('warn')));
+    // The Test Quality file on a test log box, and a test log on the Test Quality box.
+    await p.setInputFiles('#fileLogDuration', TQ_SEP);
+    await p.waitForFunction(() => /Test Quality file, not a test log/.test(document.getElementById('statusLogDuration').textContent));
+    await p.setInputFiles('#fileRating', LOG_SEP);
+    await p.waitForFunction(() => /a test log, not the Test Quality file/.test(document.getElementById('statusRating').textContent));
+    assert.equal(srv.log.filter(a => a === 'saveDvsaFile').length, 0, 'nothing filed');
+    // The right files in the right boxes.
+    await p.setInputFiles('#fileLogDate', LOG_SEP);
+    await p.setInputFiles('#fileLogDuration', LOG_SEP_DUR);
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await waitSaved(p);
+    assert.equal(srv.log.filter(a => a === 'saveDvsaFile').length, 3);
+    for (const id of ['statusLogDate', 'statusLogDuration', 'statusRating']) assert.ok(await p.evaluate((id) => document.getElementById(id).classList.contains('uploaded'), id));
+
+    // Scans start reading by themselves: no button to press.
+    await p.setInputFiles('#fileQcScans', [SCAN_A, SCAN_B, SCAN_C, SCAN_D]);
+    await p.waitForFunction(() => savedPages_.qc.length === 4 && !savesInFlight_, null, { timeout: 20000 });
+    assert.equal(await p.isVisible('#sortScansBtn'), false);
+    const plates = await p.$$eval('.qc-car .plate', els => els.map(e => e.textContent));
+    assert.deepEqual(plates, ['UKAB10 CDE', 'UKAB11 CDE']);
+    assert.match(await p.textContent('.qc-car[data-reg="AB10CDE"]'), /VT20 ✓.*Inspection ✓.*Emissions missing/);
+    assert.match(await p.textContent('.qc-car[data-reg="AB10CDE"] .qc-meta'), /^T STONE · 04\/09\/2026/, 'the tester\'s name from the Test Quality file');
+    // Who tested each car comes from the test log, by registration.
+    assert.match(await p.textContent('#qcTesters'), /QC by tester:.*\(1 car\).*no QC car yet/);
+    // A certificate dropped with the QC scans is pointed out, with Remove.
+    assert.match(await p.textContent('.qc-review'), /looks like a calibration certificate/);
+    assert.ok(await p.isVisible('.qc-review [data-remove]'));
+    // The equipment shows its lights under the certificates.
+    assert.ok(await p.locator('#eqLights .eq-row').count() >= 1);
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
