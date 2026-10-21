@@ -278,11 +278,9 @@
   .month-banner .mb-older button { background: none; border: 0; padding: 0 4px; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
   .reminder-bar { background: var(--warning-bg); color: var(--warning); border: 1px solid #f0d58a; font-weight: 600; }
   .reminder-bar .rb-item { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; width: 100%; }
-  body.month-locked #view-report .section, body.month-locked #checklistContainer,
-  body.month-locked #view-checklist .checklist-summary { pointer-events: none; opacity: .55; }
+  body.month-locked #view-report .section, body.month-locked #jcMain .check-item { pointer-events: none; opacity: .55; }
   /* While a month shown from this computer's copy is checked with Google. */
-  body.month-checking #view-report .section, body.month-checking #checklistContainer,
-  body.month-checking #view-checklist .checklist-summary, body.month-checking .sign-btn,
+  body.month-checking #view-report .section, body.month-checking #jcMain .check-item, body.month-checking .sign-btn,
   body.month-checking #monthBanner .mb-actions { pointer-events: none; opacity: .7; }
   .pdf-viewer-body { flex: 1; display: flex; align-items: center; justify-content: center; background: #525659; }
   .pdf-viewer-body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
@@ -555,71 +553,53 @@
   .readiness-lines .rl svg { width: 14px; height: 14px; flex-shrink: 0; }
 
   /* ══════════ Checklist ══════════ */
-  .checklist-summary { display: flex; align-items: center; gap: 18px; padding: 20px 22px; margin-bottom: 20px; flex-wrap: wrap; }
-  .checklist-summary .cs-numbers { display: flex; align-items: baseline; gap: 8px; }
-  .checklist-summary .cs-percent { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
-  .checklist-summary .cs-count { font-size: 14px; color: var(--text-secondary); }
-  .checklist-summary .cs-bar { flex: 1; min-width: 160px; height: 8px; border-radius: 5px; background: var(--border); overflow: hidden; }
-  .checklist-summary .cs-bar > span { display: block; height: 100%; background: var(--brand); border-radius: 5px; transition: width .25s ease; }
-  .checklist-summary .cs-flag { font-size: 13px; color: var(--warning); font-weight: 600; }
-  .checklist-summary .cs-save {
-    font-size: 12px; color: var(--text-tertiary); display: inline-flex; align-items: center; gap: 5px;
-    white-space: nowrap; transition: color .2s ease;
+  .cs-save { font-size: 12px; color: var(--text-tertiary); display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .cs-save::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+  .cs-save.is-saved { color: var(--success); font-weight: 600; }
+  .cs-save.is-saved::before { background: var(--success); }
+  .cs-save.is-error { color: var(--danger); font-weight: 600; }
+  .cs-save.is-error::before { background: var(--danger); }
+  /* ══════════ Checklist: the job card ══════════ */
+  .jobcard { display: grid; grid-template-columns: 340px 1fr; overflow: hidden; align-items: stretch; }
+  .jc-side { background: var(--surface-subtle); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .jc-head { display: flex; gap: 14px; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .jc-head .tyre { width: 56px; height: 56px; }
+  .jc-head .tyre-spin { animation: none; }
+  .jc-head-text { display: flex; flex-direction: column; min-width: 0; }
+  .jc-head b { font-size: 20px; letter-spacing: -0.01em; }
+  .jc-head small { font-size: 12px; color: var(--text-secondary); }
+  .jc-head small span { color: var(--danger); font-weight: 600; }
+  .jc-list { padding: 6px 0; }
+  .jc-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 8px 16px 8px 14px;
+    background: none; border: 0; border-left: 4px solid transparent; font: inherit; font-size: 13px; color: var(--text); cursor: pointer; }
+  .jc-item:hover { background: var(--surface); }
+  .jc-item:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -2px; }
+  .jc-num { width: 22px; height: 22px; flex: none; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface);
+    display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--text-secondary); }
+  .jc-num svg { width: 14px; height: 14px; }
+  .jc-name { flex: 1; line-height: 1.35; }
+  .jc-count { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .jc-item.complete { color: var(--text-secondary); }
+  .jc-item.complete .jc-num { background: var(--success); border-color: var(--success); color: #fff; }
+  .jc-item.has-fail .jc-num { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+  .jc-item.has-fail .jc-count { color: var(--danger); font-weight: 700; }
+  .jc-item.current { background: var(--brand-tint); border-left-color: var(--brand); font-weight: 600; }
+  .jc-item.current .jc-num { background: var(--brand); border-color: var(--brand-strong); color: var(--text); }
+  .jc-main { padding: 24px 28px; min-width: 0; }
+  .jc-sec { display: none; }
+  .jc-sec.current { display: block; }
+  .jc-sec h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .jc-sec .jc-sub { font-size: 13px; color: var(--text-secondary); margin: 4px 0 14px; }
+  .jc-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  .jc-tip { font-size: 12px; color: var(--text-tertiary); }
+  .jc-done { font-size: 13px; color: var(--success); font-weight: 600; }
+  @media (max-width: 860px) {
+    .jobcard { grid-template-columns: 1fr; }
+    .jc-side { border-right: 0; border-bottom: 1px solid var(--border); }
+    .jc-list { max-height: 240px; overflow-y: auto; }
+    .jc-main { padding: 18px 16px; }
+    .jc-tip { display: none; }
   }
-  .checklist-summary .cs-save::before {
-    content: ''; width: 6px; height: 6px; border-radius: 50%;
-    background: var(--border); transition: background .2s ease;
-  }
-  .checklist-summary .cs-save.is-saved { color: var(--success); font-weight: 600; }
-  .checklist-summary .cs-save.is-saved::before { background: var(--success); }
-  .checklist-summary .cs-save.is-error { color: var(--danger); font-weight: 600; }
-  .checklist-summary .cs-save.is-error::before { background: var(--danger); }
-
-  .checklist-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-  .filter-group { display: inline-flex; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-  .filter-btn { background: none; border: none; padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
-  .filter-btn + .filter-btn { border-left: 1px solid var(--border); }
-  .filter-btn.active { background: var(--brand-tint); color: #7a6600; }
-  .toolbar-spacer { flex: 1; }
-
-  /* Multi-column so 22 sections don't run down one long page. Grid rather than
-     CSS columns: columns rebalance when a section is expanded, which shuffles
-     unrelated cards between columns under the user's cursor. Grid cells hold
-     their position — opening one card only grows that card. */
-  #checklistContainer { display: grid; gap: 10px; align-items: start; }
-  @media (min-width: 760px)  { #checklistContainer { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1180px) { #checklistContainer { grid-template-columns: repeat(3, 1fr); } }
-
-  .checklist-cat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; transition: opacity .15s; }
-  .checklist-cat.filtered-out { display: none; }
-  .checklist-cat.complete { background: var(--surface-subtle); }
-
-  /* Traffic lights: green once a section is fully answered and clean, red as
-     soon as anything in it is marked No. Red wins over green — a flagged
-     section must never look finished. */
-  .checklist-cat.has-fail { background: var(--danger-bg); border-color: var(--danger); }
-  .checklist-cat.has-fail .checklist-cat-title { color: var(--danger); }
-  .checklist-cat.has-fail .cat-count { color: var(--danger); font-weight: 700; }
-  .checklist-cat.has-fail .cat-check { display: none; }
-  .cat-cross { width: 18px; height: 18px; color: var(--danger); display: none; }
-  .checklist-cat.has-fail .cat-cross { display: block; }
-  .cat-flag { font-size: 11px; font-weight: 700; color: var(--danger); white-space: nowrap; }
-  .checklist-cat-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 0 16px; min-height: 58px; cursor: pointer; user-select: none;
-  }
-  .checklist-cat-head:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: -2px; }
-  .checklist-cat-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
-  .checklist-cat.complete .checklist-cat-title { color: var(--text-secondary); }
-  .checklist-cat-meta { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-  .cat-count { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-  .cat-check { width: 18px; height: 18px; color: var(--success); display: none; }
-  .checklist-cat.complete .cat-check { display: block; }
-  .checklist-cat.complete .cat-count { color: var(--success); }
-  .chevron { width: 16px; height: 16px; color: var(--text-tertiary); transition: transform .18s; }
-  .checklist-cat.open .chevron { transform: rotate(90deg); }
-  .checklist-cat-body { display: none; padding: 4px 16px 12px; }
-  .checklist-cat.open .checklist-cat-body { display: block; }
 
   .auto-hint { font-size: 12px; color: var(--text-secondary); background: var(--brand-tint); border-radius: var(--radius-sm); padding: 8px 10px; margin: 4px 0 10px; }
   .badge-auto {
@@ -627,10 +607,10 @@
     color: #7a6600; background: var(--brand-tint); padding: 2px 6px; border-radius: 5px;
   }
 
-  .check-item { border-top: 1px solid var(--border); padding: 12px 2px; }
+  .check-item { border-top: 1px solid var(--border); padding: 13px 2px; }
   .check-item:first-child { border-top: none; }
   .check-item-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .check-item-text { font-size: 13px; color: var(--text); line-height: 1.45; flex: 1; }
+  .check-item-text { font-size: 14px; color: var(--text); line-height: 1.45; flex: 1; }
   /* Per-item light, so a failed line is obvious without reading the buttons. */
   .item-light {
     width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto;
@@ -641,8 +621,8 @@
   .check-item.is-no .check-item-text { color: var(--danger); font-weight: 600; }
   .check-pills { display: flex; gap: 6px; flex-shrink: 0; }
   .check-pill {
-    padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
-    font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
+    min-width: 58px; padding: 8px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface);
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer;
   }
   .check-pill:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 1px; }
   .check-pill.yes.active { border-color: var(--success); color: var(--success); background: var(--success-bg); }
@@ -1390,30 +1370,25 @@
         <div class="view-desc">Digitised from Mortlake's paper template, aligned to DVSA's current site assessment criteria.</div>
       </div>
 
-      <div class="card checklist-summary">
-        <div class="cs-numbers">
-          <span class="cs-percent" id="clPercent">0%</span>
-          <span class="cs-count" id="clCount">0 / 61 complete</span>
+      <!-- The checklist as a job card (Ediz, 20 Oct 2026): the sections down the
+           left like a workshop job sheet, one section's questions on the right,
+           so the whole thing fits on one screen with no long scroll. -->
+      <div class="card jobcard" id="checklistContainer">
+        <div class="jc-side">
+          <div class="jc-head">
+            <span data-tyre="clProgress"></span>
+            <div class="jc-head-text">
+              <b id="clCount">0 of 61</b>
+              <small>questions answered<span id="clFlag"></span></small>
+              <!-- There is no Save button because answers save as they're ticked;
+                   this says so, and confirms each one. -->
+              <span class="cs-save" id="clSave">Answers save automatically</span>
+            </div>
+          </div>
+          <div class="jc-list" id="jcList" role="tablist" aria-label="Checklist sections"></div>
         </div>
-        <div class="cs-bar"><span id="clBar" style="width:0%"></span></div>
-        <span class="cs-flag" id="clFlag"></span>
-        <!-- There is no Save button because answers save as they're ticked;
-             this says so, and confirms each one, so that isn't a leap of faith. -->
-        <span class="cs-save" id="clSave">Answers save automatically</span>
+        <div class="jc-main" id="jcMain"></div>
       </div>
-
-      <div class="checklist-toolbar">
-        <div class="filter-group" role="group" aria-label="Filter checklist">
-          <button type="button" class="filter-btn active" data-filter="all" onclick="setChecklistFilter('all')">All</button>
-          <button type="button" class="filter-btn" data-filter="incomplete" onclick="setChecklistFilter('incomplete')">Incomplete</button>
-          <button type="button" class="filter-btn" data-filter="complete" onclick="setChecklistFilter('complete')">Complete</button>
-        </div>
-        <div class="toolbar-spacer"></div>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setAllCats(true)">Expand all</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setAllCats(false)">Collapse all</button>
-      </div>
-
-      <div id="checklistContainer"></div>
     </section>
 
   </div>
@@ -3727,7 +3702,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 27;
+  var EXPECTED_BACKEND_VERSION = 28;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -4116,7 +4091,7 @@
 
   // Draws the tyres that are part of the page itself.
   (function () {
-    var opts = { saving: { id: 'tyre', count: true }, qcProgress: { id: 'qcTyre' }, calProgress: { id: 'calTyre' }, overlay: {},
+    var opts = { saving: { id: 'tyre', count: true }, qcProgress: { id: 'qcTyre' }, calProgress: { id: 'calTyre' }, overlay: {}, clProgress: { id: 'clTyre' },
                  signProgress: { id: 'signTyre' } };
     document.querySelectorAll('[data-tyre]').forEach(function (el) {
       el.outerHTML = tyreSvg_(opts[el.getAttribute('data-tyre')]);
@@ -4658,50 +4633,62 @@
 
   var checklistState = {}; // "catIndex-itemIndex" -> 'yes' | 'no'
   var checklistNotes = {}; // "catIndex-itemIndex" -> note text
-  var checklistFilter = 'all';
 
-  var CHECK_ICON = '<svg class="cat-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-  var CROSS_ICON = '<svg class="cat-cross" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-  var CHEVRON = '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+  var TICK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  var jcCurrent_ = 0;   // the section open on the right
 
+  // How far a section has got: answered, NO count, NOs still without a note.
+  function sectionState_(ci) {
+    var n = CHECKLIST[ci].items.length, done = 0, no = 0, noNote = 0;
+    for (var ii = 0; ii < n; ii++) {
+      var k = ci + '-' + ii, v = checklistState[k];
+      if (v) done++;
+      if (v === 'no') { no++; if (!(checklistNotes[k] || '').trim()) noNote++; }
+    }
+    return { total: n, done: done, no: no, noNote: noNote, finished: done === n && noNote === 0 };
+  }
+
+  // The next section that still needs something, after `from` (going round).
+  function nextUnfinished_(from) {
+    for (var step = 1; step <= CHECKLIST.length; step++) {
+      var ci = (from + step) % CHECKLIST.length;
+      if (!sectionState_(ci).finished) return ci;
+    }
+    return -1;
+  }
+
+  /* The checklist as a job card (Ediz, 20 Oct 2026): every section listed on
+     the left, one section's questions on the right. Each section's questions
+     are built once and shown or hidden, so typing in a note is never lost. */
   function renderChecklist() {
-    var container = document.getElementById('checklistContainer');
-    container.innerHTML = '';
+    var list = document.getElementById('jcList'), main = document.getElementById('jcMain');
+    list.innerHTML = '';
+    main.innerHTML = '';
     CHECKLIST.forEach(function (cat, ci) {
-      var catEl = document.createElement('div');
-      catEl.className = 'checklist-cat';
-      catEl.dataset.catIndex = ci;
-      catEl.innerHTML =
-        '<div class="checklist-cat-head" tabindex="0" role="button" aria-expanded="false">' +
-          '<div class="checklist-cat-title">' + escapeHtml_(cat.cat) + (cat.auto ? ' <span class="badge-auto">Auto</span>' : '') + '</div>' +
-          '<div class="checklist-cat-meta">' + CHECK_ICON + CROSS_ICON +
-            '<span class="cat-flag"></span>' +
-            '<span class="cat-count">0 / ' + cat.items.length + '</span>' + CHEVRON + '</div>' +
-        '</div>' +
-        '<div class="checklist-cat-body"></div>';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'jc-item';
+      btn.dataset.catIndex = ci;
+      btn.setAttribute('role', 'tab');
+      btn.innerHTML = '<span class="jc-num">' + (ci + 1) + '</span><span class="jc-name">' + escapeHtml_(cat.cat) +
+        '</span><span class="jc-count"></span>';
+      btn.addEventListener('click', function () { showSection_(ci); });
+      list.appendChild(btn);
 
-      var head = catEl.querySelector('.checklist-cat-head');
-      function toggle() {
-        var open = catEl.classList.toggle('open');
-        head.setAttribute('aria-expanded', open ? 'true' : 'false');
-      }
-      head.addEventListener('click', toggle);
-      head.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
-      });
-
-      var body = catEl.querySelector('.checklist-cat-body');
-      if (cat.auto) {
-        var hint = document.createElement('div');
-        hint.className = 'auto-hint';
-        hint.textContent = cat.auto;
-        body.appendChild(hint);
-      }
+      var sec = document.createElement('div');
+      sec.className = 'jc-sec';
+      sec.dataset.catIndex = ci;
+      sec.setAttribute('role', 'tabpanel');
+      sec.innerHTML = '<h2>' + (ci + 1) + '. ' + escapeHtml_(cat.cat) + '</h2><div class="jc-sub"></div>' +
+        (cat.auto ? '<div class="auto-hint">' + escapeHtml_(cat.auto) + '</div>' : '') +
+        '<div class="jc-items"></div><div class="jc-foot"><span class="jc-tip">Tip: press Y or N on the keyboard</span><span class="jc-next"></span></div>';
+      var body = sec.querySelector('.jc-items');
 
       cat.items.forEach(function (text, ii) {
         var key = ci + '-' + ii;
         var item = document.createElement('div');
         item.className = 'check-item';
+        item.dataset.key = key;
         item.innerHTML =
           '<div class="check-item-row">' +
             '<span class="item-light" aria-hidden="true"></span>' +
@@ -4728,13 +4715,25 @@
           item.classList.toggle('is-no', v === 'no');
           persistChecklistState();
           updateProgress();
+          // A NO needs its note written first; a YES that finishes the
+          // section moves on to the next one that needs something.
+          if (v === 'no') { noteInput.focus(); return; }
+          if (sectionState_(ci).finished) {
+            setTimeout(function () {
+              if (jcCurrent_ !== ci || !sectionState_(ci).finished) return;
+              var next = nextUnfinished_(ci);
+              if (next >= 0) showSection_(next);
+            }, 450);
+          }
         }
+        item.answer_ = setVal;
         yesBtn.addEventListener('click', function () { setVal('yes'); });
         noBtn.addEventListener('click', function () { setVal('no'); });
         noteInput.addEventListener('input', function () {
           checklistNotes[key] = noteInput.value;
           noteWrap.classList.toggle('needs-note', checklistState[key] === 'no' && !noteInput.value.trim());
           persistChecklistState();
+          updateProgress();
         });
 
         // Restore any previously saved answer / note for this item.
@@ -4748,83 +4747,85 @@
 
         body.appendChild(item);
       });
-
-      container.appendChild(catEl);
+      main.appendChild(sec);
     });
+    // Open where there is something to do.
+    var start = sectionState_(0).finished ? nextUnfinished_(0) : 0;
+    showSection_(start >= 0 ? start : 0, true);
   }
 
-  function applyChecklistFilter() {
-    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
-      var ci = parseInt(catEl.dataset.catIndex, 10);
-      var total = CHECKLIST[ci].items.length, done = 0;
-      for (var ii = 0; ii < total; ii++) { if (checklistState[ci + '-' + ii]) done++; }
-      var isComplete = done === total;
-      var show = checklistFilter === 'all' ||
-                 (checklistFilter === 'complete' && isComplete) ||
-                 (checklistFilter === 'incomplete' && !isComplete);
-      catEl.classList.toggle('filtered-out', !show);
+  function showSection_(ci, quiet) {
+    jcCurrent_ = ci;
+    document.querySelectorAll('.jc-item').forEach(function (b) {
+      var on = +b.dataset.catIndex === ci;
+      b.classList.toggle('current', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
+    document.querySelectorAll('.jc-sec').forEach(function (sec) {
+      sec.classList.toggle('current', +sec.dataset.catIndex === ci);
+    });
+    updateProgress();
+    if (!quiet) {
+      var item = document.querySelector('.jc-item.current');
+      if (item && item.scrollIntoView) item.scrollIntoView({ block: 'nearest' });
+      var card = document.getElementById('checklistContainer');
+      if (card && card.getBoundingClientRect().top < 0) card.scrollIntoView({ block: 'start' });
+    }
   }
 
-  function setChecklistFilter(f) {
-    checklistFilter = f;
-    document.querySelectorAll('.filter-btn').forEach(function (b) {
-      b.classList.toggle('active', b.dataset.filter === f);
-    });
-    applyChecklistFilter();
-  }
-
-  function setAllCats(open) {
-    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
-      if (catEl.classList.contains('filtered-out')) return;
-      catEl.classList.toggle('open', open);
-      catEl.querySelector('.checklist-cat-head').setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-  }
+  // Y or N answers the first unanswered question in the open section.
+  document.addEventListener('keydown', function (e) {
+    if (!document.getElementById('view-checklist').classList.contains('active')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '')) return;
+    if (document.body.classList.contains('month-locked') || document.body.classList.contains('month-checking')) return;
+    var k = (e.key || '').toLowerCase();
+    if (k !== 'y' && k !== 'n') return;
+    var items = document.querySelectorAll('.jc-sec.current .check-item');
+    for (var i = 0; i < items.length; i++) {
+      if (!checklistState[items[i].dataset.key]) { e.preventDefault(); items[i].answer_(k === 'y' ? 'yes' : 'no'); return; }
+    }
+  });
 
   function updateProgress() {
-    var total = 0, done = 0, flagged = 0;
+    var total = 0, done = 0, flagged = 0, noNote = 0;
     CHECKLIST.forEach(function (cat, ci) {
-      cat.items.forEach(function (text, ii) {
-        total++;
-        var v = checklistState[ci + '-' + ii];
-        if (v) done++;
-        if (v === 'no') flagged++;
-      });
+      var st = sectionState_(ci);
+      total += st.total; done += st.done; flagged += st.no; noNote += st.noNote;
     });
 
-    // Per-category count + complete styling
-    document.querySelectorAll('.checklist-cat').forEach(function (catEl) {
-      var ci = parseInt(catEl.dataset.catIndex, 10);
-      var itemCount = CHECKLIST[ci].items.length, doneCount = 0, failCount = 0;
-      for (var ii = 0; ii < itemCount; ii++) {
-        var v = checklistState[ci + '-' + ii];
-        if (v) doneCount++;
-        if (v === 'no') failCount++;
-      }
-      catEl.querySelector('.cat-count').textContent = doneCount + ' / ' + itemCount;
-      // A section with a No is red whether or not it's fully answered — a
-      // flagged section must never read as finished.
-      catEl.classList.toggle('has-fail', failCount > 0);
-      catEl.classList.toggle('complete', doneCount === itemCount && failCount === 0);
-      catEl.querySelector('.cat-flag').textContent =
-        failCount ? failCount + ' to fix' : '';
+    // Each section on the left: a tick when finished, red while it has a NO.
+    document.querySelectorAll('.jc-item').forEach(function (b) {
+      var ci = +b.dataset.catIndex, st = sectionState_(ci);
+      b.classList.toggle('complete', st.done === st.total && st.no === 0);
+      b.classList.toggle('has-fail', st.no > 0);
+      b.querySelector('.jc-num').innerHTML = (st.done === st.total && st.no === 0) ? TICK_SVG : String(ci + 1);
+      b.querySelector('.jc-count').textContent = st.no ? st.no + ' NO' : st.done + '/' + st.total;
     });
+    // The open section: its count, and where Next goes.
+    var sec = document.querySelector('.jc-sec.current');
+    if (sec) {
+      var st = sectionState_(jcCurrent_);
+      sec.querySelector('.jc-sub').textContent = st.total + (st.total === 1 ? ' question' : ' questions') + ' · ' +
+        st.done + ' answered' + (st.noNote ? ' · a NO needs a note' : '');
+      var next = nextUnfinished_(jcCurrent_), slot = sec.querySelector('.jc-next');
+      if (next < 0) slot.innerHTML = '<span class="jc-done">Every section is done ✓</span>';
+      else {
+        slot.innerHTML = '<button type="button" class="btn btn-primary">Next: ' + (next + 1) + '. ' + escapeHtml_(CHECKLIST[next].cat) + ' →</button>';
+        slot.firstChild.onclick = function () { showSection_(next); };
+      }
+    }
 
     var pct = total ? Math.round(done / total * 100) : 0;
 
-    // Checklist tab summary
-    setText('clPercent', pct + '%');
-    setText('clCount', done + ' / ' + total + ' complete');
-    setWidth('clBar', pct);
-    setText('clFlag', flagged ? (flagged + ' flagged for action') : '');
+    // Checklist tab summary: the tyre fills as questions are answered.
+    setText('clCount', done + ' of ' + total);
+    setText('clFlag', noNote ? ' · ' + noNote + ' NO ' + (noNote === 1 ? 'needs a note' : 'need notes') : '');
+    setTyreProgress_('clTyre', total ? done / total : 0);
 
     // Dashboard checklist status card
     setText('tileChecklist', done + ' / ' + total);
     setText('tileChecklistSub', pct + '% complete');
     setWidth('tileChecklistBar', pct);
-
-    applyChecklistFilter();
   }
 
   function setText(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
@@ -6763,6 +6764,12 @@
     box.querySelectorAll('.blockers-go').forEach(function (b) {
       b.addEventListener('click', function () {
         switchTab(b.dataset.go);
+        // The checklist opens at the first section that still needs something.
+        if (b.dataset.go === 'checklist') {
+          var first = nextUnfinished_(CHECKLIST.length - 1);
+          if (first >= 0) showSection_(first);
+          return;
+        }
         box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       });
     });
