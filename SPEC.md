@@ -230,6 +230,16 @@ acknowledged, wallchart displayed, Tapley/TDG/shaker plate checks) stay for
 Paul, because the app can't see them. Automatic answers are saved like any
 other, and never written into a month nobody has started.
 
+### 7.1d The road (agreed 21 Oct 2026)
+
+Across the top of every tab except Records: a road with three stops (DVSA
+files, QC paperwork, Checklist) ending at a chequered flag and the Sign off
+button. Each stop shows a tick, or what's left ("1 to upload", "2 cars
+missing a page", "37 of 61"). A car drives along as the month fills in, but
+never past a stop that isn't finished, and reaches the flag only when
+nothing is missing. Clicking a stop goes there. A signed month shows the car
+at the flag with "Signed off ✓" and Open report.
+
 ### 7.1b Nothing missing, enforced twice (20 Oct 2026)
 
 Preview and Sign off stay blocked on the page until everything is in (as

@@ -181,6 +181,15 @@ one Google Apps Script file.
   time while idle, 15s after start-up and whenever Records is opened.
   Since v26 each index entry also has `versions` (date, signer, kind,
   reason), `amendment`, `folderUrl`, `vehicles` and `certUnread`.
+- **The road (21 Oct 2026, Ediz's idea):** `#roadStrip` under the header on
+  every tab but Records: a road with three stops (DVSA files, QC paperwork,
+  Checklist, from `roadParts_`) ending at a chequered flag and Sign off. A
+  yellow car (`CAR_SVG`) drives along it: each stop is a quarter, the car
+  creeps forward as each part fills, waits at the first unfinished stop, and
+  drives the last quarter when `signOffBlockers_()` is empty; a signed month
+  parks it at the flag with "Signed off ✓ · Open report". Stops are buttons
+  (`roadGo_`). Redrawn via `renderRoad_` from `updateReportReadiness`,
+  `updateProgress` and `renderMonthState_`.
 - **Backend version check:** `EXPECTED_BACKEND_VERSION` (28 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
@@ -303,7 +312,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 35 back-office checks + 19 real-browser checks
+npm test               # 35 back-office checks + 20 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on

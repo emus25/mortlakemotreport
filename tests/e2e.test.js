@@ -890,3 +890,56 @@ test('the app answers the questions it can check itself, and only those', async 
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
+
+test('the road: the car moves as the month fills in, waits at an unfinished stop, and parks at the flag when signed', async () => {
+  const srv = await start(0, fakeClaude());
+  const b = srv.backend;
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    const car = () => p.evaluate(() => roadPos_);
+    await p.waitForSelector('#roadStrip .road-stop');
+    assert.equal(await car(), 0);
+    assert.match(await p.textContent('.road-stop[data-go="dvsa"]'), /DVSA files\s*3 to upload/);
+    assert.match(await p.textContent('.road-finish'), /Sign off/);
+    assert.ok(await p.evaluate(() => document.querySelector('.road-finish .btn').classList.contains('is-blocked')));
+
+    // One DVSA file moves the car a little; it can't pass the DVSA stop yet.
+    await p.setInputFiles('#fileLogDate', LOG_SEP);
+    await p.waitForFunction(() => roadPos_ > 0.05);
+    await p.evaluate(() => { CHECKLIST.forEach((c, ci) => c.items.forEach((t, ii) => { checklistState[ci + '-' + ii] = 'yes'; })); persistChecklistState(); });
+    await p.waitForTimeout(100);
+    assert.ok(await car() < 0.25, 'waits at the DVSA stop: ' + await car());
+    await p.setInputFiles('#fileLogDuration', LOG_SEP_DUR);
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await p.waitForFunction(() => document.querySelector('.road-stop[data-go="dvsa"]').classList.contains('done'));
+    assert.ok(await car() > 0.25 && await car() < 0.5, 'now on to QC paperwork: ' + await car());
+
+    // A stop takes Paul there.
+    await p.click('#tab-dashboard');
+    await p.click('.road-stop[data-go="checklist"]');
+    assert.ok(await p.isVisible('#view-checklist'));
+    await p.click('#tab-records');
+    assert.equal(await p.isVisible('#roadStrip'), false, 'not on Records, which is about every month');
+    await waitSaved(p);
+
+    // A signed month: the car is parked at the flag.
+    ['vt20_certificate', 'inspection_sheet', 'emissions_test'].forEach((document_type, i) =>
+      b.call('filePage', { month: '2026-08', kind: 'qc', imageBase64: fx.png(60, 85, [240, 240, 230 + i]).toString('base64'), fingerprint: 'f' + i, sourceName: i + '.png',
+        reading: { category: 'mot_vehicle_paperwork', registration: 'AB12CDE', document_type, rotation: 0, confidence: 'high' } }));
+    ['fileLogDate', 'fileLogDuration', 'fileRating'].forEach((inputId, i) =>
+      b.call('saveDvsaFile', { month: '2026-08', inputId, fileName: inputId + '.xlsx', base64: Buffer.from('x' + i).toString('base64') }));
+    const state = {};
+    b.sandbox.CHECKLIST_SIZES.forEach((n, ci) => { for (let ii = 0; ii < n; ii++) state[ci + '-' + ii] = 'yes'; });
+    b.call('saveMonthFields', { month: '2026-08', field: 'checklist', value: { state, notes: {} }, baseRevision: 0 });
+    const pdf = Buffer.from('%PDF-1.4 ' + 'x'.repeat(3000));
+    const st = b.call('signStart', { month: '2026-08', mode: 'sign', bytes: pdf.length, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+    b.call('signPiece', { uploadId: st.uploadId, index: 0, data: pdf.toString('base64') });
+    assert.equal(b.call('signFinish', { month: '2026-08', uploadId: st.uploadId }).status, 'success');
+    await p.click('#tab-report');
+    await setMonth(p, '2026-08');
+    await p.waitForFunction(() => roadPos_ === 1);
+    assert.match(await p.textContent('.road-finish'), /Signed off ✓\s*Open report/);
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});

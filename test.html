@@ -225,7 +225,7 @@
   .optional { font-weight: 400; color: var(--text-tertiary); font-size: .8em; }
   .check-action.needs-note textarea { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
   .readiness-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .sign-btn.is-blocked { opacity: .5; }
+  .sign-btn.is-blocked, .road-finish .btn.is-blocked { opacity: .5; }
   .sign-btn[hidden] { display: none; }
   .mo-box.dialog-box { max-width: 520px; text-align: left; gap: 14px; }
   .dialog-box h3 { margin: 0; font-size: 18px; }
@@ -244,6 +244,49 @@
   .month-banner, .reminder-bar { margin: 12px 24px 0; padding: 12px 16px; border-radius: var(--radius-md); font-size: 14px;
     display: flex; gap: 10px 16px; align-items: center; flex-wrap: wrap; }
   .month-banner[hidden], .reminder-bar[hidden] { display: none; }
+  /* ══════════ The road: this month's progress ══════════ */
+  .road-strip { max-width: 1400px; margin: 14px auto 0; padding: 0 24px; display: flex; align-items: center; gap: 18px; }
+  body[data-tab="records"] .road-strip { display: none; }
+  .road-wrap { flex: 1; position: relative; padding: 30px 0 34px; min-width: 0; }
+  .road { position: relative; height: 26px; border-radius: 13px; background: #3a3a3a;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.08), inset 0 -2px 0 rgba(0,0,0,.25); }
+  .road::before { content: ""; position: absolute; left: 14px; right: 14px; top: 12px; height: 2px;
+    background: repeating-linear-gradient(90deg, #f1e7b0 0 16px, transparent 16px 30px); opacity: .85; }
+  .road-done { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 13px; background: rgba(255,212,0,.18);
+    transition: width .9s ease; }
+  .road-stop { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center;
+    background: none; border: 0; padding: 0; font: inherit; cursor: pointer; color: var(--text); }
+  .road-stop .rs-pin { width: 22px; height: 22px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong);
+    display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-top: 2px; }
+  .road-stop .rs-pin svg { width: 12px; height: 12px; }
+  .road-stop.done .rs-pin { background: var(--success); border-color: var(--success); color: #fff; }
+  .road-stop.warn .rs-pin { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
+  .road-stop .rs-text { position: absolute; top: 58px; white-space: nowrap; text-align: center; line-height: 1.25; }
+  .road-stop .rs-name { font-size: 12px; font-weight: 700; display: block; }
+  .road-stop .rs-left { font-size: 11px; color: var(--text-secondary); display: block; }
+  .road-stop.done .rs-left { color: var(--success); }
+  .road-stop.warn .rs-left { color: var(--warning); font-weight: 600; }
+  .road-stop:hover .rs-name { text-decoration: underline; }
+  .road-stop:focus-visible { outline: 2px solid var(--brand-strong); outline-offset: 2px; border-radius: 6px; }
+  .road-car { position: absolute; top: 22px; width: 54px; height: 30px; transform: translateX(-50%);
+    transition: left .9s cubic-bezier(.45,.05,.3,1); pointer-events: none; z-index: 2; }
+  .road-car svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+  .road-car .wheel { transform-box: fill-box; transform-origin: center; }
+  .road-car.moving .wheel { animation: wheel-spin .35s linear infinite; }
+  @keyframes wheel-spin { to { transform: rotate(360deg); } }
+  .road-finish { display: flex; align-items: center; gap: 10px; flex: none; }
+  .road-flag { width: 26px; height: 34px; flex: none; }
+  .road-finish .rf-note { font-size: 12px; color: var(--success); font-weight: 700; white-space: nowrap; }
+  @media (max-width: 760px) {
+    .road-strip { padding: 0 16px; gap: 10px; }
+    .road-stop .rs-left { display: none; }
+    .road-stop .rs-name { font-size: 0; }
+    .road-stop .rs-name::after { content: attr(data-short); font-size: 11px; }
+    .road-flag { display: none; }
+    .road-finish .btn { padding: 0 12px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .road-car, .road-done { transition: none; } .road-car.moving .wheel { animation: none; } }
+
   /* ══════════ Records (stage C) ══════════ */
   .rec-years { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .rec-year { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-strong);
@@ -950,7 +993,7 @@
 <script src="assets/lib/xlsx.full.min.js"></script>
 <script src="assets/lib/pdf.min.js"></script>
 </head>
-<body>
+<body data-tab="dashboard">
 <div id="savingPanel" class="saving-panel" role="status" aria-live="polite" hidden>
   <span data-tyre="saving"></span>
   <div>
@@ -1012,6 +1055,10 @@
   <!-- Stage B: reminders, and what state this month is in (signed / amending). -->
   <div class="reminder-bar" id="reminderBar" hidden></div>
   <div class="month-banner" id="monthBanner" hidden></div>
+
+  <!-- The month's progress as a road (Ediz, 21 Oct 2026): a car drives
+       towards Sign off as the DVSA files, QC paperwork and checklist go in. -->
+  <div class="road-strip" id="roadStrip" aria-label="This month's progress"></div>
 
   <div class="page">
 
@@ -1260,7 +1307,7 @@
       <div id="backendWarning" style="display:none;background:var(--warning-bg);color:var(--warning);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;font-weight:600;margin-bottom:16px"></div>
 
       <!-- DVSA data -->
-      <div class="section">
+      <div class="section" id="dvsaSection">
         <div class="section-head"><h2>DVSA data <span class="req" title="Required">*</span></h2><span class="section-desc">Excel exports downloaded from the DVSA site</span></div>
         <div class="upload-grid">
 
@@ -1307,7 +1354,7 @@
       </div>
 
       <!-- QC paperwork -->
-      <div class="section">
+      <div class="section" id="qcSection">
         <div class="section-head"><h2>QC paperwork <span class="req" title="Required">*</span></h2><span class="section-desc">Upload the MOT paperwork for vehicles quality-controlled this month. Each vehicle needs its VT20, inspection sheet and emissions test (not for electric cars).</span></div>
         <div class="card panel">
           <label class="dropzone" for="fileQcScans">
@@ -1694,6 +1741,7 @@
       nav.setAttribute('aria-selected', isActive ? 'true' : 'false');
     });
     window.scrollTo(0, 0);
+    document.body.setAttribute('data-tab', tab);
     if (tab === 'records') showRecords_();
   }
 
@@ -3470,6 +3518,7 @@
   function updateReportReadiness() {
     applyAutoChecklist_();
     updateSignButton_();
+    renderRoad_();
     var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
     var qcc = scanCounts_('qc');
@@ -4920,6 +4969,7 @@
 
     var pct = total ? Math.round(done / total * 100) : 0;
 
+    renderRoad_();
     // Checklist tab summary: the tyre fills as questions are answered.
     setText('clCount', done + ' of ' + total);
     setText('clFlag', noNote ? ' · ' + noNote + ' NO ' + (noNote === 1 ? 'needs a note' : 'need notes') : '');
@@ -6169,6 +6219,7 @@
     }
     updateSignButton_();
     renderReminder_();
+    renderRoad_();
   }
 
   /* From the 10th, a month that isn't signed off yet is mentioned at the top,
@@ -6442,6 +6493,141 @@
       if (month === currentMonth) return openMonth_(month);
       hideMonthOverlay_();
     });
+  }
+
+  /* ═══════════════ The road (Ediz, 21 Oct 2026) ═══════════════
+     The month's progress as a road with three stops, DVSA files, QC
+     paperwork and the checklist, ending at Sign off. A car drives along it:
+     each stop is a quarter of the road and the car creeps forward as each
+     part fills in; the last quarter is driven when nothing is missing. */
+  var CAR_SVG = '<svg viewBox="0 0 64 34" aria-hidden="true">' +
+    '<path d="M6 22c0-4 2-6 6-7l8-7c2-2 4-3 7-3h12c3 0 5 1 7 3l6 7c5 1 8 3 8 7v3H6z" fill="#ffd400" stroke="#1f1f1f" stroke-width="1.6" stroke-linejoin="round"/>' +
+    '<path d="M22 10c1-1 2-2 4-2h5v7H17zM34 8h5c2 0 3 1 4 2l4 5H34z" fill="#2b3640"/>' +
+    '<rect x="55" y="18" width="5" height="3" rx="1.2" fill="#fff6c2"/><rect x="5" y="18" width="4" height="3" rx="1.2" fill="#d9534f"/>' +
+    '<g class="wheel"><circle cx="17" cy="26" r="6" fill="#1f1f1f"/><circle cx="17" cy="26" r="2.6" fill="#cfd3d8"/><path d="M17 21v10M12 26h10" stroke="#9aa0a6" stroke-width="1.2"/></g>' +
+    '<g class="wheel"><circle cx="48" cy="26" r="6" fill="#1f1f1f"/><circle cx="48" cy="26" r="2.6" fill="#cfd3d8"/><path d="M48 21v10M43 26h10" stroke="#9aa0a6" stroke-width="1.2"/></g>' +
+    '</svg>';
+  var FLAG_SVG = '<svg class="road-flag" viewBox="0 0 26 34" aria-hidden="true"><rect x="2" y="2" width="2.2" height="31" rx="1" fill="#555"/>' +
+    (function () {
+      var sq = '';
+      for (var r = 0; r < 4; r++) for (var c = 0; c < 5; c++) {
+        sq += '<rect x="' + (4.2 + c * 4) + '" y="' + (3 + r * 4) + '" width="4" height="4" fill="' + ((r + c) % 2 ? '#fff' : '#1f1f1f') + '"/>';
+      }
+      return sq;
+    })() + '<rect x="4.2" y="3" width="20" height="16" fill="none" stroke="#1f1f1f" stroke-width=".8"/></svg>';
+
+  // How far each part has got: 0 to 1, whether it's finished, and what's left.
+  function roadParts_() {
+    var dv = DVSA_INPUTS.filter(function (x) { return dvsaIn_(x.input); }).length;
+    var parts = [{ key: 'dvsa', name: 'DVSA files', short: 'DVSA', frac: dv / 3, done: dv === 3,
+                   left: dv === 3 ? 'All 3 in' : (3 - dv) + ' to upload' }];
+
+    var c = scanCounts_('qc'), q = qcVehicleCheck_(), qc = { key: 'qc', name: 'QC paperwork', short: 'QC' };
+    var groups = {};
+    savedPages_.qc.forEach(function (p) {
+      var r = normalizeReg_(p.reading && p.reading.registration);
+      if (looksLikeRealPlate_(r)) groups[r] = true;
+    });
+    var cars = Object.keys(groups).length;
+    if (!c.filed && !c.waiting) { qc.frac = 0; qc.left = 'Not started'; }
+    else if (c.waiting) { qc.frac = 0.3; qc.left = c.waiting + (c.waiting === 1 ? ' page' : ' pages') + ' to sort'; qc.warn = true; }
+    else if (c.unread) { qc.frac = 0.5; qc.left = c.unread + (c.unread === 1 ? ' page' : ' pages') + ' not read'; qc.warn = true; }
+    else if (q.incomplete.length || q.unidentified.length) {
+      qc.frac = cars ? Math.max(0.5, (cars - q.incomplete.length) / cars) * 0.9 : 0.5;
+      qc.left = q.incomplete.length ? q.incomplete.length + (q.incomplete.length === 1 ? ' car missing a page' : ' cars missing a page')
+                                    : q.unidentified.length + ' page' + (q.unidentified.length === 1 ? '' : 's') + ' unreadable';
+      qc.warn = true;
+    } else { qc.frac = 1; qc.done = true; qc.left = cars + (cars === 1 ? ' car complete' : ' cars complete'); }
+    parts.push(qc);
+
+    var total = 0, ok = 0;
+    CHECKLIST.forEach(function (cat, ci) { var st = sectionState_(ci); total += st.total; ok += st.done - st.noNote; });
+    parts.push({ key: 'checklist', name: 'Checklist', short: 'Checklist', frac: total ? ok / total : 0, done: ok === total,
+                 left: ok === total ? 'All ' + total + ' answered' : ok + ' of ' + total });
+    return parts;
+  }
+
+  var roadPos_ = -1, roadFrame_ = 0;
+  function renderRoad_() {
+    if (roadFrame_) return;
+    roadFrame_ = requestAnimationFrame(function () { roadFrame_ = 0; drawRoad_(); });
+  }
+  function drawRoad_() {
+    var el = document.getElementById('roadStrip');
+    if (!el) return;
+    var st = monthStatus_(), parts = roadParts_();
+    var signed = st === 'signed';
+    var ready = !signed && parts.every(function (p) { return p.done; }) && signOffBlockers_().length === 0;
+    var pos = signed ? 1 : parts.reduce(function (n, p) { return n + 0.25 * Math.min(1, p.frac); }, 0) + (ready ? 0.25 : 0);
+    // Work done anywhere moves the car, but it waits at the first stop that
+    // isn't finished, so it never looks past something still missing.
+    for (var i = 0; i < parts.length && !signed; i++) {
+      if (!parts[i].done) { pos = Math.min(pos, 0.25 * (i + 1) - 0.02); break; }
+    }
+
+    if (!el.firstChild) {
+      el.innerHTML = '<div class="road-wrap"><div class="road"><div class="road-done"></div></div>' +
+        parts.map(function (p, i) {
+          return '<button type="button" class="road-stop" data-go="' + p.key + '" style="left:' + (25 * (i + 1)) + '%">' +
+            '<span class="rs-pin"></span><span class="rs-text"><span class="rs-name" data-short="' + p.short + '">' + p.name +
+            '</span><span class="rs-left"></span></span></button>';
+        }).join('') +
+        '<div class="road-car">' + CAR_SVG + '</div></div>' +
+        '<div class="road-finish">' + FLAG_SVG + '<span class="rf-slot"></span></div>';
+      el.querySelectorAll('.road-stop').forEach(function (b) {
+        b.addEventListener('click', function () { roadGo_(b.dataset.go); });
+      });
+    }
+    parts.forEach(function (p) {
+      var b = el.querySelector('.road-stop[data-go="' + p.key + '"]');
+      var done = p.done || signed;
+      b.classList.toggle('done', done);
+      b.classList.toggle('warn', !done && !!p.warn);
+      b.querySelector('.rs-pin').innerHTML = done ? TICK_SVG : (p.warn ? '!' : '');
+      b.querySelector('.rs-left').textContent = signed ? 'Done' : p.left;
+      b.title = p.name + ': ' + (signed ? 'done' : p.left);
+    });
+    el.querySelector('.road-done').style.width = (pos * 100) + '%';
+    var car = el.querySelector('.road-car');
+    // The car sits just behind where it has got to, and never off the road.
+    car.style.left = 'calc(' + (pos * 100) + '% - ' + (pos * 27) + 'px + ' + ((1 - pos) * 27) + 'px)';
+    if (roadPos_ >= 0 && Math.abs(pos - roadPos_) > 0.001) {
+      car.classList.add('moving');
+      clearTimeout(car.stopTimer_);
+      car.stopTimer_ = setTimeout(function () { car.classList.remove('moving'); }, 900);
+    }
+    roadPos_ = pos;
+
+    var slot = el.querySelector('.rf-slot');
+    var want = signed ? 'signed' : (ready ? 'ready' : 'blocked') + ':' + st;
+    if (slot.dataset.state !== want) {
+      slot.dataset.state = want;
+      if (signed) {
+        slot.innerHTML = '<span class="rf-note">Signed off ✓</span> <button type="button" class="btn btn-secondary">Open report</button>';
+        slot.querySelector('button').onclick = function () { openSignedReport(); };
+      } else {
+        slot.innerHTML = '<button type="button" class="btn btn-primary">' + (st === 'amending' ? 'Sign off amendment' : 'Sign off') + '</button>';
+        slot.querySelector('button').onclick = function () { startSignOff(); };
+      }
+    }
+    var btn = slot.querySelector('.btn-primary');
+    if (btn) {
+      btn.classList.toggle('is-blocked', !ready);
+      btn.title = ready ? 'Everything is in' : 'Some things are still missing — click to see what';
+    }
+  }
+
+  // A stop takes Paul to that part of the month.
+  function roadGo_(key) {
+    if (key === 'checklist') {
+      switchTab('checklist');
+      var first = nextUnfinished_(CHECKLIST.length - 1);
+      if (first >= 0) showSection_(first);
+      return;
+    }
+    switchTab('report');
+    var target = document.getElementById(key === 'dvsa' ? 'dvsaSection' : 'qcSection');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   /* ═══════════════ Records screen (stage C) ═══════════════
