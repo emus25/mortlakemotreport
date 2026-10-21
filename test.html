@@ -601,6 +601,11 @@
     .jc-tip { display: none; }
   }
 
+  .check-item.is-auto .check-pill:disabled { cursor: default; }
+  .check-item.is-auto .check-pill:not(.active):disabled { opacity: .5; }
+  .check-item .badge-auto { margin-left: 4px; vertical-align: 1px; }
+  .auto-why { font-size: 12px; color: var(--text-secondary); font-weight: 400; margin-top: 3px; }
+  .check-item.is-auto textarea[readonly] { background: var(--surface-subtle); }
   .auto-hint { font-size: 12px; color: var(--text-secondary); background: var(--brand-tint); border-radius: var(--radius-sm); padding: 8px 10px; margin: 4px 0 10px; }
   .badge-auto {
     display: inline-flex; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
@@ -1956,6 +1961,7 @@
       store.calibration = eq.list;
       saveStore();
       renderEquipmentRows_(eq.list);
+      applyAutoChecklist_();
       return Promise.resolve();
     }
     // Nothing filed yet: file the list this browser already has (the real
@@ -2082,6 +2088,8 @@
     saveStore();
     if (SCRIPT_URL) scheduleChecklistSave_(); else setChecklistSaveNote_('saved');
     updateSignButton_();
+    // Paul's first answer starts the month, so the automatic ones can follow.
+    setTimeout(applyAutoChecklist_, 0);
   }
 
   function persistCalibration() {
@@ -2097,6 +2105,7 @@
     store.calibration = list;
     saveStore();
     scheduleEquipmentSave_();
+    applyAutoChecklist_();
   }
   function persistMonth() { store.selectedMonth = currentMonth; saveStore(); }
 
@@ -2279,6 +2288,8 @@
     monthChecking_ = on;
     document.body.classList.toggle('month-checking', on);
     renderSaveIndicator_();
+    // Google has confirmed the month: the automatic answers can be brought up to date.
+    if (!on) setTimeout(applyAutoChecklist_, 0);
   }
 
   // At start-up, while openSession is on its way.
@@ -3457,6 +3468,7 @@
   }
 
   function updateReportReadiness() {
+    applyAutoChecklist_();
     updateSignButton_();
     var dvsaTotal = singleFileInputs.length;
     var dvsaCount = singleFileInputs.filter(function (id) { return pickedFiles[id].length > 0; }).length;
@@ -4572,7 +4584,7 @@
       'VTS test logs printed in date sequence',
       'VTS test logs printed in test duration sequence',
       'Test quality information printed for all MOT testers'
-    ], auto: 'Marked automatically once this month\'s DVSA exports are uploaded in Monthly Report' },
+    ]},
     { cat: 'Annual MOT tester training & CPD', items: [
       'Previous records of tester annual training, CPD & assessment passes filed & available to DVSA for 5 years',
       "Current MOT tester annual training topics & CPD record kept on file"
@@ -4604,13 +4616,13 @@
       'All QC checks acknowledged by the tester',
       'All QC checks fully documented, filed & readily available to DVSA',
       'QC wallchart or notice displayed prominently'
-    ], auto: 'Marked automatically once this month\'s QC scans are uploaded in Monthly Report' },
+    ]},
     { cat: 'Equipment calibration certificates & checks', items: [
       'RBT, plate tester & beam tester certificates available',
       'ECA & DSM certificates available',
       'Tapley meter, TDG & shaker plate checks recorded on schedule',
       'Serial numbers & calibration dates accurately recorded'
-    ], auto: 'Marked automatically from the calibration dates entered on the Dashboard' },
+    ]},
     { cat: 'Vehicle documents & handover', items: [
       'System in place for vehicle return & MOT documentation handover, documents retained & retrievable',
       'Customer feedback report provided',
@@ -4633,6 +4645,90 @@
 
   var checklistState = {}; // "catIndex-itemIndex" -> 'yes' | 'no'
   var checklistNotes = {}; // "catIndex-itemIndex" -> note text
+
+  /* ── Answers the app gives itself (Ediz, 21 Oct 2026) ──
+     Only questions the app can actually check from what is filed are
+     answered automatically; anything it can't see (a wallchart on the wall,
+     a tester's signature) stays for Paul. Each rule returns the answer, or
+     null while the evidence isn't in yet, and says why in plain English. */
+  function dvsaIn_(input) {
+    return !!((monthDoc_ && monthDoc_.dvsaFiles && monthDoc_.dvsaFiles[input]) || (pickedFiles[input] || []).length);
+  }
+  function dvsaRule_(input, label) {
+    return function () {
+      return dvsaIn_(input) ? { val: 'yes', why: label + ' is filed for this month' }
+                            : { val: null, why: 'Ticked automatically once the ' + label.toLowerCase() + ' is uploaded in Monthly Report' };
+    };
+  }
+  // The last day of the reporting month: equipment must have been in date then.
+  function monthEnd_() {
+    var p = currentMonth.split('-');
+    return new Date(+p[0], +p[1], 0);
+  }
+  function calibrationRule_(pattern, what) {
+    return function () {
+      var rows = (store.calibration || []).filter(function (c) { return pattern.test(c.name || ''); });
+      if (!rows.length) return { val: null, why: 'No ' + what + ' on the equipment list (Dashboard), so answer this yourself' };
+      var end = monthEnd_(), late = [], noDate = [];
+      rows.forEach(function (c) {
+        if (!c.date) noDate.push(c.name);
+        else if (new Date(c.date + 'T00:00:00') < end) late.push(c.name + ' (due ' + fmtLongDate_(c.date) + ')');
+      });
+      if (noDate.length) return { val: null, why: 'Ticked automatically once every ' + what + ' has a calibration date on the Dashboard' };
+      if (late.length) return { val: 'no', why: 'Calibration ran out before the end of the month', note: 'Calibration out of date: ' + late.join('; ') };
+      return { val: 'yes', why: 'In date to the end of the month: ' + rows.map(function (c) { return c.name.split(' — ')[0]; }).join(', ') };
+    };
+  }
+  function qcFiledRule_() {
+    var c = scanCounts_('qc'), q = qcVehicleCheck_();
+    if (!c.filed || c.unread || c.waiting || q.incomplete.length || q.unidentified.length) {
+      return { val: null, why: 'Ticked automatically once every QC vehicle has its full set filed in Monthly Report' };
+    }
+    return { val: 'yes', why: 'Every QC vehicle\u2019s paperwork is filed in Google Drive' };
+  }
+  var AUTO_CHECKS = {
+    '10-0': dvsaRule_('fileLogDate', 'Test log by date'),
+    '10-1': dvsaRule_('fileLogDuration', 'Test log by duration'),
+    '10-2': dvsaRule_('fileRating', 'Test Quality Information'),
+    '16-3': qcFiledRule_,
+    '17-0': calibrationRule_(/roller brake|plate brake|\bRBT\b|headlamp|beam/i, 'brake or beam tester'),
+    '17-1': calibrationRule_(/exhaust gas|\bECA\b|smoke|\bDSM\b/i, 'gas analyser or smoke meter'),
+    '17-3': function () {
+      var rows = store.calibration || [];
+      var gaps = rows.filter(function (c) { return !String(c.serial || '').trim() || !c.date; });
+      if (!rows.length || gaps.length) return { val: null, why: 'Ticked automatically once every item on the equipment list has a serial number and date' };
+      return { val: 'yes', why: 'Every item on the equipment list has a serial number and calibration date' };
+    }
+  };
+
+  /* Puts the automatic answers in. They are saved like any other answer, so
+     the report and the back office's checks treat them the same. Nothing is
+     changed on a signed month, or while the month is still being checked
+     with Google (it would be saving over Google's copy). */
+  function applyAutoChecklist_() {
+    var editable = !SCRIPT_URL || (recordsReady_ && monthDoc_ && monthStatus_() !== 'signed' && !monthChecking_);
+    // A month nobody has started stays empty: just opening the app must not
+    // file anything (Records would then show it as started).
+    var started = !!recordsIndex_[currentMonth] || DVSA_INPUTS.some(function (x) { return dvsaIn_(x.input); }) ||
+      savedPages_.qc.length || savedPages_.cert.length ||
+      Object.keys(checklistState).some(function (k) { return !AUTO_CHECKS[k] && checklistState[k]; });
+    if (!started) editable = false;
+    var changed = false;
+    Object.keys(AUTO_CHECKS).forEach(function (key) {
+      var r = AUTO_CHECKS[key]();
+      var el = document.querySelector('.check-item[data-key="' + key + '"]');
+      if (el) el.querySelector('.auto-why').textContent = r.why;
+      if (!editable) return;
+      var note = r.val === 'no' ? (r.note || r.why) : (checklistNotes[key] || '');
+      if ((checklistState[key] || null) !== r.val || (r.val === 'no' && checklistNotes[key] !== note)) {
+        if (r.val) checklistState[key] = r.val; else delete checklistState[key];
+        if (r.val === 'no') checklistNotes[key] = note; else delete checklistNotes[key];
+        changed = true;
+        if (el) el.paint_();
+      }
+    });
+    if (changed) { persistChecklistState(); updateProgress(); }
+  }
 
   var TICK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
   var jcCurrent_ = 0;   // the section open on the right
@@ -4685,14 +4781,15 @@
       var body = sec.querySelector('.jc-items');
 
       cat.items.forEach(function (text, ii) {
-        var key = ci + '-' + ii;
+        var key = ci + '-' + ii, auto = !!AUTO_CHECKS[key];
         var item = document.createElement('div');
-        item.className = 'check-item';
+        item.className = 'check-item' + (auto ? ' is-auto' : '');
         item.dataset.key = key;
         item.innerHTML =
           '<div class="check-item-row">' +
             '<span class="item-light" aria-hidden="true"></span>' +
-            '<div class="check-item-text">' + escapeHtml_(text) + '</div>' +
+            '<div class="check-item-text">' + escapeHtml_(text) +
+              (auto ? ' <span class="badge-auto">Auto</span><div class="auto-why"></div>' : '') + '</div>' +
             '<div class="check-pills">' +
               '<button type="button" class="check-pill yes" data-val="yes">Yes</button>' +
               '<button type="button" class="check-pill no" data-val="no">No</button>' +
@@ -4736,19 +4833,25 @@
           updateProgress();
         });
 
-        // Restore any previously saved answer / note for this item.
-        var saved = checklistState[key];
-        if (saved === 'yes') { yesBtn.classList.add('active'); item.classList.add('is-yes'); }
-        else if (saved === 'no') {
-          noBtn.classList.add('active'); noteWrap.classList.add('show'); item.classList.add('is-no');
-          if (!(checklistNotes[key] || '').trim()) noteWrap.classList.add('needs-note');
-        }
-        if (checklistNotes[key]) { noteInput.value = checklistNotes[key]; }
+        // Shows the saved answer and note (also used when the app answers it).
+        item.paint_ = function () {
+          var v = checklistState[key];
+          yesBtn.classList.toggle('active', v === 'yes');
+          noBtn.classList.toggle('active', v === 'no');
+          noteWrap.classList.toggle('show', v === 'no');
+          noteWrap.classList.toggle('needs-note', v === 'no' && !(checklistNotes[key] || '').trim());
+          item.classList.toggle('is-yes', v === 'yes');
+          item.classList.toggle('is-no', v === 'no');
+          noteInput.value = checklistNotes[key] || '';
+        };
+        item.paint_();
+        if (auto) { yesBtn.disabled = noBtn.disabled = noteInput.readOnly = true; }
 
         body.appendChild(item);
       });
       main.appendChild(sec);
     });
+    applyAutoChecklist_();
     // Open where there is something to do.
     var start = sectionState_(0).finished ? nextUnfinished_(0) : 0;
     showSection_(start >= 0 ? start : 0, true);
@@ -4782,7 +4885,7 @@
     if (k !== 'y' && k !== 'n') return;
     var items = document.querySelectorAll('.jc-sec.current .check-item');
     for (var i = 0; i < items.length; i++) {
-      if (!checklistState[items[i].dataset.key]) { e.preventDefault(); items[i].answer_(k === 'y' ? 'yes' : 'no'); return; }
+      if (!checklistState[items[i].dataset.key] && !AUTO_CHECKS[items[i].dataset.key]) { e.preventDefault(); items[i].answer_(k === 'y' ? 'yes' : 'no'); return; }
     }
   });
 
