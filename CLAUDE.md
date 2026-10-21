@@ -439,7 +439,7 @@ From Ediz, in priority order:
      amended in 62s, v1 unchanged, cancel restored, the other computer opened
      the report in 51s. The back office refused October 2026 with "21
      checklist questions are not answered". **Every TEST month in 2025 and
-     2026 now holds data; use 2024 months for new runs (2024-06 is used).**
+     2026 now holds data; use 2024 months for new runs (2024-06, 08, 09, 10 are used).**
    - Stage C check: `TEST_PASSWORD=… MONTH=2026-07 node tests/live-records.js`. **Passed 18 Oct 2026 on TEST v27:** Records drawn in 0.1s, Google's month list in 1.2s, July's report from Google on a new computer 19.6s, all 6 signed reports copied in the background, "show me July" on Paul's computer 0.5s.
    - The test copy is at https://mortlakemotreport.exposureboost.co.uk/test.html
      (orange TEST banner). Its back office is "Mortlake Garage Backend TEST"

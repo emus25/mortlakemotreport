@@ -3314,8 +3314,11 @@
     if (!log.error) {
       var byTime = sortedShare_(log.tests.map(function (t) { return t.stamp; }));
       var byRamp = sortedShare_(log.tests.map(function (t) { return t.minutes; }));
-      if (byRamp >= 0.95 && byTime < 0.8) return 'duration';
-      if (byTime >= 0.95 && byRamp < 0.8) return 'date';
+      // One of the two runs in order from top to bottom; the other doesn't.
+      // (Many tests share the same time on the ramp, and within those the
+      // rows are in date order, so "nearly in date order" proves nothing.)
+      if (byRamp >= 0.98 && byTime < 0.98) return 'duration';
+      if (byTime >= 0.98 && byRamp < 0.98) return 'date';
       return 'log';
     }
     var tq = parseTestQuality_(result.rows);

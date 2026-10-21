@@ -940,10 +940,13 @@ test('Monthly Report boxes: a file in the wrong box is not filed; scans read the
     const p = await newComputer(srv);
     await setMonth(p, '2026-09');
     // The duration log dropped on the date box: refused, red, nothing filed.
-    await p.setInputFiles('#fileLogDate', LOG_SEP_DUR);
+    // A full month has many tests with the same time on the ramp.
+    await p.setInputFiles('#fileLogDate', tmpFile('dur-240.xlsx', fx.testLog(2026, 9, 240, 'duration')));
     await p.waitForFunction(() => /Not filed/.test(document.getElementById('statusLogDate').textContent));
     assert.match(await p.textContent('#statusLogDate'), /looks like the test log by duration/);
     assert.ok(await p.evaluate(() => document.getElementById('statusLogDate').classList.contains('warn')));
+    await p.setInputFiles('#fileLogDuration', tmpFile('date-240.xlsx', fx.testLog(2026, 9, 240)));
+    await p.waitForFunction(() => /looks like the test log by date/.test(document.getElementById('statusLogDuration').textContent));
     // The Test Quality file on a test log box, and a test log on the Test Quality box.
     await p.setInputFiles('#fileLogDuration', TQ_SEP);
     await p.waitForFunction(() => /Test Quality file, not a test log/.test(document.getElementById('statusLogDuration').textContent));
