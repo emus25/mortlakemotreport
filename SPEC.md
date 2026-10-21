@@ -209,6 +209,27 @@ new version alongside them. There is no "un-sign".
 - "Go there" from the list of what's missing opens the first unfinished
   section.
 
+### 7.1c Questions the app answers itself (agreed 21 Oct 2026)
+
+Only questions the app can check from what is filed. Each shows an **Auto**
+badge and a line saying why; Paul can't change them. Until the evidence is
+in they stay unanswered, saying what will tick them.
+
+| Question | Answered from |
+|---|---|
+| 11.1 Test logs printed in date sequence | YES when the test log by date is filed |
+| 11.2 Test logs printed in duration sequence | YES when the test log by duration is filed |
+| 11.3 Test quality information printed | YES when the Test Quality file is filed |
+| 17.4 All QC checks fully documented & filed | YES when every QC vehicle has its full set filed |
+| 18.1 RBT, plate & beam tester certificates | the equipment list: YES if all in date to the end of the month, otherwise NO with the overdue items as the note |
+| 18.2 ECA & DSM certificates | the same, for the gas analyser and smoke meter |
+| 18.4 Serial numbers & calibration dates recorded | YES when every equipment item has both |
+
+The other questions in those sections (comments recorded, tester
+acknowledged, wallchart displayed, Tapley/TDG/shaker plate checks) stay for
+Paul, because the app can't see them. Automatic answers are saved like any
+other, and never written into a month nobody has started.
+
 ### 7.1b Nothing missing, enforced twice (20 Oct 2026)
 
 Preview and Sign off stay blocked on the page until everything is in (as

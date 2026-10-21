@@ -185,6 +185,13 @@ test('Paul fills in September; everything is filed and comes back on another com
     // 7. The report on the second computer includes the filed pages, fetched from Drive.
     await b.evaluate(() => { CHECKLIST.forEach((c, ci) => c.items.forEach((t, ii) => { checklistState[ci + '-' + ii] = 'yes'; })); persistChecklistState(); });
     await waitSaved(b);
+    // These made-up cars are each missing a document, so the app leaves "QC
+    // checks fully documented" unanswered and the report is blocked...
+    assert.equal(await b.evaluate(() => checklistState['16-3'] || null), null);
+    assert.ok(await b.evaluate(() => reportBlockers_().some(m => /checklist/i.test(m.what))));
+    // ...so for this check (the pages in the report) that rule is set aside.
+    await b.evaluate(() => { AUTO_CHECKS['16-3'] = () => ({ val: 'yes', why: 'test' }); applyAutoChecklist_(); });
+    await waitSaved(b);
     await b.evaluate(() => handleGenerate());
     await b.waitForFunction(() => document.getElementById('reportPreview').style.display === 'flex', null, { timeout: 15000 });
     const imgs = await b.evaluate(() => document.querySelectorAll('#previewBody .pr-evidence-img').length);
@@ -296,7 +303,7 @@ test('a signed month cannot be changed from the page', async () => {
     await p.evaluate(() => { checklistState['0-0'] = 'yes'; persistChecklistState(); });
     await waitSaved(p);
     // Sign-off is stage B; mark it signed directly to check the lock holds.
-    const file = [...srv.backend.drive.items.values()].find(x => x._name === 'details.json');
+    const file = [...srv.backend.drive.items.values()].find(x => x._name === 'details.json' && JSON.parse(x._bytes.toString()).month === '2026-09');
     const d = JSON.parse(file._bytes.toString()); d.status = 'signed'; file.setContent(JSON.stringify(d));
     srv.backend.props.set('MST_2026-09', 'signed');   // sign-off sets both
     await p.evaluate(() => { checklistState['0-1'] = 'yes'; persistChecklistState(); });
@@ -837,6 +844,49 @@ test('the checklist is a job card: one section at a time, moves on by itself, a 
     await p.click('#reportBlockers .blockers-go[data-go="checklist"]');
     assert.ok(await p.isVisible('#view-checklist'));
     assert.match(await p.textContent('.jc-sec.current h2'), /^3\. /);
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});
+
+test('the app answers the questions it can check itself, and only those', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await p.waitForTimeout(2500);
+    assert.equal(srv.log.filter(x => x === 'saveMonthFields').length, 0, 'opening the app files nothing for a month not started');
+    await setMonth(p, '2026-09');
+    const ans = (k) => p.evaluate((k) => [checklistState[k] || null, checklistNotes[k] || ''], k);
+    // Nothing in yet: left unanswered, saying what will tick it.
+    assert.deepEqual(await ans('10-0'), [null, '']);
+    await p.click('#tab-checklist');
+    await p.click('.jc-item[data-cat-index="10"]');
+    assert.match(await p.textContent('.check-item[data-key="10-0"] .auto-why'), /once the test log by date is uploaded/);
+    assert.ok(await p.isDisabled('.check-item[data-key="10-0"] .check-pill.yes'), 'Paul cannot change an automatic answer');
+    // The DVSA files and the QC sets tick their questions.
+    await p.click('#tab-report');
+    await p.setInputFiles('#fileLogDate', LOG_SEP);
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await p.waitForFunction(() => checklistState['10-0'] === 'yes' && checklistState['10-2'] === 'yes');
+    assert.deepEqual(await ans('10-1'), [null, ''], 'the duration log is not in yet');
+    // Equipment in date to the end of September: YES; one out of date: NO, with the reason as the note.
+    await p.evaluate(() => {
+      store.calibration = [
+        { name: 'Roller Brake Tester', serial: '80780205', date: '2027-03-01' },
+        { name: 'Headlamp Tester', serial: '2245', date: '2027-03-01' },
+        { name: 'Exhaust Gas Meter', serial: '11210011', date: '2026-09-12' },
+        { name: 'Diesel Smoke Meter', serial: '', date: '2027-01-01' }];
+      applyAutoChecklist_();
+    });
+    assert.deepEqual(await ans('17-0'), ['yes', '']);
+    const eca = await ans('17-1');
+    assert.equal(eca[0], 'no');
+    assert.match(eca[1], /Calibration out of date: Exhaust Gas Meter \(due 12 September 2026\)/);
+    assert.deepEqual(await ans('17-3'), [null, ''], 'a serial number is missing');
+    // Questions the app can't see stay for Paul.
+    assert.deepEqual(await ans('16-4'), [null, '']);
+    assert.equal(await p.evaluate(() => !!AUTO_CHECKS['16-4']), false);
+    await waitSaved(p);
+    assert.equal(details(srv, '2026-09').checklist.state['10-0'], 'yes', 'automatic answers are saved like any other');
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });

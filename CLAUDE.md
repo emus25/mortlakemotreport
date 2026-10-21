@@ -32,7 +32,10 @@ together the DVSA quality-assurance record:
   the left (`#jcList`), one section's questions on the right (`#jcMain`,
   `showSection_`), moving on by itself when a YES finishes a section
   (`nextUnfinished_`), the note box opened on a NO, Y/N keys, and the tyre
-  filling up (`clTyre`).
+  filling up (`clTyre`). Seven questions are answered by the app itself
+  (`AUTO_CHECKS`, `applyAutoChecklist_`, SPEC 7.1c): only what it can check
+  from filed files, QC sets and the equipment list; locked for Paul; never
+  saved into a month nobody has started.
 - **Generate report**: builds a printable report (print or save as PDF from
   the browser). Page 1 is a one-page summary, followed by DVSA performance,
   test logs, the checklist, equipment, and appendices of QC paperwork and
@@ -300,7 +303,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 35 back-office checks + 18 real-browser checks
+npm test               # 35 back-office checks + 19 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
