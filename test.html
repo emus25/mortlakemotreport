@@ -4992,7 +4992,7 @@
      changed on a signed month, or while the month is still being checked
      with Google (it would be saving over Google's copy). */
   function applyAutoChecklist_() {
-    var editable = !SCRIPT_URL || (recordsReady_ && monthDoc_ && monthStatus_() !== 'signed' && !monthChecking_);
+    var editable = !SCRIPT_URL || (recordsReady_ && monthDoc_ && monthStatus_() !== 'signed' && !monthChecking_ && !switchingStatus_);
     // A month nobody has started stays empty: just opening the app must not
     // file anything (Records would then show it as started).
     var started = !!recordsIndex_[currentMonth] || DVSA_INPUTS.some(function (x) { return dvsaIn_(x.input); }) ||
@@ -6715,6 +6715,10 @@
     });
   }
 
+  // While a month is going back to signed (or being opened again after it),
+  // the page is half old and half new: no automatic answer may be saved.
+  var switchingStatus_ = false;
+
   function cancelAmendment() {
     var d = monthDoc_;
     if (!d || !d.amendment) return;
@@ -6723,13 +6727,14 @@
     var month = currentMonth;
     flushChecklist_();
     showMonthOverlay_('Putting ' + formatMonth(month) + ' back as it was signed…');
+    switchingStatus_ = true;
     return api_('cancelAmend', { month: month }).then(function (r) {
       if (r.status !== 'success') { hideMonthOverlay_(); alert(r.message || 'The amendment could not be cancelled.'); return; }
       recordsIndex_[month] = Object.assign({}, recordsIndex_[month] || {}, { status: 'signed' });
       renderReminder_();
       if (month === currentMonth) return openMonth_(month);
       hideMonthOverlay_();
-    });
+    }).then(function () { switchingStatus_ = false; }, function (e) { switchingStatus_ = false; throw e; });
   }
 
   /* ═══════════════ The road (Ediz, 21 Oct 2026) ═══════════════

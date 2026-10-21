@@ -642,6 +642,8 @@ test('stage B: nothing missing, sign off, locked, open the report, amend to v2, 
     await waitSaved(p);
     await p.click('#monthBanner button:text-is("Cancel amendment")');
     await p.waitForFunction(() => monthStatus_() === 'signed' && savedPages_.qc.length === 4, null, { timeout: 20000 });
+    await p.waitForTimeout(2500);
+    assert.ok(!p.dialogs.some(d => /Use Amend to make changes/.test(d)), 'nothing tries to save into the signed month: ' + p.dialogs.join(' | '));
     assert.equal(details(srv, '2026-09').qcPages.length, 4);
     assert.equal(signed().length, 2, 'no new version');
     assert.deepEqual(p.errors, []);
