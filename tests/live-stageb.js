@@ -54,7 +54,14 @@ function check(ok, what) { log(ok ? '  ✅' : '  ❌', what); if (!ok) problems.
     log(name, 'opened ' + MONTH);
     return p;
   }
-  const allSaved = p => p.waitForFunction(() => !hasPendingSaves_() && document.getElementById('syncStatus').textContent === 'All saved ✓', null, { timeout: 300000 });
+  const allSaved = p => p.waitForFunction(() => !hasPendingSaves_() && document.getElementById('syncStatus').textContent === 'All saved ✓', null, { timeout: 300000 })
+    .catch(async (e) => {
+      log('   not all saved:', JSON.stringify(await p.evaluate(() => ({ status: document.getElementById('syncStatus').textContent, inFlight: savesInFlight_,
+        failed: failedSaves_.map(f => f.label + ': ' + f.message), cl: !!clPending_, clSaving: clSaving_, eq: eqDirty_ || eqSaving_,
+        unsaved: unsavedPages_.qc.length + '/' + unsavedPages_.cert.length, provisional: savedPages_.qc.filter(x => x.provisional).length,
+        timings: (recordsTimings || []).slice(-12).map(t => t.action + ':' + (t.status || '') + ':' + t.totalMs) }))));
+      throw e;
+    });
   async function scan(p, files) {
     const before = await p.evaluate(() => savedPages_.qc.length + unsavedPages_.qc.length);
     let expected = before;
