@@ -14,7 +14,7 @@ function backendReading(result) { return { claude: () => ({ status: 'success', r
 
 test('password is required for everything except the version check', () => {
   const b = loadBackend();
-  assert.equal(b.call('getVersion', { password: '' }).version, 29);
+  assert.equal(b.call('getVersion', { password: '' }).version, 30);
   assert.equal(b.call('loadMonth', { month: '2026-09', password: 'wrong' }).status, 'forbidden');
   assert.equal(b.call('checkDashboardPassword', { password: 'wrong' }).status, 'fail');
   assert.equal(b.call('checkDashboardPassword').status, 'success');
@@ -264,7 +264,7 @@ test('opening the app is one request: moves old data, seeds equipment, returns t
   const r = b.call('openSession', { month: '2026-08', browserTestLog: { '2026-08': { total: 50 } },
                                     seedEquipment: [{ name: 'Headlamp Tester', serial: '2245' }] });
   assert.equal(r.status, 'success');
-  assert.equal(r.version, 29);
+  assert.equal(r.version, 30);
   assert.equal(typeof r.ms, 'number', 'every answer says how long it took');
   assert.deepEqual(r.migration.monthsUpdated, ['2026-08']);
   assert.equal(r.month.exists, true);
@@ -773,4 +773,29 @@ test('the back office refuses to sign off a month with anything missing, whateve
   b.call('removePage', { month, kind: 'qc', id: pages.find(p => p.fingerprint === 'fp-e').id });
   b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p6').toString('base64'), fingerprint: 'fp-f', sourceName: 'f.jpg', reading: Object.assign({}, QC_READ, { registration: 'XY65ZZZ', document_type: 'inspection_sheet', is_electric: true }) });
   assert.equal(sign(b, month, fakePdf('x')).status, 'success');
+});
+
+test('the month list says what the wall sheet needs: QC complete, each QC car with its tester, tests per tester (v30)', () => {
+  const b = loadBackend(backendReading(QC_READ));
+  const month = '2026-09';
+  readyMonth(b, month);
+  let e = b.call('listMonths').months[month];
+  assert.equal(e.qcDone, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(e.qcCars)), [{ reg: 'AB12CDE', tester: null }], 'no test log figures yet, so tester unknown');
+  assert.equal(e.checklistTotal, CHECKLIST_SIZES.reduce((a, b) => a + b, 0));
+  // A test log filed with who tested each car, and the Test Quality names.
+  b.call('saveDvsaFile', { month, inputId: 'fileLogDate', fileName: 'log.xlsx', base64: 'eA==',
+    figures: { testLog: { total: 3, byTester: { TSTONE: 2, PKHAN: 1 }, regTester: { AB12CDE: 'TSTONE', XY65ZZZ: 'PKHAN' } } } });
+  b.call('saveDvsaFile', { month, inputId: 'fileRating', fileName: 'tq.xlsx', base64: 'eA==',
+    figures: { testQuality: { period: 'Sep-26', site: { tests: 3, failed: 10 }, testers: [{ id: 'TSTONE', name: 'T STONE' }, { id: 'PKHAN', name: 'P KHAN' }] } } });
+  e = b.call('listMonths').months[month];
+  assert.deepEqual(JSON.parse(JSON.stringify(e.qcCars)), [{ reg: 'AB12CDE', tester: 'TSTONE' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(e.testers)), { TSTONE: 2, PKHAN: 1 });
+  assert.equal(e.testerNames.PKHAN, 'P KHAN');
+  assert.equal(b.call('loadMonth', { month }).details.testLog.regTester, undefined, 'kept in quick storage, not in details.json');
+  // A car missing a page: QC not complete.
+  b.call('filePage', { month, kind: 'qc', imageBase64: Buffer.from('p9').toString('base64'), fingerprint: 'fp-9', sourceName: 'z.jpg', reading: Object.assign({}, QC_READ, { registration: 'XY65ZZZ' }) });
+  e = b.call('listMonths').months[month];
+  assert.equal(e.qcDone, false);
+  assert.deepEqual(e.qcCars.map(c => c.tester), ['TSTONE', 'PKHAN']);
 });

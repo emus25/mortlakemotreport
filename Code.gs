@@ -27,7 +27,7 @@ var CLAUDE_MODEL = 'claude-opus-5';
 // Bumped whenever this file changes, so the app can confirm which version is
 // actually deployed. Apps Script keeps serving the old code unless you pick
 // "New version" when deploying, which is very easy to miss.
-var BACKEND_VERSION = 29;
+var BACKEND_VERSION = 30;
 
 // Rate limits are the main failure mode when a whole scan is sorted at once:
 // a burst of requests can trip 429s, and UrlFetchApp does not retry for us
@@ -836,7 +836,7 @@ function readIndex_() {
   // Lines written before v26 lack what the Records screen shows (who signed
   // and when, the folder link). Each is rebuilt once from its details.json.
   Object.keys(months).forEach(function (m) {
-    if (months[m].versions) return;
+    if (months[m].versions && 'qcDone' in months[m]) return;
     try {
       var ctx = openMonth_(m, false);
       if (!ctx) return;
@@ -858,6 +858,12 @@ function updateIndex_(d, folder) {
     return { version: v.version, signedAt: v.signedAt, signedBy: v.signedBy, kind: v.kind, reason: v.reason || null };
   });
   var folderUrl = old.folderUrl || null;
+  var wall = wallchartFacts_(d.month, pages.qc);
+  var names = null;
+  if (d.testQuality && d.testQuality.testers) {
+    names = {};
+    d.testQuality.testers.forEach(function (t) { if (t && t.id) names[t.id] = t.name || t.id; });
+  }
   if (!folderUrl && folder) { try { folderUrl = folder.getUrl(); } catch (e) {} }
   var answered = Object.keys(d.checklist.state || {}).filter(function (k) { return d.checklist.state[k]; }).length;
   var tq = d.testQuality && d.testQuality.site ? {
@@ -879,6 +885,11 @@ function updateIndex_(d, folder) {
     certUnread: pages.cert.filter(function (p) { return p.status !== 'read'; }).length,
     dvsaFiles: Object.keys(d.dvsaFiles),
     checklistAnswered: answered,
+    checklistTotal: CHECKLIST_SIZES.reduce(function (a, b) { return a + b; }, 0),
+    qcDone: wall.qcDone,
+    qcCars: wall.qcCars,
+    testers: d.testLog && d.testLog.byTester ? d.testLog.byTester : null,
+    testerNames: names,
     testQuality: tq,
     updatedAt: d.updatedAt
   }));
@@ -1062,7 +1073,18 @@ function saveDvsaFile_(data) {
     };
     var figures = data.figures || {};
     if (figures.testQuality) d.testQuality = figures.testQuality;
-    if (figures.testLog) d.testLog = figures.testLog;
+    if (figures.testLog) {
+      // Who tested each car, kept apart in quick storage (it can be a few KB):
+      // the wall sheet uses it to put each QC'd car under its tester.
+      var rt = figures.testLog.regTester;
+      if (rt && typeof rt === 'object') {
+        var list = Object.keys(rt).filter(function (r) { return /^[A-Z0-9]{2,8}$/.test(r); })
+          .map(function (r) { return r + ':' + String(rt[r]).replace(/[,:]/g, '').slice(0, 20); }).join(',');
+        if (list.length < 8500) putProp_('RT_' + month, list);
+      }
+      delete figures.testLog.regTester;
+      d.testLog = figures.testLog;
+    }
     d.revisions.dvsa = (d.revisions.dvsa || 0) + 1;
     addHistory_(d, (prev ? 'Replaced ' : 'Added ') + slot.label + ': ' + d.dvsaFiles[data.inputId].fileName);
     saveMonth_(ctx);
@@ -1199,6 +1221,9 @@ function updateIndexPages_(month) {
   entry.vehicles = vehicleCount_(live.qc);
   entry.certPages = live.cert.length;
   entry.certUnread = live.cert.filter(function (p) { return p.status !== 'read'; }).length;
+  var wall = wallchartFacts_(month, live.qc);
+  entry.qcDone = wall.qcDone;
+  entry.qcCars = wall.qcCars;
   entry.status = entry.status || 'draft';
   entry.updatedAt = nowIso_();
   putProp_(key, JSON.stringify(entry));
@@ -1629,22 +1654,10 @@ function realPlate_(reg) {
   return /[A-Z]/.test(r) && /\d/.test(r) ? r : '';
 }
 
-/* What the back office itself insists on before anything is signed (agreed
-   17 Oct 2026, made firm here 20 Oct 2026: nothing may be signed with
-   anything missing). The page checks the same things first and says what is
-   missing; these checks mean even a fault in the page can't get round them. */
-function serverSignBlockers_(d) {
-  var out = [];
-  Object.keys(DVSA_INPUTS).forEach(function (id) {
-    if (!d.dvsaFiles[id]) out.push(DVSA_INPUTS[id].label + ' is not filed');
-  });
-  if (!d.qcPages.length) out.push('No QC paperwork is filed');
-  var unread = d.qcPages.concat(d.certPages).filter(function (p) { return p.status !== 'read'; }).length;
-  if (unread) out.push(unread + ' page' + (unread === 1 ? ' has' : 's have') + ' not been read');
-
-  // Each QC vehicle's full set, and no page without a readable registration.
-  var cars = {}, noReg = 0;
-  d.qcPages.forEach(function (p) {
+/* Each QC vehicle's full set, and no page without a readable registration. */
+function qcProblems_(qcPages) {
+  var out = [], cars = {}, noReg = 0;
+  qcPages.forEach(function (p) {
     if (p.status !== 'read') return;
     var r = p.reading || {}, reg = realPlate_(r.registration);
     if (!reg) { noReg++; return; }
@@ -1658,6 +1671,44 @@ function serverSignBlockers_(d) {
     if (missing.length) out.push('QC vehicle ' + reg + ' is missing its ' + missing.map(function (t) { return QC_DOCS[t]; }).join(' and '));
   });
   if (noReg) out.push(noReg + ' QC page' + (noReg === 1 ? ' has' : 's have') + ' no readable registration');
+  return out;
+}
+
+/* The wall sheet (22 Oct 2026): what each month adds to it. Whether QC is
+   complete, and each QC'd car with the tester who tested it, looked up in
+   the month's test log by registration (RT_<month>, filed with the log). */
+function wallchartFacts_(month, qcPages) {
+  var tester = {};
+  String(prop_('RT_' + month) || '').split(',').forEach(function (pair) {
+    var i = pair.indexOf(':');
+    if (i > 0) tester[pair.slice(0, i)] = pair.slice(i + 1);
+  });
+  var regs = {};
+  qcPages.forEach(function (p) {
+    var reg = p.status === 'read' && realPlate_((p.reading || {}).registration);
+    if (reg) regs[reg] = true;
+  });
+  var read = qcPages.length && qcPages.every(function (p) { return p.status === 'read'; });
+  return {
+    qcDone: !!(read && Object.keys(regs).length && !qcProblems_(qcPages).length),
+    qcCars: Object.keys(regs).sort().map(function (reg) { return { reg: reg, tester: tester[reg] || null }; })
+  };
+}
+
+/* What the back office itself insists on before anything is signed (agreed
+   17 Oct 2026, made firm here 20 Oct 2026: nothing may be signed with
+   anything missing). The page checks the same things first and says what is
+   missing; these checks mean even a fault in the page can't get round them. */
+function serverSignBlockers_(d) {
+  var out = [];
+  Object.keys(DVSA_INPUTS).forEach(function (id) {
+    if (!d.dvsaFiles[id]) out.push(DVSA_INPUTS[id].label + ' is not filed');
+  });
+  if (!d.qcPages.length) out.push('No QC paperwork is filed');
+  var unread = d.qcPages.concat(d.certPages).filter(function (p) { return p.status !== 'read'; }).length;
+  if (unread) out.push(unread + ' page' + (unread === 1 ? ' has' : 's have') + ' not been read');
+
+  out = out.concat(qcProblems_(d.qcPages));
 
   // Every checklist question answered, and a note on every NO.
   var cl = d.checklist || {}, state = cl.state || {}, notes = cl.notes || {}, blank = 0, noNote = 0;

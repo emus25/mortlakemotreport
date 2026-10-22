@@ -204,7 +204,13 @@ one Google Apps Script file.
   `monthEnd_()` (`computeCalStatus(date, asOf)`), overdue and due soon
   counted apart, and `changesSince_` nets out checklist answers that changed
   back during an amendment.
-- **Backend version check:** `EXPECTED_BACKEND_VERSION` (29 on this branch; the live page expects 20) must
+- **Wall sheet (22 Oct 2026, SPEC 7.1f):** `#wallBtn` on Records →
+  `printWallchart_()` prints `buildWallchartHTML_(year)` (landscape A4) from a
+  hidden frame, from `recordsIndex_` (v30 adds `qcDone`, `qcCars` with
+  testers from `RT_<month>`, `testers`, `testerNames`, `checklistTotal`) and
+  `store.calibration` (`lastDone` = calibrated on; set from a certificate's
+  calibrated date when its due date is accepted).
+- **Backend version check:** `EXPECTED_BACKEND_VERSION` (30 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
 - **Report:** `buildReportHTML()` is rendered into `#printReport`, shown in a
@@ -326,7 +332,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 35 back-office checks + 22 real-browser checks
+npm test               # 36 back-office checks + 23 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
@@ -508,8 +514,5 @@ From Ediz, in priority order:
    `runCertScan`, cert cards, plus an appendix in the report). Check that it
    matches what was asked: certs should probably also be saved with the
    report from item 1.
-5. **One-page summary for 2 notice boards.** The report already opens with
-   a one-page summary (`summaryBlock` in `buildReportHTML`). The ask seems
-   to be a separate, printable one-page notice (possibly printed twice, or
-   two versions) that can be printed on its own without the full report.
-   Confirm exactly what goes on it before building.
+5. ~~**One-page summary for 2 notice boards.**~~ Built 22 Oct 2026 as the
+   wall sheet (SPEC 7.1f), from a photo of Paul's paper one.

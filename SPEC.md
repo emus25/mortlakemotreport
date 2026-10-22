@@ -271,6 +271,26 @@ at the flag with "Signed off ✓" and Open report.
 - An amended report lists only real changes: a checklist answer that
   changed and changed back during the amendment is left out.
 
+### 7.1f The wall sheet (agreed 22 Oct 2026)
+
+Replaces the sheet Paul keeps on the two notice boards. **Print wall sheet**
+on Records prints a landscape A4 page for the year shown:
+- **MOT department admin**, a tick per month: QC checks done (every car's full
+  set), site self-assessment complete, test log by date / by duration filed,
+  Test Quality filed, and **"everything else done", ticked when the month is
+  signed off** (Ediz, 22 Oct 2026). "…" for a started month where it isn't
+  done yet; blank for months not started.
+- **QC checks per tester**: the number plates QC'd each month under the tester
+  who tested each car (from the month's test log, by registration), "✗ none"
+  if they tested but had no QC car, "no tests" if they didn't test. Cars whose
+  tester isn't known go under "Tester not known".
+- **Equipment calibration**: make/model, serial, calibrated on, due, with a
+  light. The Tapley meter (not in use) is left off.
+A signed month's column comes from what was filed at sign-off, so it doesn't
+change. Each month's registration-to-tester list is kept in quick storage
+(`RT_<month>`), and the month list carries `qcDone`, `qcCars`, `testers`,
+`testerNames` and `checklistTotal` (v30).
+
 ### 7.1b Nothing missing, enforced twice (20 Oct 2026)
 
 Preview and Sign off stay blocked on the page until everything is in (as

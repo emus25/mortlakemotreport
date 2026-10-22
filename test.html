@@ -288,6 +288,8 @@
   @media (prefers-reduced-motion: reduce) { .road-car, .road-done { transition: none; } .road-car.moving .wheel { animation: none; } }
 
   /* ══════════ Records (stage C) ══════════ */
+  .rec-bar { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .rec-bar .rec-years { flex: 1; margin-bottom: 0; }
   .rec-years { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
   .rec-year { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border-strong);
     background: var(--surface); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
@@ -1357,7 +1359,10 @@
         <h1>Records</h1>
         <div class="view-desc">Every month, kept in Google Drive. Pick a month to open its signed report, or carry on with it.</div>
       </div>
-      <div class="rec-years" id="recYears"></div>
+      <div class="rec-bar">
+        <div class="rec-years" id="recYears"></div>
+        <button type="button" class="btn btn-secondary" id="wallBtn" onclick="printWallchart_()">Print wall sheet</button>
+      </div>
       <div class="rec-grid" id="recGrid"></div>
       <div class="card rec-panel" id="recPanel" hidden></div>
     </section>
@@ -3127,7 +3132,9 @@
       byDay: parsed.byDay, medianMinutes: parsed.medianMinutes, under30: parsed.under30,
       initialTests: parsed.initialTests, timedInitial: parsed.timedInitial,
       noDuration: parsed.noDuration, shortestMinutes: parsed.shortestMinutes,
-      durationBands: parsed.durationBands, testerStats: parsed.testerStats
+      durationBands: parsed.durationBands, testerStats: parsed.testerStats,
+      // Who tested each car: filed with the log, for the wall sheet.
+      regTester: parsed.tests.reduce(function (m, t) { if (t.reg && t.tester) m[t.reg] = t.tester; return m; }, {})
     };
     saveStore();
     renderTestLogCharts_();
@@ -3906,7 +3913,7 @@
   // The Apps Script backend reports its own version. If it's older than what
   // this page expects, the sorting will misbehave in confusing ways — so say
   // so plainly instead of leaving it to be guessed at.
-  var EXPECTED_BACKEND_VERSION = 29;
+  var EXPECTED_BACKEND_VERSION = 30;
 
   function checkBackendVersion_() {
     if (!SCRIPT_URL) return;
@@ -4047,6 +4054,9 @@
           var target = findCalRowBySerial_(p.serial);
           if (!target) return;
           target.querySelector('.calDate').value = parsedDue;
+          // The certificate also says when it was done (the wall sheet shows it).
+          var done = p.calibratedOn ? parseCertDate_(p.calibratedOn) : '';
+          if (done) target.dataset.lastDone = done;
           target.querySelector('.calDate').dispatchEvent(new Event('input', { bubbles: true }));
           renderCertResults_();
         });
@@ -5230,11 +5240,12 @@
   // (The Tapley decelerometer, serial 77303, is on his sheet but marked
   // "not in use", so it's deliberately left out — add it if that changes.)
   var DEFAULT_EQUIPMENT = [
-    { name: 'Headlamp Tester — Tecalemit DE7288',   serial: '2245',      date: '2026-10-31' },
-    { name: 'Roller Brake Tester — Hofmann Brekon 120', serial: '80780205',  date: '2026-10-31' },
-    { name: 'Exhaust Gas Meter — V-Tech Opus Combi', serial: '11210011',  date: '2026-10-20' },
-    { name: 'Diesel Smoke Meter — V-Tech DSM Opus',  serial: '432040006', date: '2026-10-20' },
-    { name: 'Brake Decelerometer — Bowmonk',         serial: '4712',      date: '2026-09-08' }
+    // lastDone: "calibrated on", from Paul's notice-board sheet (Oct 2026).
+    { name: 'Headlamp Tester — Tecalemit DE7288',   serial: '2245',      date: '2026-10-31', lastDone: '2026-04-14' },
+    { name: 'Roller Brake Tester — Hofmann Brekon 120', serial: '80780205',  date: '2026-10-31', lastDone: '2026-04-14' },
+    { name: 'Exhaust Gas Meter — V-Tech Opus Combi', serial: '11210011',  date: '2026-10-20', lastDone: '2026-04-14' },
+    { name: 'Diesel Smoke Meter — V-Tech DSM Opus',  serial: '432040006', date: '2026-10-20', lastDone: '2025-10-06' },
+    { name: 'Brake Decelerometer — Bowmonk',         serial: '4712',      date: '2026-09-08', lastDone: '2025-09-09' }
   ];
 
   // ── Boot: restore saved month, calibration and checklist, then render ──
@@ -6761,6 +6772,112 @@
       if (month === currentMonth) return openMonth_(month);
       hideMonthOverlay_();
     }).then(function () { switchingStatus_ = false; }, function (e) { switchingStatus_ = false; throw e; });
+  }
+
+  /* ═══════════════ The wall sheet (Paul, 22 Oct 2026) ═══════════════
+     A landscape A4 page for the two notice boards, replacing the one Paul
+     kept by hand: the year's monthly admin (ticked from the records; "everything
+     else" is ticked when the month is signed off), the cars QC'd for each
+     tester each month, and the equipment's calibration dates. Signed months
+     never change after sign-off, so neither does their column. */
+  var MONTH_SHORT_ = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function buildWallchartHTML_(year) {
+    var months = MONTH_SHORT_.map(function (m, i) { return { key: year + '-' + ('0' + (i + 1)).slice(-2), label: m + '-' + String(year).slice(2) }; });
+    var e = function (k) { return recordsIndex_[k] || null; };
+    var TICK = '<span class="t">✓</span>', WAIT = '<span class="p">…</span>';
+    function adminRow(label, test) {
+      return '<tr><th>' + label + '</th>' + months.map(function (m) {
+        var x = e(m.key);
+        return '<td>' + (!x ? '' : test(x) ? TICK : WAIT) + '</td>';
+      }).join('') + '</tr>';
+    }
+    var has = function (x, id) { return (x.dvsaFiles || []).indexOf(id) > -1; };
+    var admin = [
+      adminRow('QC checks done (every car’s full set)', function (x) { return !!x.qcDone; }),
+      adminRow('Site self-assessment complete', function (x) { return x.checklistTotal && x.checklistAnswered >= x.checklistTotal; }),
+      adminRow('Test log by date filed', function (x) { return has(x, 'fileLogDate'); }),
+      adminRow('Test log by duration filed', function (x) { return has(x, 'fileLogDuration'); }),
+      adminRow('Test Quality (scheme performance) filed', function (x) { return has(x, 'fileRating'); }),
+      adminRow('<b>Everything else done: month signed off</b>', function (x) { return x.status === 'signed' || x.status === 'amending'; })
+    ].join('');
+
+    // Testers: everyone in a test log or with a QC car this year, named from
+    // the latest Test Quality file.
+    var names = {}, testers = {}, unknown = false;
+    months.forEach(function (m) {
+      var x = e(m.key);
+      if (!x) return;
+      Object.keys(x.testerNames || {}).forEach(function (id) { names[id] = x.testerNames[id]; });
+      Object.keys(x.testers || {}).forEach(function (id) { testers[id] = true; });
+      (x.qcCars || []).forEach(function (c) { if (c.tester) testers[c.tester] = true; else unknown = true; });
+    });
+    var ids = Object.keys(testers).sort(function (a, b) { return String(names[a] || a).localeCompare(String(names[b] || b)); });
+    if (unknown) ids.push('');
+    function qcCell(x, id) {
+      if (!x) return '<td></td>';
+      var cars = (x.qcCars || []).filter(function (c) { return (c.tester || '') === id; });
+      if (cars.length) return '<td>' + cars.map(function (c) { return '<span class="pl">' + escapeHtml_(c.reg) + '</span>'; }).join('<br>') + '</td>';
+      if (!id || !x.testers) return '<td></td>';
+      return x.testers[id] ? '<td><span class="x">✗ none</span></td>' : '<td><span class="nt">no tests</span></td>';
+    }
+    var qc = ids.map(function (id) {
+      return '<tr><th>' + escapeHtml_(id ? (names[id] || id) : 'Tester not known') + '</th>' +
+        months.map(function (m) { return qcCell(e(m.key), id); }).join('') + '</tr>';
+    }).join('') || '<tr><td colspan="13" class="nt">No QC checks filed for ' + year + ' yet.</td></tr>';
+
+    var eq = (store.calibration || []).map(function (c) {
+      var st = computeCalStatus(c.date);
+      var parts = String(c.name || '').split(' — ');
+      return '<tr><td><span class="dot ' + st.cls + '"></span>' + escapeHtml_(parts[0]) + '</td><td>' + escapeHtml_(parts[1] || '') +
+        '</td><td>' + escapeHtml_(c.serial || '') + '</td><td>' + (c.lastDone ? shortDate_(c.lastDone) : '—') +
+        '</td><td><b>' + (c.date ? shortDate_(c.date) : '—') + '</b></td></tr>';
+    }).join('');
+
+    var today = new Date();
+    var head = months.map(function (m) { return '<th class="m">' + m.label + '</th>'; }).join('');
+    return '<!doctype html><html><head><meta charset="utf-8"><title>MOT wallchart ' + year + '</title><style>' +
+      '@page{size:A4 landscape;margin:9mm}*{box-sizing:border-box;margin:0;padding:0}' +
+      'body{font-family:Inter,Arial,sans-serif;color:#181818;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.top{display:flex;align-items:center;gap:14px;border-bottom:3px solid #ffd400;padding-bottom:8px;margin-bottom:8px}' +
+      '.top img{height:34px}h1{font-size:19px}.sub{font-size:10.5px;color:#666}.right{margin-left:auto;text-align:right;font-size:10.5px;color:#666}' +
+      'h2{font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:9px 0 4px;color:#333}' +
+      'table{width:100%;border-collapse:collapse;font-size:10px;table-layout:fixed}th,td{border:1px solid #cfcfcf;padding:3px 4px;text-align:center;vertical-align:middle}' +
+      'tbody th{text-align:left;font-weight:600;width:205px;background:#fafaf8}th.m{background:#f2f2ee}thead th:first-child{width:205px}' +
+      '.t{color:#2f7d4a;font-weight:800;font-size:12px}.p{color:#a66a00;font-weight:700}' +
+      '.pl{display:inline-block;background:#f7d117;border:1px solid #222;border-radius:3px;font:700 9px Arial;letter-spacing:.4px;padding:1px 3px;margin:1px 0}' +
+      '.x{color:#b54747;font-weight:700}.nt{color:#999}.eq td,.eq th{text-align:left}.eq th{background:#f2f2ee}' +
+      '.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.dot.success{background:#2f9e57}.dot.warning{background:#e0a100}.dot.danger{background:#d64545}.dot.neutral{background:#bbb}' +
+      '.key{font-size:9.5px;color:#666;margin-top:4px}' +
+      '</style></head><body>' +
+      '<div class="top"><img src="' + new URL('assets/mortlake-logo.png', location.href).href + '" alt=""><div><h1>MOT wallchart ' + year + '</h1>' +
+        '<div class="sub">Mortlake Station Garage · VTS 22453 · filled in by the DVSA Compliance app</div></div>' +
+        '<div class="right">Printed ' + shortDate_(today) + '</div></div>' +
+      '<h2>MOT department admin</h2><table><thead><tr><th></th>' + head + '</tr></thead><tbody>' + admin + '</tbody></table>' +
+      '<div class="key">✓ done · … not done yet · blank: month not started</div>' +
+      '<h2>Quality control checks: cars QC’d per tester</h2><table><thead><tr><th></th>' + head + '</tr></thead><tbody>' + qc + '</tbody></table>' +
+      '<div class="key">✗ none: tested cars that month, none QC’d · no tests: didn’t test that month · tester taken from the DVSA test log</div>' +
+      '<h2>MOT equipment calibration (as at ' + shortDate_(today) + ')</h2>' +
+      '<table class="eq"><thead><tr><th>Equipment</th><th>Make / model</th><th>Serial no.</th><th>Calibrated on</th><th>Calibration due</th></tr></thead><tbody>' +
+        (eq || '<tr><td colspan="5" class="nt">No equipment on the list.</td></tr>') + '</tbody></table>' +
+      '<div class="key">red: overdue · amber: due within 30 days · green: in date</div>' +
+      '</body></html>';
+  }
+
+  // Prints the sheet for the year shown on Records, from a hidden frame (the
+  // page's own print layout is portrait, for the report).
+  function printWallchart_() {
+    var old = document.getElementById('wallFrame');
+    if (old) old.remove();
+    var f = document.createElement('iframe');
+    f.id = 'wallFrame';
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0';
+    document.body.appendChild(f);
+    var doc = f.contentWindow.document;
+    doc.open(); doc.write(buildWallchartHTML_(recYear_ || new Date().getFullYear())); doc.close();
+    var img = doc.querySelector('img');
+    function go() { try { f.contentWindow.focus(); f.contentWindow.print(); } catch (e) {} }
+    if (img && !img.complete) { img.onload = img.onerror = go; } else { setTimeout(go, 50); }
   }
 
   /* ═══════════════ The road (Ediz, 21 Oct 2026) ═══════════════

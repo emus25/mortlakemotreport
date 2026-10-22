@@ -1009,3 +1009,50 @@ test('the report judges equipment at the end of its month, counts overdue and du
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
+
+test('the wall sheet: a year of admin ticks, the cars QC\'d per tester, and the equipment', async () => {
+  const srv = await start(0, fakeClaude());
+  const b = srv.backend;
+  const reading = (reg, document_type) => ({ category: 'mot_vehicle_paperwork', registration: reg, document_type, rotation: 0, confidence: 'high' });
+  try {
+    // August: signed, one complete car for T STONE; September: started, a car missing a page.
+    ['vt20_certificate', 'inspection_sheet', 'emissions_test'].forEach((t, i) =>
+      b.call('filePage', { month: '2026-08', kind: 'qc', imageBase64: fx.png(60, 85, [240, 240, 230 + i]).toString('base64'), fingerprint: 'a' + i, sourceName: i + '.png', reading: reading('AB12CDE', t) }));
+    ['fileLogDate', 'fileLogDuration'].forEach((inputId) =>
+      b.call('saveDvsaFile', { month: '2026-08', inputId, fileName: inputId + '.xlsx', base64: 'eA==',
+        figures: { testLog: { total: 3, byTester: { TSTONE: 2, PKHAN: 1 }, regTester: { AB12CDE: 'TSTONE' } } } }));
+    b.call('saveDvsaFile', { month: '2026-08', inputId: 'fileRating', fileName: 'tq.xlsx', base64: 'eA==',
+      figures: { testQuality: { period: 'Aug-26', site: { tests: 3, failed: 10 }, testers: [{ id: 'TSTONE', name: 'T STONE' }, { id: 'PKHAN', name: 'P KHAN' }] } } });
+    const state = {};
+    b.sandbox.CHECKLIST_SIZES.forEach((n, ci) => { for (let ii = 0; ii < n; ii++) state[ci + '-' + ii] = 'yes'; });
+    b.call('saveMonthFields', { month: '2026-08', field: 'checklist', value: { state, notes: {} }, baseRevision: 0 });
+    const pdf = Buffer.from('%PDF-1.4 ' + 'x'.repeat(3000));
+    const st = b.call('signStart', { month: '2026-08', mode: 'sign', bytes: pdf.length, pieces: 1, signedBy: 'Paul Testman', confirm: true });
+    b.call('signPiece', { uploadId: st.uploadId, index: 0, data: pdf.toString('base64') });
+    assert.equal(b.call('signFinish', { month: '2026-08', uploadId: st.uploadId }).status, 'success');
+    b.call('filePage', { month: '2026-09', kind: 'qc', imageBase64: 'cDk=', fingerprint: 'b1', sourceName: 'x.png', reading: reading('XY65ZZZ', 'vt20_certificate') });
+
+    const p = await newComputer(srv);
+    await p.click('#tab-records');
+    await p.waitForFunction(() => !recRefreshing_ && recordsIndex_['2026-08'] && recordsIndex_['2026-08'].qcDone);
+    assert.ok(await p.isVisible('#wallBtn'));
+    const html = await p.evaluate(() => buildWallchartHTML_(2026));
+    const text = html.replace(/<style[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    assert.match(text, /MOT wallchart 2026/);
+    assert.match(html, /size:A4 landscape/);
+    // August: every admin row ticked. September: started, QC not done, not signed.
+    const row = (label) => (html.match(new RegExp('<tr><th>(<b>)?' + label + '[\\s\\S]*?</tr>')) || [''])[0].match(/<td>.*?<\/td>/g);
+    const qcRow = row('QC checks done'), signRow = row('Everything else done');
+    assert.match(qcRow[7], /✓/, 'August QC done');
+    assert.match(qcRow[8], /…/, 'September QC not done');
+    assert.match(signRow[7], /✓/);
+    assert.equal(qcRow[9], '<td></td>', 'October not started');
+    // QC per tester: T STONE has AB12CDE in August; P KHAN tested but had none; the September car's tester isn't known.
+    assert.match(row('T STONE')[7], /AB12CDE/);
+    assert.match(row('P KHAN')[7], /none/);
+    assert.match(row('Tester not known')[8], /XY65ZZZ/);
+    // Equipment, with when it's due.
+    assert.match(text, /Roller Brake Tester .*Hofmann Brekon 120 80780205/);
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});
