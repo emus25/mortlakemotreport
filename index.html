@@ -3496,9 +3496,12 @@
   var DUE_SOON_DAYS = 30;
   var calRowCount = 0;
 
-  function computeCalStatus(dateStr) {
+  // `asOf` (optional): the day to judge from. The report uses the last day of
+  // its month, so a report signed late never shows something as overdue that
+  // was in date for the whole month.
+  function computeCalStatus(dateStr, asOf) {
     if (!dateStr) return { text: 'Set a date', badge: '', cls: 'neutral', due: false };
-    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var today = asOf ? new Date(asOf) : new Date(); today.setHours(0, 0, 0, 0);
     var d = new Date(dateStr); d.setHours(0, 0, 0, 0);
     var days = Math.round((d - today) / 86400000);
     if (days < 0)  return { text: Math.abs(days) + ' days ago', badge: 'Overdue',  cls: 'danger',  due: true };
@@ -5722,8 +5725,9 @@
       var date = row.querySelector('.calDate').value;
       if (name || date) calList.push({ name: name, serial: serial, date: date });
     });
+    var calAsOf = monthEnd_();
     var calRows = calList.length ? calList.map(function (c) {
-      var s = computeCalStatus(c.date);
+      var s = computeCalStatus(c.date, calAsOf);
       var dateTxt = c.date ? new Date(c.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
       return '<tr><td>' + escapeHtml_(c.name || '—') + '</td><td>' + escapeHtml_(c.serial || '—') + '</td><td>' + dateTxt + '</td><td>' + s.text + (s.badge ? ' (' + s.badge + ')' : '') + '</td></tr>';
     }).join('') : '<tr><td colspan="4" class="pr-na">No equipment recorded.</td></tr>';
@@ -5837,10 +5841,14 @@
 
       // Calibration — anything overdue or due soon is the thing worth surfacing.
       var calDue = calList.filter(function (c) {
-        var s = computeCalStatus(c.date);
+        var s = computeCalStatus(c.date, calAsOf);
         return s.badge && /due|overdue/i.test(s.badge);
       });
-      tiles += tile('Equipment', calList.length, calDue.length ? calDue.length + ' due soon' : 'all in date',
+      var calOver = calDue.filter(function (c) { return computeCalStatus(c.date, calAsOf).badge === 'Overdue'; }).length;
+      var calSoon = calDue.length - calOver;
+      tiles += tile('Equipment', calList.length,
+        calDue.length ? [calOver ? calOver + ' overdue' : '', calSoon ? calSoon + ' due soon' : ''].filter(Boolean).join(' · ')
+                      : 'all in date at month end',
         calDue.length ? 'warn' : 'ok');
 
       var qcVehicles = {};
@@ -5861,9 +5869,9 @@
         });
       });
       calDue.forEach(function (c) {
-        var s = computeCalStatus(c.date);
-        actions.push({ what: (c.name || 'Equipment') + ' calibration ' + (s.badge || 'due'),
-                       cat: 'Equipment', note: c.date || '' });
+        var s = computeCalStatus(c.date, calAsOf);
+        actions.push({ what: (c.name || 'Equipment') + ' calibration ' + (s.badge === 'Overdue' ? 'overdue' : 'due soon'),
+                       cat: 'Equipment', note: c.date ? 'Due ' + shortDate_(c.date) : '' });
       });
 
       // Row count and text length are both capped so this page can never spill
@@ -6057,7 +6065,7 @@
       '</div>' +
 
       '<h2>Equipment &amp; calibration</h2>' +
-      '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>Status</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
+      '<table><thead><tr><th>Equipment</th><th>Serial no.</th><th>Next due</th><th>At the end of the month</th></tr></thead><tbody>' + calRows + '</tbody></table>' +
 
       '<h2>Files attached</h2>' +
       '<table><thead><tr><th>Export</th><th>Status</th><th>File</th><th>Where in this report</th></tr></thead><tbody>' +
@@ -6584,9 +6592,27 @@
   // The amendment box lists what changed, taken from the history.
   function changesSince_(d) {
     var from = new Date(d.amendment.startedAt).getTime();
-    return (d.history || []).filter(function (h) {
+    var lines = (d.history || []).filter(function (h) {
       return new Date(h.at).getTime() >= from && !/^(Read |Could not read |Amendment started)/.test(h.what);
     }).map(function (h) { return h.what; });
+    // A checklist answer can change and change back during an amendment (the
+    // app's own answers do, as pages come and go). Only the overall change
+    // from signed to now is listed; one that ends where it started is left out.
+    var first = {}, last = {}, order = [], out = [];
+    lines.forEach(function (line) {
+      var m = /^Checklist: (.*)$/.exec(line);
+      var parts = m ? m[1].split('; ') : [];
+      var parsed = parts.map(function (p) { return /^question ([\d.]+): (.+) → (.+)$/.exec(p); });
+      if (!m || parsed.some(function (x) { return !x; })) { out.push({ text: line }); return; }
+      parsed.forEach(function (x) {
+        if (!(x[1] in first)) { first[x[1]] = x[2]; order.push(x[1]); out.push({ q: x[1] }); }
+        last[x[1]] = x[3];
+      });
+    });
+    return out.map(function (o) {
+      if (o.text) return o.text;
+      return first[o.q] === last[o.q] ? null : 'Checklist: question ' + o.q + ': ' + first[o.q] + ' → ' + last[o.q];
+    }).filter(Boolean);
   }
 
   var SIGN_PIECE_CHARS = 2000000;   // base64 characters per piece (about 1.5MB), well inside Google's limits;

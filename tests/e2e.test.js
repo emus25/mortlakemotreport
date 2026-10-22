@@ -981,3 +981,31 @@ test('Monthly Report boxes: a file in the wrong box is not filed; scans read the
     assert.deepEqual(p.errors, []);
   } finally { srv.server.close(); }
 });
+
+test('the report judges equipment at the end of its month, counts overdue and due soon apart, and lists only real changes', async () => {
+  const srv = await start(0, fakeClaude());
+  try {
+    const p = await newComputer(srv);
+    await setMonth(p, '2026-09');
+    await p.setInputFiles('#fileRating', TQ_SEP);
+    await p.waitForFunction(() => TEST_QUALITY && TEST_QUALITY.site);
+    const html = await p.evaluate(() => {
+      document.querySelectorAll('.cal-row').forEach(r => r.remove());
+      [{ name: 'Roller Brake Tester', serial: '1', date: '2026-10-05' },     // in date all September, though past today
+       { name: 'Headlamp Tester', serial: '2', date: '2026-09-12' },         // ran out during September
+       { name: 'Exhaust Gas Meter', serial: '3', date: '2026-10-20' }]       // due within 30 days of month end
+        .forEach(c => addCalRow(c));
+      return buildReportHTML().replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    });
+    assert.match(html, /Equipment 3 1 overdue · 2 due soon/);
+    assert.match(html, /Headlamp Tester calibration overdue Equipment Due 12 Sept? 2026/);
+    // A checklist answer that went to "not answered" and back is not a change.
+    const changes = await p.evaluate(() => changesSince_({ amendment: { startedAt: '2026-10-01T00:00:00Z' }, history: [
+      { at: '2026-10-02T00:00:00Z', what: 'Checklist: question 17.4: YES → not answered' },
+      { at: '2026-10-02T00:01:00Z', what: 'Added QC page page-009.jpg (x.jpg)' },
+      { at: '2026-10-02T00:02:00Z', what: 'Checklist: question 17.4: not answered → YES; question 3.1: YES → NO' },
+      { at: '2026-10-02T00:03:00Z', what: 'Checklist: 61 answers changed' }] }));
+    assert.deepEqual(changes, ['Added QC page page-009.jpg (x.jpg)', 'Checklist: question 3.1: YES → NO', 'Checklist: 61 answers changed']);
+    assert.deepEqual(p.errors, []);
+  } finally { srv.server.close(); }
+});

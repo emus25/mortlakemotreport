@@ -262,6 +262,15 @@ at the flag with "Signed off ✓" and Open report.
   item with a green/amber/red light and its due date ("certificate filed
   this month" where one was).
 
+### 7.1e Report page 1 fixes (agreed 22 Oct 2026)
+
+- Equipment in the report is judged **as at the last day of the report's
+  month**, not the day it is made, so a report signed late never shows
+  something as overdue that was in date all month.
+- The equipment figure says "N overdue · N due soon" (not "N due soon" for both).
+- An amended report lists only real changes: a checklist answer that
+  changed and changed back during the amendment is left out.
+
 ### 7.1b Nothing missing, enforced twice (20 Oct 2026)
 
 Preview and Sign off stay blocked on the page until everything is in (as

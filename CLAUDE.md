@@ -200,6 +200,10 @@ one Google Apps Script file.
   certificates among QC scans flagged (`category: calibration_certificate`,
   v29). Equipment lights under the certificates (`renderEqLights_`).
   Test fixtures: `fx.testLog(y, m, n, 'duration')` makes a duration-ordered log.
+- **Report page 1 (22 Oct 2026, SPEC 7.1e):** equipment judged as at
+  `monthEnd_()` (`computeCalStatus(date, asOf)`), overdue and due soon
+  counted apart, and `changesSince_` nets out checklist answers that changed
+  back during an amendment.
 - **Backend version check:** `EXPECTED_BACKEND_VERSION` (29 on this branch; the live page expects 20) must
   match `BACKEND_VERSION` in `Code.gs`. If the live backend is older, the app
   shows a warning.
@@ -322,7 +326,7 @@ or `Code.gs`:
 
 ```
 npm install            # once; installs Playwright (or use a global install)
-npm test               # 35 back-office checks + 21 real-browser checks
+npm test               # 35 back-office checks + 22 real-browser checks
 ```
 
 - **Back office checks:** `tests/backend.test.js` runs the real `Code.gs` on
